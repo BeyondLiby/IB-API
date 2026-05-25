@@ -1,0 +1,27 @@
+# Local notebooks with credentials or ad-hoc experiments
+test.ipynb
+
+# Market data and generated snapshots
+*.csv
+data/
+*.sqlite
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Logs and local app state
+*.log
+.streamlit/
+.claude/
+.env
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
