@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 from ib_async import IB, util
 
+from portfolio_monitor import render_portfolio_monitor
 from treasury_fop_chain import (
     FOPMarketDataStreamer,
     append_flow_events_sqlite,
@@ -680,6 +681,13 @@ def chart_flow_by_strike(flow: pd.DataFrame):
 
 def main() -> None:
     inject_css()
+    with st.sidebar:
+        page = st.radio("页面", ["ZF期权链", "持仓监控"], index=0)
+
+    if page == "持仓监控":
+        render_portfolio_monitor()
+        return
+
     st.title("ZF Option Chain Dashboard")
 
     with st.sidebar:
