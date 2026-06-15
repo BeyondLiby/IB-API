@@ -9,8 +9,9 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 from ib_async import IB, util
+from ib_async.ib import StartupFetch
 
-from portfolio_monitor import render_portfolio_monitor
+from portfolio_monitor import DEFAULT_HOST, DEFAULT_PORT, render_portfolio_monitor
 from treasury_fop_chain import (
     FOPMarketDataStreamer,
     append_flow_events_sqlite,
@@ -194,28 +195,39 @@ def snapshot_from_live(
     dte0_width: float,
     non_dte0_width: float,
     manual_prices: dict[str, float],
+    ib_host: str,
+    ib_port: int,
     ib_client_id: int,
     max_live_contracts: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     contracts, universe_df = read_universe(str(UNIVERSE_CSV))
 
     existing_ib = st.session_state.get("ib")
-    if existing_ib is not None and st.session_state.get("ib_client_id") != ib_client_id:
+    connection_key = (ib_host, ib_port, ib_client_id)
+    if existing_ib is not None and st.session_state.get("ib_connection_key") != connection_key:
         old_streamer = st.session_state.get("streamer")
         if old_streamer is not None:
             old_streamer.cancel()
         if existing_ib.isConnected():
             existing_ib.disconnect()
-        for key in ["streamer", "ib", "active_conids"]:
+        for key in ["streamer", "ib", "active_conids", "ib_connection_key"]:
             st.session_state.pop(key, None)
 
     if "ib" not in st.session_state:
         util.startLoop()
         ib = IB()
-        ib.connect("127.0.0.1", 4002, clientId=ib_client_id, timeout=10)
+        ib.connect(
+            ib_host,
+            ib_port,
+            clientId=ib_client_id,
+            timeout=10,
+            readonly=True,
+            fetchFields=StartupFetch(0),
+        )
         ib.reqMarketDataType(1)
         st.session_state.ib = ib
         st.session_state.ib_client_id = ib_client_id
+        st.session_state.ib_connection_key = connection_key
         st.session_state.ib_errors = []
 
         def on_error(req_id: int, error_code: int, error_string: str, contract: Any) -> None:
@@ -695,7 +707,9 @@ def main() -> None:
         mode = st.radio("数据源", ["读取CSV快照", "连接IB实时"], index=0)
         refresh_seconds = st.number_input("页面刷新秒数", min_value=1, max_value=60, value=3, step=1)
         save_seconds = st.number_input("保存秒数", min_value=10, max_value=3600, value=60, step=10)
-        ib_client_id = st.number_input("IB clientId", min_value=1, max_value=9999, value=DEFAULT_DASHBOARD_CLIENT_ID, step=1)
+        ib_host = st.text_input("IB host", value=DEFAULT_HOST, key="zf_ib_host")
+        ib_port = st.number_input("IB port", min_value=1, max_value=65535, value=DEFAULT_PORT, step=1, key="zf_ib_port")
+        ib_client_id = st.number_input("IB clientId", min_value=1, max_value=9999, value=DEFAULT_DASHBOARD_CLIENT_ID, step=1, key="zf_ib_client_id")
         request_interval = st.number_input("请求间隔秒", min_value=0.005, max_value=0.100, value=0.025, step=0.005, format="%.3f")
         max_live_contracts = st.number_input("最大实时订阅合约数", min_value=100, max_value=3000, value=900, step=100)
         kline_bar_size = st.selectbox("ZF日内K线周期", ["30 secs", "1 min", "2 mins", "5 mins"], index=1)
@@ -716,7 +730,7 @@ def main() -> None:
             ib = st.session_state.get("ib")
             if ib is not None and ib.isConnected():
                 ib.disconnect()
-            for key in ["streamer", "ib", "active_conids", "ib_client_id", "subscription_generation", "last_subscribe_time", "last_subscribe_contracts"]:
+            for key in ["streamer", "ib", "active_conids", "ib_client_id", "ib_connection_key", "subscription_generation", "last_subscribe_time", "last_subscribe_contracts"]:
                 st.session_state.pop(key, None)
             st.success("已停止")
 
@@ -732,6 +746,8 @@ def main() -> None:
             float(dte0_width),
             float(non_dte0_width),
             manual_prices,
+            ib_host.strip() or DEFAULT_HOST,
+            int(ib_port),
             int(ib_client_id),
             int(max_live_contracts),
         )
