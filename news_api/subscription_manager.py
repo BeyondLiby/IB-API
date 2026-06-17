@@ -18,6 +18,9 @@ class SubscriptionManager:
         provider_codes: str,
     ) -> dict[str, int]:
         """对 P0/P1 股票建立实时新闻标题订阅。"""
+        if not self.client.wait_until_ready(timeout=10.0):
+            raise TimeoutError("IB API 尚未就绪，不能建立新闻订阅。")
+
         result: dict[str, int] = {}
         generic_ticks = f"mdoff,292:{provider_codes}"
 

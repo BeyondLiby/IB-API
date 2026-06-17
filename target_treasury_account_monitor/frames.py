@@ -22,10 +22,11 @@ def positions_to_frame(
     tickers: dict[int, Any],
     portfolio_map: dict[int, Any],
 ) -> pd.DataFrame:
-    """Convert target treasury positions plus live IB data into a display frame."""
+    """把 IB 持仓、报价和账户 portfolio 合并成监控主表。"""
     rows: list[dict[str, Any]] = []
     for pos in positions:
         contract = pos.contract
+        sec_type = str(getattr(contract, "secType", "") or "").upper()
         con_id = int(getattr(contract, "conId", 0) or 0)
         quantity = float(getattr(pos, "position", 0) or 0)
         avg_cost = clean_number(getattr(pos, "avgCost", math.nan))
@@ -35,6 +36,7 @@ def positions_to_frame(
         has_portfolio_item = portfolio_item is not None
         quote = ticker_snapshot(ticker) if ticker is not None else {}
 
+        # 价格优先使用 IB portfolio，缺失时再从实时/延迟 ticker 中兜底。
         price = math.nan
         price_source = ""
         if portfolio_item is not None:
@@ -43,6 +45,7 @@ def positions_to_frame(
         if ticker is not None and not is_valid_number(price):
             price, price_source = ticker_price(ticker)
 
+        # 市值优先使用 IB 账户口径；没有 portfolio item 时才用价格估算。
         multiplier = contract_multiplier(contract)
         market_value = (
             clean_number(getattr(portfolio_item, "marketValue", math.nan))
@@ -54,6 +57,7 @@ def positions_to_frame(
             market_value = quantity * price * multiplier
             value_source = f"estimated_from_{price_source}"
 
+        # PnL 同样优先使用 IB，估算值只作为展示兜底。
         unrealized_pnl = (
             clean_number(getattr(portfolio_item, "unrealizedPNL", math.nan))
             if portfolio_item is not None
@@ -74,7 +78,14 @@ def positions_to_frame(
             unrealized_pnl = estimated_unrealized_pnl
 
         greek = read_ticker_greeks(ticker)
-        if str(getattr(contract, "secType", "") or "").upper() == "FUT" and not is_valid_number(greek["delta"]):
+        model_option_price = (
+            greek["modelOptionPrice"]
+            if is_valid_number(greek["modelOptionPrice"])
+            else quote.get("modelOptionPrice", math.nan)
+        )
+
+        # 美债期货本身没有 option Greeks；这里按 1 手期货 delta=1 处理。
+        if sec_type == "FUT" and not is_valid_number(greek["delta"]):
             greek.update(
                 {
                     "greekSource": "future_delta_1",
@@ -85,7 +96,7 @@ def positions_to_frame(
                 }
             )
         quote_ready = is_valid_number(price)
-        greek_ready = str(getattr(contract, "secType", "") or "").upper() == "FUT" or is_valid_number(greek["delta"])
+        greek_ready = sec_type == "FUT" or is_valid_number(greek["delta"])
         missing_notes = []
         if not has_portfolio_item:
             missing_notes.append("no portfolio item")
@@ -95,7 +106,7 @@ def positions_to_frame(
             missing_notes.append("no ticker")
         if has_ticker and not quote_ready:
             missing_notes.append("quote unavailable")
-        if str(getattr(contract, "secType", "") or "").upper() == "FOP" and not greek_ready:
+        if sec_type == "FOP" and not greek_ready:
             missing_notes.append("greeks unavailable")
         if is_valid_number(greek["delta"]) and not is_valid_number(greek["iv"]):
             missing_notes.append("iv unavailable")
@@ -106,7 +117,7 @@ def positions_to_frame(
                 "symbol": getattr(contract, "symbol", ""),
                 "localSymbol": contract_label(contract),
                 "optionName": option_full_name(contract),
-                "secType": getattr(contract, "secType", ""),
+                "secType": sec_type,
                 "expiry": getattr(contract, "lastTradeDateOrContractMonth", ""),
                 "strike": clean_number(getattr(contract, "strike", math.nan)),
                 "right": getattr(contract, "right", ""),
@@ -122,7 +133,7 @@ def positions_to_frame(
                 "markPrice": quote.get("markPrice", math.nan),
                 "close": quote.get("close", math.nan),
                 "delayedMid": quote.get("delayedMid", math.nan),
-                "modelOptionPrice": greek["modelOptionPrice"] if is_valid_number(greek["modelOptionPrice"]) else quote.get("modelOptionPrice", math.nan),
+                "modelOptionPrice": model_option_price,
                 "underlyingPrice": greek["underlyingPrice"],
                 "price": price,
                 "priceSource": price_source,
@@ -149,7 +160,6 @@ def positions_to_frame(
                 "systemGammaMultiplier": quantity * greek["gamma"] * multiplier if is_valid_number(greek["gamma"]) else math.nan,
                 "systemThetaMultiplier": quantity * greek["theta"] * multiplier if is_valid_number(greek["theta"]) else math.nan,
                 "systemVegaMultiplier": quantity * greek["vega"] * multiplier if is_valid_number(greek["vega"]) else math.nan,
-                "midGreekStatus": "TODO",
                 "conId": con_id,
             }
         )
@@ -160,7 +170,7 @@ def positions_to_frame(
 
 
 def excluded_positions_frame(all_positions: list[Any]) -> pd.DataFrame:
-    """Build an audit table of positions excluded by the treasury filter."""
+    """列出被美债过滤器排除的非目标持仓，方便核对账户范围。"""
     rows = [
         {
             "account": getattr(pos, "account", ""),

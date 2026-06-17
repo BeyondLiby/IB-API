@@ -1,4 +1,4 @@
-"""Tools for monitoring one IBKR treasury futures/options account."""
+"""IBKR 美债期货/期权账户持仓监控工具。"""
 
 from .config import MonitorSettings
 from .frames import positions_to_frame

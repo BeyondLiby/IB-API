@@ -10,7 +10,7 @@ except ImportError:
 
 
 def contract_label(contract: Any) -> str:
-    """Build a stable human-readable contract label from IB contract fields."""
+    """生成稳定的合约显示名，优先使用 IB 本地代码。"""
     for attr in ("localSymbol", "symbol"):
         value = getattr(contract, attr, "")
         if value:
@@ -19,7 +19,7 @@ def contract_label(contract: Any) -> str:
 
 
 def option_full_name(contract: Any) -> str:
-    """Build ticker-expiry-strike-right names for futures option rows."""
+    """生成期权全名：品种-到期日-strike-看涨/看跌。"""
     symbol = str(getattr(contract, "symbol", "") or "").strip()
     expiry = str(getattr(contract, "lastTradeDateOrContractMonth", "") or "").strip()
     strike = getattr(contract, "strike", "")
@@ -34,7 +34,7 @@ def option_full_name(contract: Any) -> str:
 
 
 def is_treasury_contract(contract: Any) -> bool:
-    """Keep only CBOT treasury futures and futures options by root symbol."""
+    """只保留美债期货和美债期货期权，根代码覆盖 ZT/ZF/ZN/TN/ZB/UB。"""
     if contract is None:
         return False
     sec_type = str(getattr(contract, "secType", "") or "").upper()
@@ -51,7 +51,7 @@ def is_treasury_contract(contract: Any) -> bool:
 
 
 def contract_exchange(contract: Any) -> str:
-    """Choose the exchange used for market-data requests."""
+    """选择行情请求使用的交易所，IB 有时会在持仓合约里留空。"""
     exchange = str(getattr(contract, "exchange", "") or "").strip()
     if exchange:
         return exchange
@@ -59,7 +59,7 @@ def contract_exchange(contract: Any) -> str:
 
 
 def normalize_market_data_contract(contract: Any) -> Any:
-    """Copy a contract and fill exchange/currency fields needed by reqMktData."""
+    """复制合约并补齐行情请求常用字段，避免修改原始持仓对象。"""
     out = copy(contract)
     exchange = contract_exchange(out)
     if exchange:
@@ -70,7 +70,7 @@ def normalize_market_data_contract(contract: Any) -> Any:
 
 
 def contract_multiplier(contract: Any) -> float:
-    """Read the IB multiplier, falling back to 1 when IB leaves it blank."""
+    """读取合约乘数；IB 留空或异常时按 1 兜底。"""
     raw = getattr(contract, "multiplier", None)
     if raw in (None, ""):
         return 1.0

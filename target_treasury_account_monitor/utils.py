@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def clean_number(value: Any) -> float:
-    """Convert IB's mixed numeric values to float and treat missing sentinel values as NaN."""
+    """把 IB 返回的混合数值转成 float，并把缺失哨兵值转成 NaN。"""
     if value is None:
         return math.nan
     try:
@@ -20,7 +20,7 @@ def clean_number(value: Any) -> float:
 
 
 def is_valid_number(value: Any, *, allow_zero: bool = True) -> bool:
-    """Return whether a value is a usable number for display and aggregation."""
+    """判断数值是否可以参与展示和聚合。"""
     number = clean_number(value)
     if math.isnan(number):
         return False
@@ -28,7 +28,7 @@ def is_valid_number(value: Any, *, allow_zero: bool = True) -> bool:
 
 
 def fmt_number(value: Any, digits: int = 2) -> str:
-    """Format a numeric value for compact dashboard display."""
+    """格式化普通数字，用于仪表盘指标。"""
     number = clean_number(value)
     if math.isnan(number):
         return "-"
@@ -36,7 +36,7 @@ def fmt_number(value: Any, digits: int = 2) -> str:
 
 
 def fmt_money(value: Any, digits: int = 0) -> str:
-    """Format a numeric value as USD money for account metrics."""
+    """格式化美元金额，用于账户资金指标。"""
     number = clean_number(value)
     if math.isnan(number):
         return "-"
@@ -44,7 +44,7 @@ def fmt_money(value: Any, digits: int = 0) -> str:
 
 
 def summary_value(summary: pd.DataFrame, tag: str) -> float:
-    """Read one accountSummary tag from the normalized summary frame."""
+    """从标准化后的 accountSummary 表中读取一个指标。"""
     if summary.empty:
         return math.nan
     rows = summary[summary["tag"] == tag]

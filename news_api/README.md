@@ -112,12 +112,37 @@ from news_api.watchlist import normalize_watchlist
 
 service = NewsService(settings=SETTINGS)
 client = IBNewsClient(service)
-client.start_api(SETTINGS.host, SETTINGS.port, SETTINGS.client_id)
+client.start_api(
+    SETTINGS.host,
+    SETTINGS.port,
+    SETTINGS.client_id,
+    timeout=15,
+)
 
 watchlist = normalize_watchlist()
 manager = SubscriptionManager(client)
 manager.subscribe_watchlist(watchlist, SETTINGS.provider_codes)
 ```
+
+`start_api()` 会等待 IB 返回 `nextValidId` 后才返回；如果只调用了
+`connect()` 但还没有等到 `nextValidId`，后续 `reqMktData()` 很容易被发早，
+表现就是“API 已连接，但没有任何 tickNews 回来”。
+
+如果你想先验证新闻权限和 provider codes 是否正常，可以在建立连接后补拉
+历史新闻：
+
+```python
+client.request_watchlist_historical_news(
+    watchlist,
+    SETTINGS.provider_codes,
+    total_results=50,
+)
+```
+
+历史标题会进入同一套 `NewsService` 队列和 SQLite 表；如果历史新闻能入库但
+实时新闻没回来，优先检查 market data line、TWS 新闻订阅权限和 provider
+code；如果历史新闻也没有，优先看 `reqContractDetails`/`reqHistoricalNews`
+对应的 IBKR error。
 
 IBKR/TWS 侧需要确保：
 

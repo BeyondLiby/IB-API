@@ -34,7 +34,7 @@ MARGIN_FIELDS = [
 
 
 def parse_margin_number(value: Any) -> float:
-    """Parse IB OrderState margin strings such as '1,234.56' into floats."""
+    """解析 IB OrderState 里的保证金字符串，例如 '1,234.56'。"""
     if value is None:
         return math.nan
     if isinstance(value, str):
@@ -45,7 +45,7 @@ def parse_margin_number(value: Any) -> float:
 
 
 def order_state_to_margin_row(order_state: Any) -> dict[str, Any]:
-    """Convert an IB what-if OrderState object to a flat margin dict."""
+    """把 IB what-if 返回的 OrderState 摊平成一行数据。"""
     row: dict[str, Any] = {}
     for field in MARGIN_FIELDS:
         value = getattr(order_state, field, math.nan)
@@ -57,7 +57,7 @@ def order_state_to_margin_row(order_state: Any) -> dict[str, Any]:
 
 
 def build_limit_order(action: str, quantity: float, limit_price: float, account: str = "") -> Any:
-    """Create a readonly what-if limit order for IB margin simulation."""
+    """创建只用于保证金试算的限价单；whatIf=True 且 transmit=False。"""
     if LimitOrder is None:
         raise ImportError("ib_async LimitOrder is not available in this Python environment")
     order = LimitOrder(action.upper(), quantity, limit_price)
@@ -77,7 +77,7 @@ def what_if_order_margin(
     limit_price: float,
     account: str = "",
 ) -> dict[str, Any]:
-    """Ask IB to calculate margin impact for one candidate option order."""
+    """请求 IB 计算候选订单的保证金影响，不发送真实订单。"""
     order = build_limit_order(action, quantity, limit_price, account)
     order_state = ib.whatIfOrder(contract, order)
     row = order_state_to_margin_row(order_state)
@@ -93,7 +93,7 @@ def what_if_order_margin(
 
 
 def estimate_contract_capacity(summary: pd.DataFrame, margin_row: dict[str, Any], safety_buffer: float = 0.0) -> dict[str, Any]:
-    """Estimate max contracts from ExcessLiquidity and IB's per-order margin change."""
+    """用剩余流动性和单笔保证金变化粗算最多可承受手数。"""
     excess_liquidity = summary_value(summary, "ExcessLiquidity")
     maint_change = abs(parse_margin_number(margin_row.get("maintMarginChange")))
     init_change = abs(parse_margin_number(margin_row.get("initMarginChange")))

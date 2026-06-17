@@ -10,7 +10,7 @@ except ImportError:
 
 
 def ticker_mid(ticker: Any) -> float:
-    """Calculate bid/ask midpoint from an IB ticker when both sides are valid."""
+    """bid/ask 都有效时计算中间价。"""
     bid = clean_number(getattr(ticker, "bid", math.nan))
     ask = clean_number(getattr(ticker, "ask", math.nan))
     if is_valid_number(bid) and is_valid_number(ask):
@@ -19,7 +19,7 @@ def ticker_mid(ticker: Any) -> float:
 
 
 def greek_option_price(ticker: Any) -> tuple[float, str]:
-    """Read IB option model prices as a last-resort option price fallback."""
+    """从 Greeks 对象里读取模型价，作为期权价格兜底来源。"""
     for greek_name in ("modelGreeks", "lastGreeks", "askGreeks", "bidGreeks"):
         greeks = getattr(ticker, greek_name, None)
         price = clean_number(getattr(greeks, "optPrice", math.nan)) if greeks is not None else math.nan
@@ -29,7 +29,7 @@ def greek_option_price(ticker: Any) -> tuple[float, str]:
 
 
 def ticker_snapshot(ticker: Any) -> dict[str, float]:
-    """Normalize common quote fields into one dictionary for diagnostics."""
+    """把常用报价字段摊平成字典，便于主表展示和诊断缺失数据。"""
     bid = clean_number(getattr(ticker, "bid", math.nan))
     ask = clean_number(getattr(ticker, "ask", math.nan))
     delayed_bid = clean_number(getattr(ticker, "delayedBid", math.nan))
@@ -53,7 +53,7 @@ def ticker_snapshot(ticker: Any) -> dict[str, float]:
 
 
 def ticker_price(ticker: Any) -> tuple[float, str]:
-    """Pick the best live price from a ticker and return the value plus source name."""
+    """按优先级选择最可信的 ticker 价格，并返回价格来源。"""
     market_price_attr = getattr(ticker, "marketPrice", None)
     market_price = market_price_attr() if callable(market_price_attr) else math.nan
     model_price, model_price_source = greek_option_price(ticker)
@@ -80,6 +80,6 @@ def ticker_price(ticker: Any) -> tuple[float, str]:
 
 
 def ticker_has_price(ticker: Any) -> bool:
-    """Return whether a ticker already has any usable price field."""
+    """判断 ticker 是否已经有可用价格。"""
     price, _ = ticker_price(ticker)
     return not math.isnan(price)

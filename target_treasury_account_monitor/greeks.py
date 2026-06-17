@@ -12,7 +12,7 @@ except ImportError:
 
 
 def greek_source(ticker: Any) -> tuple[str, Any]:
-    """Return the first available IB Greeks object and the field it came from."""
+    """按稳定优先级读取 IB ticker 上可用的 Greeks 对象。"""
     for name in ("modelGreeks", "lastGreeks", "askGreeks", "bidGreeks"):
         value = getattr(ticker, name, None)
         if value is not None:
@@ -21,7 +21,7 @@ def greek_source(ticker: Any) -> tuple[str, Any]:
 
 
 def read_ticker_greeks(ticker: Any) -> dict[str, Any]:
-    """Normalize IB ticker Greeks into scalar values for one holding row."""
+    """把 IB Greeks 对象摊平成一行持仓可直接使用的数值。"""
     greek_name, greeks = greek_source(ticker) if ticker is not None else ("", None)
     ticker_iv = clean_number(getattr(ticker, "impliedVolatility", math.nan)) if ticker is not None else math.nan
     model_iv = clean_number(getattr(greeks, "impliedVol", math.nan)) if greeks else math.nan
@@ -38,7 +38,7 @@ def read_ticker_greeks(ticker: Any) -> dict[str, Any]:
 
 
 def greek_totals(frame: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate position-level Greeks into account-level exposure rows."""
+    """把单笔持仓 Greeks 聚合到账户敞口。"""
     if frame.empty:
         return pd.DataFrame(
             columns=[
@@ -53,20 +53,12 @@ def greek_totals(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "method": "IB system ticker Greeks",
+                "method": "IB ticker/modelGreeks",
                 "deltaContracts": pd.to_numeric(frame["systemDeltaContracts"], errors="coerce").sum(),
                 "deltaMultiplier": pd.to_numeric(frame["systemDeltaMultiplier"], errors="coerce").sum(),
                 "gammaMultiplier": pd.to_numeric(frame["systemGammaMultiplier"], errors="coerce").sum(),
                 "thetaMultiplier": pd.to_numeric(frame["systemThetaMultiplier"], errors="coerce").sum(),
                 "vegaMultiplier": pd.to_numeric(frame["systemVegaMultiplier"], errors="coerce").sum(),
-            },
-            {
-                "method": "Mid-price Greeks",
-                "deltaContracts": math.nan,
-                "deltaMultiplier": math.nan,
-                "gammaMultiplier": math.nan,
-                "thetaMultiplier": math.nan,
-                "vegaMultiplier": math.nan,
             },
         ]
     )
