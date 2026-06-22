@@ -9,7 +9,6 @@ from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 
 from news_api.config import SETTINGS
-from news_api.realtime.broadtape_monitor import run_broadtape_probe
 
 
 class NewsProviderProbeClient(EWrapper, EClient):
@@ -95,6 +94,8 @@ def run_capability_probe(
         client_id=provider_client_id,
     )
     print("news_providers", providers)
+    from news_api.realtime.broadtape_monitor import run_broadtape_probe
+
     broadtape_client = run_broadtape_probe(
         host=host,
         port=port,

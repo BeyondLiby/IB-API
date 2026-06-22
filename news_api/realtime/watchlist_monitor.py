@@ -6,6 +6,7 @@ from typing import Any
 
 from news_api.config import SETTINGS
 from news_api.ib_client import IBNewsClient
+from news_api.realtime.probe import fetch_news_providers
 from news_api.subscription_manager import SubscriptionManager
 from news_api.watchlist import normalize_watchlist
 
@@ -39,8 +40,24 @@ def run_watchlist_probe(
     client_id: int = SETTINGS.client_id + 100,
     seconds: int = 30,
     market_data_type: int | None = SETTINGS.market_data_type,
+    require_news_providers: bool = True,
 ) -> CapturingService:
     service = CapturingService()
+    if require_news_providers:
+        providers = fetch_news_providers(
+            host=host,
+            port=port,
+            client_id=client_id + 1000,
+        )
+        print("news_providers", providers)
+        if not providers:
+            print(
+                "No API news providers are available in this IB Gateway session; "
+                "generic tick 292 is not legal for STK subscriptions."
+            )
+            print("final_events", len(service.events))
+            return service
+
     client = IBNewsClient(service)  # type: ignore[arg-type]
     client.start_api(host, port, client_id)
     time.sleep(2)
@@ -79,6 +96,7 @@ def main() -> None:
     parser.add_argument("--client-id", type=int, default=SETTINGS.client_id + 100)
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--market-data-type", type=int, default=SETTINGS.market_data_type)
+    parser.add_argument("--skip-provider-check", action="store_true")
     args = parser.parse_args()
     run_watchlist_probe(
         host=args.host,
@@ -86,6 +104,7 @@ def main() -> None:
         client_id=args.client_id,
         seconds=args.seconds,
         market_data_type=args.market_data_type,
+        require_news_providers=not args.skip_provider_check,
     )
 
 
