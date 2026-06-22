@@ -1,12 +1,62 @@
 from __future__ import annotations
 
 import argparse
+import threading
+import time
 from typing import Any
 
-from ib_async import IB
+from ibapi.client import EClient
+from ibapi.wrapper import EWrapper
 
 from news_api.config import SETTINGS
 from news_api.realtime.broadtape_monitor import run_broadtape_probe
+
+
+class NewsProviderProbeClient(EWrapper, EClient):
+    def __init__(self) -> None:
+        EClient.__init__(self, self)
+        self.providers: list[tuple[str, str]] = []
+        self.errors: list[dict[str, Any]] = []
+        self._done = threading.Event()
+        self._api_thread: threading.Thread | None = None
+
+    def start_api(self, host: str, port: int, client_id: int) -> None:
+        self.connect(host, port, clientId=client_id)
+        self._api_thread = threading.Thread(target=self.run, daemon=True)
+        self._api_thread.start()
+
+    def stop_api(self) -> None:
+        if self.isConnected():
+            self.disconnect()
+        if self._api_thread:
+            self._api_thread.join(timeout=5)
+
+    def newsProviders(self, newsProviders: list[Any]) -> None:
+        self.providers = [
+            (provider.code, provider.name)
+            for provider in newsProviders
+        ]
+        self._done.set()
+
+    def error(self, reqId: int, *args: Any) -> None:
+        if len(args) == 2:
+            error_code, error_string = args
+        elif len(args) == 3:
+            if isinstance(args[1], int):
+                _, error_code, error_string = args
+            else:
+                error_code, error_string, _ = args
+        elif len(args) >= 4:
+            _, error_code, error_string, _ = args[:4]
+        else:
+            error_code = -1
+            error_string = "Unknown IBKR error callback payload"
+
+        if error_code in {2104, 2106, 2107, 2108, 2119, 2158}:
+            return
+        self.errors.append(
+            {"req_id": reqId, "code": error_code, "message": str(error_string)}
+        )
 
 
 def fetch_news_providers(
@@ -14,13 +64,19 @@ def fetch_news_providers(
     host: str = SETTINGS.host,
     port: int = SETTINGS.port,
     client_id: int = SETTINGS.client_id + 300,
+    timeout: float = 8.0,
 ) -> list[tuple[str, str]]:
-    ib = IB()
-    ib.connect(host, port, clientId=client_id, readonly=True, timeout=8)
+    client = NewsProviderProbeClient()
+    client.start_api(host, port, client_id)
+    time.sleep(1)
     try:
-        return [(provider.code, provider.name) for provider in ib.reqNewsProviders()]
+        client.reqNewsProviders()
+        client._done.wait(timeout=timeout)
+        if client.errors and not client.providers:
+            print("provider_errors", client.errors)
+        return client.providers
     finally:
-        ib.disconnect()
+        client.stop_api()
 
 
 def run_capability_probe(
