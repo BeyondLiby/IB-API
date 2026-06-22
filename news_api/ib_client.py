@@ -66,14 +66,20 @@ class IBNewsClient(EWrapper, EClient):  # type: ignore[misc]
             extra_data=extraData,
         )
 
-    def error(
-        self,
-        reqId: int,
-        errorTime: int,
-        errorCode: int,
-        errorString: str,
-        advancedOrderRejectJson: str = "",
-    ) -> None:
+    def error(self, reqId: int, *args: Any) -> None:
+        if len(args) == 2:
+            errorCode, errorString = args
+        elif len(args) == 3:
+            if isinstance(args[1], int):
+                _, errorCode, errorString = args
+            else:
+                errorCode, errorString, _ = args
+        elif len(args) >= 4:
+            _, errorCode, errorString, _ = args[:4]
+        else:
+            errorCode = -1
+            errorString = "Unknown IBKR error callback payload"
+
         if errorCode in STATUS_CODES:
             return
         print(f"IBKR error reqId={reqId} code={errorCode}: {errorString}")

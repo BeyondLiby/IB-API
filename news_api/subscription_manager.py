@@ -16,10 +16,13 @@ class SubscriptionManager:
         self,
         watchlist: dict[str, dict],
         provider_codes: str,
+        market_data_type: int | None = 3,
     ) -> dict[str, int]:
         """对 P0/P1 股票建立实时新闻标题订阅。"""
         result: dict[str, int] = {}
         generic_ticks = f"mdoff,292:{provider_codes}"
+        if market_data_type is not None:
+            self.client.reqMarketDataType(market_data_type)
 
         for symbol, item in watchlist.items():
             if int(item.get("priority", 1)) > 1:

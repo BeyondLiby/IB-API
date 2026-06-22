@@ -517,14 +517,20 @@ class IBKRNewsPipeline(EWrapper, EClient):
 
         self._schedule_next_article()
 
-    def error(
-        self,
-        req_id: int,
-        error_time: int,
-        error_code: int,
-        error_string: str,
-        advanced_order_reject_json: str = "",
-    ) -> None:
+    def error(self, req_id: int, *args: Any) -> None:
+        if len(args) == 2:
+            error_code, error_string = args
+        elif len(args) == 3:
+            if isinstance(args[1], int):
+                _, error_code, error_string = args
+            else:
+                error_code, error_string, _ = args
+        elif len(args) >= 4:
+            _, error_code, error_string, _ = args[:4]
+        else:
+            error_code = -1
+            error_string = "Unknown IBKR error callback payload"
+
         if error_code in STATUS_CODES:
             if self.verbose:
                 self.log(f"IBKR状态：{error_code} - {error_string}")

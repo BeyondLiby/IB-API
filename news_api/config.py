@@ -9,6 +9,19 @@ DEFAULT_PROVIDER_CODES = (
     "BRFG+BRFUPDN+DJ-N+DJ-RTA+DJ-RTE+DJ-RTG+DJ-RTPRO+DJNL"
 )
 
+DEFAULT_BROADTAPE_SPECS = (
+    "BRF:BRF_ALL@BRF",
+    "BZ:BZ_ALL@BZ",
+    "FLY:FLY_ALL@FLY",
+)
+
+
+def _env_tuple(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.getenv(name, "")
+    if not raw.strip():
+        return default
+    return tuple(item.strip() for item in raw.split(",") if item.strip())
+
 
 @dataclass(slots=True)
 class NewsSettings:
@@ -18,6 +31,11 @@ class NewsSettings:
     port: int = 4001
     client_id: int = 91
     provider_codes: str = DEFAULT_PROVIDER_CODES
+    market_data_type: int = int(os.getenv("NEWS_MARKET_DATA_TYPE", "3"))
+    broadtape_specs: tuple[str, ...] = _env_tuple(
+        "NEWS_BROADTAPE_SPECS",
+        DEFAULT_BROADTAPE_SPECS,
+    )
     local_timezone: str = "Asia/Shanghai"
 
     db_path: Path = Path(__file__).resolve().parent / "data" / "news.sqlite"

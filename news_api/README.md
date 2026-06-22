@@ -116,7 +116,11 @@ client.start_api(SETTINGS.host, SETTINGS.port, SETTINGS.client_id)
 
 watchlist = normalize_watchlist()
 manager = SubscriptionManager(client)
-manager.subscribe_watchlist(watchlist, SETTINGS.provider_codes)
+manager.subscribe_watchlist(
+    watchlist,
+    SETTINGS.provider_codes,
+    SETTINGS.market_data_type,
+)
 ```
 
 IBKR/TWS 侧需要确保：
@@ -125,6 +129,8 @@ IBKR/TWS 侧需要确保：
 - API 端口正确，纸账户常见是 `4002`，实盘 Gateway 常见是 `4001`；
 - 已订阅对应新闻权限；
 - 实时订阅额度不要把 TWS 和 API 共享的 market data line 用满。
+- 如果股票 Top market data 权限不足，保持默认
+  `NEWS_MARKET_DATA_TYPE=3` 使用 delayed market data；有 live 权限时可设置为 `1`。
 
 ## 后续扩展
 
