@@ -25,7 +25,7 @@ This is the new all-news capability probe. It subscribes to IBKR NEWS contracts
 instead of stock contracts. Default specs come from `NEWS_BROADTAPE_SPECS`:
 
 ```text
-BRF:BRF_ALL@BRF,BZ:BZ_ALL@BZ,FLY:FLY_ALL@FLY
+BRFG:BRFG_ALL@BRFG,DJNL:DJNL_ALL@DJNL,BZ:BZ_ALL@BZ,FLY:FLY_ALL@FLY
 ```
 
 Run:
