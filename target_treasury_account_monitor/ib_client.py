@@ -6,16 +6,16 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-from ib_async import IB, util
+from ib_async import Future, IB, util
 from ib_async.ib import StartupFetch
 
 try:
     from .config import ACCOUNT_TAGS, DEFAULT_GENERIC_TICKS, DISCONNECT_ERROR_CODES, MonitorSettings
-    from .contracts import contract_label, is_treasury_contract, normalize_market_data_contract
+    from .contracts import contract_label, infer_primary_future_month, is_treasury_contract, normalize_market_data_contract
     from .market_data import ticker_has_price
 except ImportError:
     from config import ACCOUNT_TAGS, DEFAULT_GENERIC_TICKS, DISCONNECT_ERROR_CODES, MonitorSettings
-    from contracts import contract_label, is_treasury_contract, normalize_market_data_contract
+    from contracts import contract_label, infer_primary_future_month, is_treasury_contract, normalize_market_data_contract
     from market_data import ticker_has_price
 
 
@@ -351,3 +351,82 @@ def account_summary_frame(ib: IB, account: str) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(data)
+
+
+def get_future_reference(
+    ib: IB,
+    positions: list[Any],
+    settings: MonitorSettings,
+    *,
+    root: str = "ZF",
+) -> dict[str, Any]:
+    """Fetch the inferred treasury futures reference price for distance calculations."""
+    month = infer_primary_future_month(positions, root=root)
+    if not month:
+        return {"symbol": root, "month": "", "localSymbol": "", "price": math.nan, "priceSource": "missing_month"}
+
+    contract = Future(symbol=root, lastTradeDateOrContractMonth=month, exchange="CBOT", currency="USD")
+    try:
+        qualified = ib.qualifyContracts(contract)
+        if qualified:
+            contract = qualified[0]
+    except Exception:
+        pass
+
+    ib.reqMarketDataType(settings.market_data_type)
+    ticker = None
+    try:
+        ticker = ib.reqMktData(contract, genericTickList="", snapshot=False, regulatorySnapshot=False)
+        ib.sleep(min(max(settings.quote_wait_seconds, 1.0), 3.0))
+    except Exception:
+        ticker = None
+
+    return _future_reference_from_ticker_or_snapshot(ib, contract, ticker, settings.market_data_type, root, month)
+
+
+def _future_reference_from_ticker_or_snapshot(
+    ib: IB,
+    contract: Any,
+    ticker: Any,
+    market_data_type: int,
+    root: str,
+    month: str,
+) -> dict[str, Any]:
+    """Read a futures price from streaming ticker, live snapshot, or delayed snapshot."""
+    try:
+        from .market_data import ticker_price
+    except ImportError:
+        from market_data import ticker_price
+
+    price = math.nan
+    source = ""
+    if ticker is not None:
+        price, source = ticker_price(ticker)
+    if math.isnan(price):
+        try:
+            snapshot = ib.reqTickers(contract)[0]
+            price, source = ticker_price(snapshot)
+        except Exception:
+            pass
+    if math.isnan(price) and market_data_type == 1:
+        try:
+            ib.reqMarketDataType(3)
+            delayed = ib.reqTickers(contract)[0]
+            price, source = ticker_price(delayed)
+            if source:
+                source = f"delayed_{source}"
+        except Exception:
+            pass
+        finally:
+            try:
+                ib.reqMarketDataType(market_data_type)
+            except Exception:
+                pass
+    return {
+        "symbol": root,
+        "month": month,
+        "localSymbol": contract_label(contract),
+        "price": price,
+        "priceSource": source,
+        "conId": int(getattr(contract, "conId", 0) or 0),
+    }

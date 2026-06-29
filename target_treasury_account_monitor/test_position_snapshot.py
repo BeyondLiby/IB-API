@@ -15,7 +15,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from target_treasury_account_monitor.config import DEFAULT_CLIENT_ID, DEFAULT_HOST, DEFAULT_PORT, MARKET_DATA_TYPES, MonitorSettings
 from target_treasury_account_monitor.frames import positions_to_frame
 from target_treasury_account_monitor.greeks import greek_totals
-from target_treasury_account_monitor.ib_client import account_summary_frame, fetch_target_positions, portfolio_items_by_key, refresh_account_portfolio, subscribe_quotes_for_positions
+from target_treasury_account_monitor.ib_client import account_summary_frame, fetch_target_positions, get_future_reference, portfolio_items_by_key, refresh_account_portfolio, subscribe_quotes_for_positions
+from target_treasury_account_monitor.portfolio_view import build_portfolio_view
+from target_treasury_account_monitor.spreads import pair_vertical_spreads
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--market-data", choices=list(MARKET_DATA_TYPES), default="Live")
     parser.add_argument("--wait", type=float, default=6.0, help="Seconds to wait after market-data subscription.")
     parser.add_argument("--csv", default="", help="Optional CSV output path.")
+    parser.add_argument("--infer-spreads", action="store_true", help="Experimentally infer spreads from legs. This is not IBKR-confirmed combo identity.")
     return parser.parse_args()
 
 
@@ -69,13 +72,16 @@ def main() -> None:
     )
     try:
         positions, all_positions = fetch_target_positions(ib, settings.account)
+        future_ref = get_future_reference(ib, positions, settings)
         tickers = subscribe_quotes_for_positions(ib, positions, settings)
         refresh_account_portfolio(ib, settings.account)
         ib.sleep(settings.quote_wait_seconds)
-        frame = positions_to_frame(positions, tickers, portfolio_items_by_key(ib, settings.account))
+        frame = positions_to_frame(positions, tickers, portfolio_items_by_key(ib, settings.account), reference_price=float(future_ref.get("price", float("nan"))))
+        frame, spread_summary = pair_vertical_spreads(frame) if args.infer_spreads else (frame, pd.DataFrame())
         summary = account_summary_frame(ib, settings.account)
 
         print(f"treasury positions: {len(positions)} / all positions: {len(all_positions)}")
+        print(f"ZF reference: {future_ref}")
         print("\naccount summary:")
         print(summary.to_string(index=False))
         print("\nposition snapshot:")
@@ -83,6 +89,10 @@ def main() -> None:
             "optionName",
             "localSymbol",
             "position",
+            "spreadType",
+            "spreadRole",
+            "otmTicks",
+            "moneyness",
             "bid",
             "ask",
             "mid",
@@ -103,6 +113,10 @@ def main() -> None:
             "conId",
         ]
         print(frame[[col for col in useful_cols if col in frame.columns]].to_string(index=False))
+        print("\nspread summary:")
+        print(spread_summary.to_string(index=False) if not spread_summary.empty else "No paired vertical spreads detected.")
+        print("\nIBKR-like portfolio view:")
+        print(build_portfolio_view(frame, spread_summary).to_string(index=False))
         print("\ngreek totals:")
         print(greek_totals(frame).to_string(index=False))
         if args.csv:

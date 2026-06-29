@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import copy
+from collections import Counter
+import re
 from typing import Any
 
 try:
@@ -31,6 +33,73 @@ def option_full_name(contract: Any) -> str:
     except (TypeError, ValueError):
         strike_text = str(strike)
     return f"{symbol}-{expiry}-{strike_text}-{right}"
+
+
+def year_from_code(year_code: str, current_year: int | None = None) -> int:
+    """Infer a four-digit futures year from a one-digit IB local symbol code."""
+    if current_year is None:
+        from datetime import datetime
+
+        current_year = datetime.now().year
+    digit = int(year_code)
+    decade = current_year - (current_year % 10)
+    candidate = decade + digit
+    if candidate < current_year - 5:
+        candidate += 10
+    if candidate > current_year + 5:
+        candidate -= 10
+    return candidate
+
+
+def month_code_to_number(month_code: str) -> int:
+    """Convert a futures month code into a calendar month number."""
+    month_codes = {
+        "F": 1,
+        "G": 2,
+        "H": 3,
+        "J": 4,
+        "K": 5,
+        "M": 6,
+        "N": 7,
+        "Q": 8,
+        "U": 9,
+        "V": 10,
+        "X": 11,
+        "Z": 12,
+    }
+    return month_codes[month_code.upper()]
+
+
+def infer_future_month_from_contract(contract: Any) -> str:
+    """Infer the underlying futures month YYYYMM from an option or future contract."""
+    sec_type = str(getattr(contract, "secType", "") or "").upper()
+    expiry = str(getattr(contract, "lastTradeDateOrContractMonth", "") or "")
+    if sec_type == "FUT" and len(expiry) >= 6:
+        return expiry[:6]
+
+    local_symbol = str(getattr(contract, "localSymbol", "") or "").upper()
+    matches = re.findall(r"([FGHJKMNQUVXZ])(\d)(?=\s|$)", local_symbol)
+    if matches:
+        month_code, year_code = matches[-1]
+        year = year_from_code(year_code)
+        month = month_code_to_number(month_code)
+        return f"{year}{month:02d}"
+    return ""
+
+
+def infer_primary_future_month(positions: list[Any], root: str = "ZF") -> str:
+    """Choose the most common underlying future month from current positions."""
+    months: list[str] = []
+    for pos in positions:
+        contract = getattr(pos, "contract", None)
+        if str(getattr(contract, "symbol", "") or "").upper() != root:
+            continue
+        month = infer_future_month_from_contract(contract)
+        if month:
+            months.append(month)
+    if not months:
+        return ""
+    return Counter(months).most_common(1)[0][0]
 
 
 def is_treasury_contract(contract: Any) -> bool:

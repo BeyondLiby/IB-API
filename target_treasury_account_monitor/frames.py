@@ -6,11 +6,13 @@ from typing import Any
 import pandas as pd
 
 try:
+    from .config import DEFAULT_TICK_SIZE
     from .contracts import contract_label, contract_multiplier, is_treasury_contract, option_full_name
     from .greeks import read_ticker_greeks
     from .market_data import ticker_price, ticker_snapshot
     from .utils import clean_number, is_valid_number
 except ImportError:
+    from config import DEFAULT_TICK_SIZE
     from contracts import contract_label, contract_multiplier, is_treasury_contract, option_full_name
     from greeks import read_ticker_greeks
     from market_data import ticker_price, ticker_snapshot
@@ -21,6 +23,9 @@ def positions_to_frame(
     positions: list[Any],
     tickers: dict[int, Any],
     portfolio_map: dict[int, Any],
+    *,
+    reference_price: float = math.nan,
+    tick_size: float = DEFAULT_TICK_SIZE,
 ) -> pd.DataFrame:
     """Convert target treasury positions plus live IB data into a display frame."""
     rows: list[dict[str, Any]] = []
@@ -99,6 +104,28 @@ def positions_to_frame(
             missing_notes.append("greeks unavailable")
         if is_valid_number(greek["delta"]) and not is_valid_number(greek["iv"]):
             missing_notes.append("iv unavailable")
+        strike = clean_number(getattr(contract, "strike", math.nan))
+        right = str(getattr(contract, "right", "") or "").upper()
+        signed_distance_ticks = (
+            (strike - reference_price) / tick_size
+            if is_valid_number(strike) and is_valid_number(reference_price) and tick_size > 0
+            else math.nan
+        )
+        abs_distance_ticks = abs(signed_distance_ticks) if is_valid_number(signed_distance_ticks) else math.nan
+        if right == "C" and is_valid_number(signed_distance_ticks):
+            otm_ticks = max(signed_distance_ticks, 0.0)
+        elif right == "P" and is_valid_number(signed_distance_ticks):
+            otm_ticks = max(-signed_distance_ticks, 0.0)
+        else:
+            otm_ticks = math.nan
+        if is_valid_number(otm_ticks) and otm_ticks > 0:
+            moneyness = "far OTM" if otm_ticks > 2.5 else "OTM"
+        elif is_valid_number(abs_distance_ticks) and abs_distance_ticks <= 0.5:
+            moneyness = "ATM"
+        elif right in {"C", "P"} and is_valid_number(otm_ticks):
+            moneyness = "ITM"
+        else:
+            moneyness = ""
 
         rows.append(
             {
@@ -108,8 +135,13 @@ def positions_to_frame(
                 "optionName": option_full_name(contract),
                 "secType": getattr(contract, "secType", ""),
                 "expiry": getattr(contract, "lastTradeDateOrContractMonth", ""),
-                "strike": clean_number(getattr(contract, "strike", math.nan)),
-                "right": getattr(contract, "right", ""),
+                "strike": strike,
+                "right": right,
+                "referencePrice": reference_price,
+                "signedDistanceTicks": round(signed_distance_ticks, 1) if is_valid_number(signed_distance_ticks) else math.nan,
+                "absDistanceTicks": round(abs_distance_ticks, 1) if is_valid_number(abs_distance_ticks) else math.nan,
+                "otmTicks": round(otm_ticks, 1) if is_valid_number(otm_ticks) else math.nan,
+                "moneyness": moneyness,
                 "exchange": getattr(contract, "exchange", ""),
                 "currency": getattr(contract, "currency", ""),
                 "position": quantity,

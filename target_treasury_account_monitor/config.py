@@ -8,6 +8,7 @@ DEFAULT_PORT = 4001
 DEFAULT_CLIENT_ID = 351
 DEFAULT_REFRESH_SECONDS = 5
 DEFAULT_GENERIC_TICKS = "100,101,106"
+DEFAULT_TICK_SIZE = 0.25
 
 TREASURY_ROOTS = {"ZT", "ZF", "ZN", "TN", "ZB", "UB"}
 DISCONNECT_ERROR_CODES = {1100, 1101, 1102, 1300, 2110}
@@ -58,3 +59,4 @@ class MonitorSettings:
     wechat_webhook_url: str
     wechat_push_enabled: bool
     wechat_min_interval_seconds: int
+    infer_spreads: bool = False

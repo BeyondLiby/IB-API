@@ -15,7 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from target_treasury_account_monitor.config import DEFAULT_CLIENT_ID, DEFAULT_HOST, DEFAULT_PORT, MARKET_DATA_TYPES, MonitorSettings
 from target_treasury_account_monitor.frames import positions_to_frame
-from target_treasury_account_monitor.ib_client import account_summary_frame, fetch_target_positions, portfolio_items_by_key, refresh_account_portfolio, subscribe_quotes_for_positions
+from target_treasury_account_monitor.ib_client import account_summary_frame, fetch_target_positions, get_future_reference, portfolio_items_by_key, refresh_account_portfolio, subscribe_quotes_for_positions
 from target_treasury_account_monitor.margin import estimate_contract_capacity, what_if_order_margin
 from target_treasury_account_monitor.utils import is_valid_number
 
@@ -101,11 +101,12 @@ def main() -> None:
     )
     try:
         positions, _ = fetch_target_positions(ib, settings.account)
+        future_ref = get_future_reference(ib, positions, settings)
         tickers = subscribe_quotes_for_positions(ib, positions, settings)
         refresh_account_portfolio(ib, settings.account)
         ib.sleep(settings.quote_wait_seconds)
         position_by_con_id = {int(getattr(pos.contract, "conId", 0) or 0): pos for pos in positions}
-        frame = positions_to_frame(positions, tickers, portfolio_items_by_key(ib, settings.account))
+        frame = positions_to_frame(positions, tickers, portfolio_items_by_key(ib, settings.account), reference_price=float(future_ref.get("price", math.nan)))
         summary = account_summary_frame(ib, settings.account)
 
         if not args.contract:

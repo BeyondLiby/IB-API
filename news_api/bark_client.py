@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import socket
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -16,6 +18,8 @@ class BarkClient:
     base_url: str = "https://api.day.app"
     dashboard_url: str = ""
     timeout: float = 8.0
+    retries: int = 1
+    retry_interval: float = 1.5
 
     def push(self, analysis: NewsAnalysis, priority: int) -> tuple[str, str]:
         if not self.key:
@@ -48,8 +52,14 @@ class BarkClient:
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return "ok", response.read().decode("utf-8", errors="replace")
-        except urllib.error.URLError as exc:
-            return "error", str(exc)
+        last_error = ""
+        for attempt in range(self.retries + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    return "ok", response.read().decode("utf-8", errors="replace")
+            except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                if attempt < self.retries:
+                    time.sleep(self.retry_interval)
+
+        return "error", last_error

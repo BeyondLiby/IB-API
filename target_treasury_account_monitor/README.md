@@ -34,6 +34,14 @@ The monitor keeps only treasury futures/options roots `ZT/ZF/ZN/TN/ZB/UB`.
 Futures are included in the system Greek total with `delta=1` and `gamma/theta/vega=0`.
 Mid-price Greeks are intentionally left as a future extension.
 
+The dashboard also fetches the inferred ZF underlying future price, usually from the
+most common underlying month in the account positions, and adds:
+
+- `signedDistanceTicks`: `(strike - ZF reference price) / 0.25`.
+- `otmTicks`: option-specific out-of-the-money distance in 0.25 ticks.
+- `moneyness`: `ITM`, `ATM`, `OTM`, or `far OTM`; more than 2.5 OTM ticks is marked `far OTM`.
+- `spreadType` / `spreadRole`: paired vertical spread labels such as bull put spread and bear call spread.
+
 ## Test Scripts
 
 List current treasury positions with non-truncated key columns:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import count
 
-from .ib_client import IBNewsClient, stock_contract
+from .ib_client import IBNewsClient, broadtape_news_contract, stock_contract
 
 
 class SubscriptionManager:
@@ -26,7 +26,12 @@ class SubscriptionManager:
                 continue
 
             ticker_id = next(self._ids)
-            contract = stock_contract(symbol, item.get("exchange", "SMART"))
+            contract = stock_contract(
+                symbol,
+                item.get("exchange", "SMART"),
+                currency=item.get("currency", "USD"),
+                sec_type=item.get("sec_type", "STK"),
+            )
             self.client.ticker_id_to_symbol[ticker_id] = symbol
             self.client.reqMktData(
                 ticker_id,
@@ -39,3 +44,24 @@ class SubscriptionManager:
             result[symbol] = ticker_id
 
         return result
+
+    def subscribe_broadtape(
+        self,
+        provider: str,
+        *,
+        symbol_alias: str = "ALL",
+        contract_symbol: str | None = None,
+    ) -> int:
+        """订阅某个新闻源的 BroadTape 全量新闻流。"""
+        ticker_id = next(self._ids)
+        contract = broadtape_news_contract(provider, contract_symbol)
+        self.client.ticker_id_to_symbol[ticker_id] = symbol_alias
+        self.client.reqMktData(
+            ticker_id,
+            contract,
+            "mdoff,292",
+            False,
+            False,
+            [],
+        )
+        return ticker_id
