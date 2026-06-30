@@ -174,6 +174,9 @@ def fetch_static_fop_chain_snapshot(
     wait_max_seconds: float = 10.0,
     wait_stable_seconds: float = 2.0,
     request_interval: float = 0.025,
+    inter_batch_pause_seconds: float = 0.5,
+    empty_batch_retries: int = 1,
+    empty_batch_retry_pause_seconds: float = 5.0,
     request_market_data: bool = True,
 ) -> dict[str, Any]:
     """
@@ -205,6 +208,9 @@ def fetch_static_fop_chain_snapshot(
             wait_max_seconds=float(wait_max_seconds),
             wait_stable_seconds=float(wait_stable_seconds),
             request_interval=float(request_interval),
+            inter_batch_pause_seconds=float(inter_batch_pause_seconds),
+            empty_batch_retries=int(empty_batch_retries),
+            empty_batch_retry_pause_seconds=float(empty_batch_retry_pause_seconds),
         )
         monitor_frame = snapshot_to_monitor_frame(snapshot, root=root)
 
@@ -245,5 +251,10 @@ def save_static_chain_result(result: dict[str, Any], output_dir: str | Path = "d
     if isinstance(monitor_frame, pd.DataFrame) and not monitor_frame.empty:
         paths["monitor_frame"] = prefix.with_name(prefix.name + "_monitor_frame.csv")
         monitor_frame.to_csv(paths["monitor_frame"], index=False, encoding="utf-8-sig")
+
+    selected_metadata = result.get("selected_metadata", pd.DataFrame())
+    if isinstance(selected_metadata, pd.DataFrame) and not selected_metadata.empty:
+        paths["selected_metadata"] = prefix.with_name(prefix.name + "_selected_contracts.csv")
+        selected_metadata.to_csv(paths["selected_metadata"], index=False, encoding="utf-8-sig")
 
     return paths

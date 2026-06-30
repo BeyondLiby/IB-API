@@ -994,7 +994,8 @@ class FOPMarketDataStreamer:
             )
             if elapsed >= max_seconds:
                 break
-            if elapsed >= min_seconds and now - last_change >= stable_seconds:
+            has_any_data = sum(score) > 0
+            if has_any_data and elapsed >= min_seconds and now - last_change >= stable_seconds:
                 break
         print()
         return stats
@@ -1006,7 +1007,7 @@ class FOPMarketDataStreamer:
             return df
         return df.sort_values(["expiration", "right", "strike", "conId"], ignore_index=True)
 
-    def cancel(self) -> None:
+    def cancel(self, *, wait_seconds: float = 0.5) -> None:
         if not self.tickers:
             return
         for ticker in self.tickers:
@@ -1014,7 +1015,8 @@ class FOPMarketDataStreamer:
                 self.ib.cancelMktData(ticker.contract)
             except Exception:
                 pass
-        self.ib.sleep(0.5)
+        if wait_seconds > 0:
+            self.ib.sleep(wait_seconds)
         self.tickers = []
 
 
@@ -1027,25 +1029,40 @@ def snapshot_in_batches(
     wait_stable_seconds: float = 2.0,
     request_interval: float = 0.025,
     generic_ticks: str = DEFAULT_GENERIC_TICKS,
+    inter_batch_pause_seconds: float = 0.5,
+    empty_batch_retries: int = 1,
+    empty_batch_retry_pause_seconds: float = 5.0,
 ) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     total = len(contracts)
     for batch_no, batch in enumerate(chunks(list(contracts), batch_size), start=1):
         print(f"\nmarket data batch {batch_no}: {len(batch)} contracts")
-        streamer = FOPMarketDataStreamer(
-            ib,
-            generic_ticks=generic_ticks,
-            request_interval=request_interval,
-        )
-        try:
-            streamer.subscribe(batch)
-            streamer.wait_until_stable(
-                max_seconds=wait_max_seconds,
-                stable_seconds=wait_stable_seconds,
+        batch_frame = pd.DataFrame()
+        attempts = max(int(empty_batch_retries), 0) + 1
+        for attempt in range(1, attempts + 1):
+            streamer = FOPMarketDataStreamer(
+                ib,
+                generic_ticks=generic_ticks,
+                request_interval=request_interval,
             )
-            frames.append(streamer.snapshot())
-        finally:
-            streamer.cancel()
+            try:
+                streamer.subscribe(batch)
+                stats = streamer.wait_until_stable(
+                    max_seconds=wait_max_seconds,
+                    stable_seconds=wait_stable_seconds,
+                )
+                batch_frame = streamer.snapshot()
+                is_empty_batch = stats.quote_ready == 0 and stats.greek_ready == 0 and stats.oi_ready == 0
+                if not is_empty_batch or attempt == attempts:
+                    break
+                print(
+                    f"empty market-data batch {batch_no}; retrying after "
+                    f"{empty_batch_retry_pause_seconds:.1f}s ({attempt}/{attempts - 1})"
+                )
+            finally:
+                pause = empty_batch_retry_pause_seconds if attempt < attempts else inter_batch_pause_seconds
+                streamer.cancel(wait_seconds=pause)
+        frames.append(batch_frame)
         print(f"finished {min(batch_no * batch_size, total)}/{total}")
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 

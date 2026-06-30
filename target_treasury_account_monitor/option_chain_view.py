@@ -135,6 +135,7 @@ def snapshot_to_monitor_frame(snapshot: pd.DataFrame, *, root: str) -> pd.DataFr
     out["symbol"] = root.upper()
     out["secType"] = "FOP"
     out["position"] = 0.0
+    out["dte"] = out["expiry"].map(expiry_days_from_today)
     if "multiplier" not in out.columns:
         out["multiplier"] = 1000.0
     else:
@@ -165,7 +166,62 @@ def snapshot_to_monitor_frame(snapshot: pd.DataFrame, *, root: str) -> pd.DataFr
         return "; ".join(notes)
 
     out["missingData"] = out.apply(missing_notes, axis=1)
+    quality = out.apply(classify_option_chain_quality, axis=1)
+    out["qualityLabel"] = [item[0] for item in quality]
+    out["qualityReason"] = [item[1] for item in quality]
     return out
+
+
+def expiry_days_from_today(expiry: Any, *, timezone: str = "Asia/Shanghai") -> int | None:
+    """Return calendar DTE for an IB YYYYMMDD expiration."""
+    exp_dt = pd.to_datetime(str(expiry)[:8], format="%Y%m%d", errors="coerce")
+    if pd.isna(exp_dt):
+        return None
+    today = pd.Timestamp.now(tz=timezone).normalize().tz_localize(None)
+    return int((exp_dt - today).days)
+
+
+def classify_option_chain_quality(row: pd.Series) -> tuple[str, str]:
+    """Classify option-chain rows so illiquid quotes are not mixed with bad pulls."""
+    bid = clean_number(row.get("bid", math.nan))
+    ask = clean_number(row.get("ask", math.nan))
+    price = clean_number(row.get("price", math.nan))
+    delta = clean_number(row.get("delta", math.nan))
+    dte_value = row.get("dte", math.nan)
+    try:
+        dte = int(dte_value) if not pd.isna(dte_value) else None
+    except (TypeError, ValueError):
+        dte = None
+
+    strike = clean_number(row.get("strike", math.nan))
+    underlying = clean_number(row.get("undPrice", row.get("underlyingPrice", math.nan)))
+    distance = abs(strike - underlying) if is_valid_number(strike) and is_valid_number(underlying) else math.nan
+
+    has_bid = is_valid_number(bid, allow_zero=True)
+    has_ask = is_valid_number(ask, allow_zero=True)
+    has_price = is_valid_number(price)
+    has_greeks = is_valid_number(delta)
+
+    if has_bid and has_ask and has_greeks:
+        return "ok", "bid/ask and greeks available"
+    if not has_bid and has_ask and ask <= 0.01:
+        reason = "bid missing; tiny ask <= 0.01"
+        if has_greeks:
+            reason += "; greeks available"
+        else:
+            reason += "; greeks unavailable"
+        return "ask_only_tiny", reason
+    if not has_bid and not has_ask:
+        if dte == 0:
+            return "no_quote_0dte", "0DTE contract has no bid/ask"
+        if is_valid_number(distance) and distance >= 3.0:
+            return "no_quote_far_otm", f"no bid/ask; strike distance {distance:.2f}"
+        return "no_quote", "no bid/ask"
+    if has_price and not has_greeks:
+        return "missing_greeks", "quote available but greeks unavailable"
+    if has_greeks and not has_price:
+        return "greeks_only", "greeks available but quote unavailable"
+    return "partial", "partial quote or analytics"
 
 
 def filter_universe_by_expiration(
