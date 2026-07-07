@@ -119,9 +119,32 @@
 
     .top-controls {
       display: grid;
-      grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) auto;
+      grid-template-columns: repeat(3, minmax(220px, 1fr)) auto;
       gap: 9px;
       align-items: end;
+    }
+
+    .product-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .product-tab {
+      height: 32px;
+      min-width: 64px;
+      padding: 0 14px;
+      background: #fff;
+      color: var(--ink);
+      border-color: var(--line);
+      font-weight: 700;
+    }
+
+    .product-tab.active {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
     }
 
     .controls {
@@ -133,7 +156,7 @@
 
     .paste-panel {
       display: none;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
       gap: 12px;
     }
 
@@ -243,6 +266,126 @@
       min-width: 0;
     }
 
+    .fixed-target {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .fixed-target .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #f8fafc;
+    }
+
+    .fixed-target .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .fixed-target .metric strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.15;
+    }
+
+    .chart-panel {
+      min-height: 360px;
+    }
+
+    .data-status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .status-pill {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 10px 12px;
+      min-height: 72px;
+    }
+
+    .status-pill strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.2;
+      margin-bottom: 5px;
+    }
+
+    .status-pill span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .status-pill.ready strong { color: var(--green); }
+    .status-pill.missing strong { color: var(--red); }
+    .status-pill.partial strong { color: var(--amber); }
+
+    .chart-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .chart-caption {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .kline-chart {
+      width: 100%;
+      height: 310px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(#fff, #fbfcfe);
+      overflow: hidden;
+    }
+
+    .kline-chart svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .option-chain-cross {
+      max-height: 640px;
+    }
+
+    .option-chain-cross table {
+      min-width: 1320px;
+      font-size: 12px;
+    }
+
+    .option-chain-cross th.call,
+    .option-chain-cross td.call {
+      background: #f0fdf4;
+    }
+
+    .option-chain-cross th.put,
+    .option-chain-cross td.put {
+      background: #fff7ed;
+    }
+
+    .option-chain-cross th.strike,
+    .option-chain-cross td.strike {
+      text-align: center;
+      background: #1f2937;
+      color: #fff;
+      font-weight: 800;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+
     .table-wrap {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -320,6 +463,7 @@
       .top-controls, .controls { grid-template-columns: 1fr 1fr; }
       .hero, .layout { grid-template-columns: 1fr; }
       .decision-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+      .data-status-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
     }
 
     @media (max-width: 760px) {
@@ -327,6 +471,7 @@
       .top-controls, .controls { grid-template-columns: 1fr; }
       .paste-panel { grid-template-columns: 1fr; }
       .decision-grid { grid-template-columns: 1fr; }
+      .data-status-grid { grid-template-columns: 1fr; }
       .card .value { font-size: 21px; }
     }
   </style>
@@ -337,8 +482,10 @@
     <div class="top-controls">
       <label>当前持仓 CSV/JSON<input id="positionFile" type="file" accept=".csv,.json,.txt" /></label>
       <label>期权链 CSV/JSON<input id="chainFile" type="file" accept=".csv,.json,.txt" /></label>
+      <label>期货K线 CSV/JSON<input id="barsFile" type="file" accept=".csv,.json,.txt" /></label>
       <button id="sampleBtn" class="secondary">加载样例</button>
     </div>
+    <div id="productTabs" class="product-tabs"></div>
     <div id="error" class="error"></div>
   </header>
 
@@ -346,11 +493,17 @@
     <div class="layout">
       <div class="panel">
         <h3>收益目标设置</h3>
+        <div class="fixed-target">
+          <div class="metric"><span>月目标回报</span><strong>10%</strong></div>
+          <div class="metric"><span>资金基数</span><strong>$20,000</strong></div>
+          <div class="metric"><span>月目标收益</span><strong>$2,000</strong></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>筛选参数</h3>
         <div class="controls">
-          <label>目标回报 %<input id="targetReturn" type="number" value="10" step="0.5" min="0" /></label>
-          <label>资金基数<input id="capitalBase" type="number" value="100000" step="1000" min="0" /></label>
-          <label>收割阈值<input id="harvestThreshold" type="number" value="10" step="1" min="0" /></label>
           <label>候选Delta上限<input id="candidateDeltaMax" type="number" value="0.40" step="0.01" min="0" /></label>
+          <label>期权链到期<input id="expiryFilter" type="text" value="" placeholder="自动选择最近到期" /></label>
         </div>
       </div>
       <div class="panel">
@@ -376,8 +529,23 @@
       <div id="pastePanel" class="paste-panel" style="margin-top:12px;">
         <label>粘贴当前持仓<textarea id="positionPaste" placeholder="粘贴当前持仓 CSV 或 JSON"></textarea></label>
         <label>粘贴期权链<textarea id="chainPaste" placeholder="粘贴期权链 CSV 或 JSON"></textarea></label>
+        <label>粘贴期货K线<textarea id="barsPaste" placeholder="粘贴 K线 CSV 或 JSON，字段 symbol,date,open,high,low,close,volume"></textarea></label>
         <button id="loadPaste">加载粘贴数据</button>
       </div>
+    </div>
+
+    <h2>数据覆盖</h2>
+    <div class="panel">
+      <div id="dataStatus" class="data-status-grid"></div>
+    </div>
+
+    <h2>期货走势</h2>
+    <div class="panel chart-panel">
+      <div class="chart-toolbar">
+        <h3 style="margin:0;">30分钟K线，近一个月</h3>
+        <div id="klineCaption" class="chart-caption"></div>
+      </div>
+      <div id="klineChart" class="kline-chart"></div>
     </div>
 
     <section class="hero">
@@ -399,7 +567,17 @@
 
     <h2>目标缺口与补卖矩阵</h2>
     <div class="panel">
+      <div id="sellMatrixNote" class="chart-caption" style="margin-bottom:8px;"></div>
       <div id="sellMatrix" class="table-wrap"></div>
+    </div>
+
+    <h2>最新期权链</h2>
+    <div class="panel">
+      <div class="chart-toolbar">
+        <h3 id="chainBoardTitle" style="margin:0;">标准链表</h3>
+        <div id="chainBoardCaption" class="chart-caption"></div>
+      </div>
+      <div id="optionChainBoard" class="table-wrap option-chain-cross"></div>
     </div>
 
     <h2>风险地图</h2>
@@ -448,22 +626,36 @@
     const DTE_BUCKETS = ["0DTE", "1DTE", "2DTE", "3-7DTE", "8-21DTE", "22DTE+"];
     const DELTA_BUCKETS = ["<0.10", "0.10-0.25", "0.25-0.40", ">=0.40"];
     const SHOCK_MOVES = [-0.50, -0.40, -0.30, -0.20, -0.10, 0.10, 0.20, 0.30, 0.40, 0.50];
+    const DEFAULT_POSITION_PATH = "data/carry_dashboard_positions.csv";
+    const DEFAULT_CHAIN_PATH = "data/carry_dashboard_chain.csv";
+    const DEFAULT_BARS_PATH = "data/carry_dashboard_bars.csv";
+    const FIXED_TARGET_RETURN = 10;
+    const FIXED_CAPITAL_BASE = 20000;
+    const FIXED_TARGET_PREMIUM = FIXED_CAPITAL_BASE * FIXED_TARGET_RETURN / 100;
+    const MIN_CHAIN_ROWS = 50;
+    const MIN_BARS_ROWS = 100;
+    const MAX_CHAIN_AGE_HOURS = 24;
+    const MAX_BARS_AGE_HOURS = 72;
     let positionRows = [];
     let chainRows = [];
+    let barsRows = [];
+    let selectedProduct = "";
 
     const $ = id => document.getElementById(id);
-    const controls = ["targetReturn", "capitalBase", "harvestThreshold", "futuresPrice", "bpPerPoint", "atmIv", "atmStraddle", "eventDays", "candidateDeltaMax"];
+    const controls = ["futuresPrice", "bpPerPoint", "atmIv", "atmStraddle", "eventDays", "candidateDeltaMax", "expiryFilter"];
     controls.forEach(id => $(id).addEventListener("input", render));
-    $("sampleBtn").addEventListener("click", () => { positionRows = samplePositions(); chainRows = sampleChain(); render(); });
-    $("clearBtn").addEventListener("click", () => { positionRows = []; chainRows = []; $("positionPaste").value = ""; $("chainPaste").value = ""; render(); });
+    $("sampleBtn").addEventListener("click", () => { positionRows = samplePositions(); chainRows = sampleChain(); barsRows = sampleBars(); selectedProduct = "ZF"; render(); });
+    $("clearBtn").addEventListener("click", () => { positionRows = []; chainRows = []; barsRows = []; selectedProduct = ""; $("positionPaste").value = ""; $("chainPaste").value = ""; $("barsPaste").value = ""; render(); });
     $("pasteToggle").addEventListener("click", () => $("pastePanel").classList.toggle("open"));
     $("loadPaste").addEventListener("click", () => {
       if ($("positionPaste").value.trim()) positionRows = parseInput($("positionPaste").value);
       if ($("chainPaste").value.trim()) chainRows = parseInput($("chainPaste").value);
+      if ($("barsPaste").value.trim()) barsRows = parseInput($("barsPaste").value);
       render();
     });
     $("positionFile").addEventListener("change", event => loadFile(event, rows => { positionRows = rows; render(); }));
     $("chainFile").addEventListener("change", event => loadFile(event, rows => { chainRows = rows; render(); }));
+    $("barsFile").addEventListener("change", event => loadFile(event, rows => { barsRows = rows; render(); }));
 
     async function loadFile(event, callback) {
       const file = event.target.files && event.target.files[0];
@@ -474,6 +666,42 @@
       } catch (error) {
         setError(error.message || String(error));
       }
+    }
+
+    async function loadDefaultData() {
+      const [positions, chain, bars] = await Promise.allSettled([
+        fetchRows(DEFAULT_POSITION_PATH),
+        fetchRows(DEFAULT_CHAIN_PATH),
+        fetchRows(DEFAULT_BARS_PATH)
+      ]);
+      let loaded = 0;
+      const failures = [];
+      if (positions.status === "fulfilled") {
+        positionRows = positions.value;
+        loaded += 1;
+      } else {
+        failures.push("当前持仓");
+      }
+      if (chain.status === "fulfilled") {
+        chainRows = chain.value;
+        loaded += 1;
+      } else {
+        failures.push("期权链");
+      }
+      if (bars.status === "fulfilled") {
+        barsRows = bars.value;
+        loaded += 1;
+      }
+      render();
+      if (loaded > 0 && failures.length) {
+        setError(`自动载入部分数据失败：${failures.join("、")}。可手动上传补齐。`);
+      }
+    }
+
+    async function fetchRows(path) {
+      const response = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`${path}: ${response.status}`);
+      return parseInput(await response.text());
     }
 
     function parseInput(raw) {
@@ -521,6 +749,14 @@
       return Number.isFinite(number) ? number : NaN;
     }
 
+    function firstNum(...values) {
+      for (const value of values) {
+        const number = toNum(value);
+        if (Number.isFinite(number)) return number;
+      }
+      return NaN;
+    }
+
     function txt(value) {
       return value === null || value === undefined ? "" : String(value).trim();
     }
@@ -552,37 +788,90 @@
       return ">=0.40";
     }
 
+    function productOf(raw) {
+      const explicit = txt(raw.product || raw.root || raw.symbol || raw.tradingClass).toUpperCase();
+      if (/^(ZF|ZN|ZC|ZT|TN|ZB|UB)$/.test(explicit)) return explicit;
+      const candidates = [
+        raw.localSymbol,
+        raw.optionName,
+        raw.contract,
+        raw.description,
+        raw.name,
+        raw.conId
+      ].map(value => txt(value).toUpperCase()).filter(Boolean);
+      for (const text of candidates) {
+        const match = text.match(/\b(ZF|ZN|ZC|ZT|TN|ZB|UB)\b|^(ZF|ZN|ZC|ZT|TN|ZB|UB)[-\s_]|^(ZF|ZN|ZC|ZT|TN|ZB|UB)[FGHJKMNQUVXZ]\d\b/);
+        if (match) return match[1] || match[2] || match[3];
+        if (/^OZN/.test(text)) return "ZN";
+        if (/^OZC/.test(text)) return "ZC";
+      }
+      return "";
+    }
+
+    function productSet() {
+      const products = new Set();
+      [...positionRows, ...chainRows, ...barsRows].forEach(row => {
+        const product = productOf(row);
+        if (product) products.add(product);
+      });
+      return Array.from(products).sort();
+    }
+
+    function rowsForProduct(rows, product) {
+      if (!product) return rows;
+      return rows.filter(row => productOf(row) === product);
+    }
+
     function normalize(rows, mode) {
       const targetMonthlyPremium = targetPremium();
-      const harvest = numberInput("harvestThreshold", 10);
       return rows.map(raw => {
         const direction0 = txt(raw.direction || raw.right).toLowerCase();
         const direction = direction0 === "p" ? "put" : direction0 === "c" ? "call" : direction0;
         const position = mode === "chain" ? 0 : toNum(raw.position);
-        const expiry = txt(raw.expiry || raw.lastTradeDateOrContractMonth);
+        const expiry = txt(raw.expiry || raw.expiration || raw.lastTradeDateOrContractMonth);
         const dte = Number.isFinite(toNum(raw.dte)) ? toNum(raw.dte) : dteFromExpiry(expiry);
-        const price = toNum(raw.price);
+        const price = firstNum(raw.price, raw.mid, raw.markPrice, raw.modelOptionPrice, raw.optPrice, raw.modelGreeks_optPrice, raw.last, raw.close, raw.bid, raw.ask);
         const multiplier = Number.isFinite(toNum(raw.multiplier)) ? toNum(raw.multiplier) : 1000;
         const premiumPerContract = Number.isFinite(toNum(raw.premiumPerContract)) ? toNum(raw.premiumPerContract) : price * multiplier;
-        let signedDelta = toNum(raw.signedDelta);
-        const delta = toNum(raw.delta);
+        let signedDelta = firstNum(raw.signedDelta);
+        const delta = firstNum(raw.delta, raw.modelGreeks_delta, raw.bidGreeks_delta, raw.askGreeks_delta, raw.lastGreeks_delta);
         if (!Number.isFinite(signedDelta)) {
           signedDelta = Number.isFinite(delta) ? delta : NaN;
           if (direction === "put" && signedDelta > 0) signedDelta *= -1;
         }
-        const gamma = toNum(raw.gamma);
-        const theta = toNum(raw.theta);
+        const gamma = firstNum(raw.gamma, raw.modelGreeks_gamma, raw.bidGreeks_gamma, raw.askGreeks_gamma, raw.lastGreeks_gamma);
+        const theta = firstNum(raw.theta, raw.modelGreeks_theta, raw.bidGreeks_theta, raw.askGreeks_theta, raw.lastGreeks_theta);
         const marketValue = toNum(raw.marketValue);
         const remainingPremium = position < 0 && Number.isFinite(marketValue) ? -marketValue : 0;
         const absDelta = Math.abs(signedDelta);
         const effective = effectiveCarry(absDelta, remainingPremium);
+        const openInterest = direction === "call"
+          ? firstNum(raw.openInterest, raw.callOpenInterest, raw.rawOpenInterest)
+          : direction === "put"
+            ? firstNum(raw.openInterest, raw.putOpenInterest, raw.rawOpenInterest)
+            : firstNum(raw.openInterest, raw.rawOpenInterest);
+        const volume = direction === "call"
+          ? firstNum(raw.volume, raw.callVolume, raw.rawVolume)
+          : direction === "put"
+            ? firstNum(raw.volume, raw.putVolume, raw.rawVolume)
+            : firstNum(raw.volume, raw.rawVolume);
+        const iv = firstNum(raw.iv, raw.impliedVolatility, raw.modelGreeks_impliedVol, raw.bidGreeks_impliedVol, raw.askGreeks_impliedVol, raw.lastGreeks_impliedVol);
+        const bid = firstNum(raw.bid, raw.bidGreeks_optPrice);
+        const ask = firstNum(raw.ask, raw.askGreeks_optPrice);
+        const last = firstNum(raw.last, raw.close, raw.markPrice, raw.modelOptionPrice, raw.optPrice, raw.modelGreeks_optPrice, raw.price);
         const out = {
           flag: txt(raw.flag),
           dte,
+          product: productOf(raw),
           direction,
           strike: toNum(raw.strike),
           delta: absDelta,
           price,
+          bid,
+          ask,
+          last,
+          openInterest,
+          volume,
           gamma,
           signedDelta,
           position,
@@ -593,8 +882,9 @@
           deltaAtTarget: toNum(raw.deltaAtTarget),
           localSymbol: txt(raw.localSymbol),
           expiry,
-          iv: toNum(raw.iv),
+          iv,
           theta,
+          vega: firstNum(raw.vega, raw.modelGreeks_vega, raw.bidGreeks_vega, raw.askGreeks_vega, raw.lastGreeks_vega),
           marketValue,
           unrealizedPnL: toNum(raw.unrealizedPnL),
           absDelta,
@@ -611,7 +901,7 @@
         };
         if (!Number.isFinite(out.deltaAtTarget)) out.deltaAtTarget = out.contractsForTarget * out.absDelta;
         out.riskLevel = riskLevel(out);
-        out.actionCandidate = actionCandidate(out, harvest);
+        out.actionCandidate = actionCandidate(out);
         return out;
       }).filter(row => mode === "chain" || Number.isFinite(row.position));
     }
@@ -634,11 +924,11 @@
       return "安全";
     }
 
-    function actionCandidate(row, harvest) {
+    function actionCandidate(row) {
       if (!(row.position < 0)) return "";
       if (row.dte <= 2 && row.absDelta >= 0.40) return "平仓候选";
       if (row.dte <= 2 && row.absDelta >= 0.25 && row.absDelta < 0.40) return "移仓候选";
-      if (row.absDelta < 0.10 && row.remainingPremium <= harvest) return "收割候选";
+      if (row.absDelta < 0.10 && row.remainingPremium > 0) return "低Delta持有";
       if (row.absDelta >= 0.10 && row.absDelta < 0.25 && row.dte >= 2) return "持有候选";
       return "";
     }
@@ -797,7 +1087,7 @@
     }
 
     function targetPremium() {
-      return numberInput("capitalBase", 0) * numberInput("targetReturn", 0) / 100;
+      return FIXED_TARGET_PREMIUM;
     }
 
     function numberInput(id, fallback) {
@@ -808,23 +1098,38 @@
     function render() {
       try {
         setError("");
-        const account = normalize(positionRows, "position");
-        const chain = normalize(chainRows, "chain");
+        renderProductTabs();
+        const rawAccount = rowsForProduct(positionRows, selectedProduct);
+        const rawChain = rowsForProduct(chainRows, selectedProduct);
+        const rawBars = rowsForProduct(barsRows, selectedProduct);
+        const account = normalize(rowsForProduct(positionRows, selectedProduct), "position");
+        const chain = normalize(rowsForProduct(chainRows, selectedProduct), "chain");
+        const chainStatus = chainCoverageStatus(rawAccount, rawChain);
+        const planningChain = chainStatus.view === "chain" ? chain : [];
+        const bars = rawBars;
         const carry = account.filter(row => row.position < 0);
         const m = metrics(carry);
         const dte = aggregateDte(carry);
         const delta = aggregateDelta(carry);
         const shock = shockRows(account, carry);
-        const matrix = sellMatrix(chain, m);
+        const matrix = sellMatrix(planningChain, m);
         const events = eventRows(carry, m);
         const actions = carry.filter(row => row.actionCandidate).sort((a, b) => riskRank(a.riskLevel) - riskRank(b.riskLevel) || a.dte - b.dte || b.absDelta - a.absDelta);
         const danger = carry.filter(row => row.riskLevel === "危急" || row.riskLevel === "危险" || row.absDelta >= 0.40).sort((a, b) => a.dte - b.dte || b.absDelta - a.absDelta);
 
+        renderDataStatus(rawAccount, rawChain, rawBars);
+        renderKlineChart(bars);
         renderDecisionCards(m, matrix, events, danger);
         $("summary").innerHTML = summaryText(m, carry, shock, events, danger, matrix);
         renderTable("incomeDte", dte, ["到期", "剩余权利金", "有效收益", "风险权利金", "未实现盈亏", "卖出张数", "平均Delta", "净Theta"]);
         renderTable("incomeDelta", delta, ["Delta桶", "卖出张数", "剩余权利金", "有效收益", "未实现盈亏", "净Delta", "净Gamma"]);
+        $("sellMatrixNote").textContent = planningChain.length ? "使用当前新鲜标准期权链估算补卖候选。" : `等待新鲜标准期权链：${chainStatus.sub}`;
         renderTable("sellMatrix", matrix, ["到期", "Delta桶", "方向", "候选数", "平均权利金每张", "平均Delta", "平均Gamma", "补目标需卖", "卖后净Delta", "卖后净Gamma", "卖后净Theta", "样例合约"]);
+        const boardFallback = account.filter(row =>
+          Number.isFinite(row.strike) &&
+          (row.direction === "call" || row.direction === "put")
+        );
+        renderOptionChainBoard(chain.length ? chain : boardFallback, chain.length ? chainStatus.view : "positions");
         renderTable("riskDte", dte, ["到期", "净Delta", "净Gamma", "净Theta", "危险权利金", "卖出张数"]);
         renderTable("shockTable", shock, ["期货变动", "Carry近似PnL", "Account近似PnL", "消耗剩余权利金"]);
         renderTable("eventTable", events, ["窗口", "天数", "隐含期货变动", "对应CTD_bp", "上行情景PnL", "下行情景PnL", "压力占权利金"]);
@@ -835,6 +1140,226 @@
       } catch (error) {
         setError(error.message || String(error));
       }
+    }
+
+    function renderProductTabs() {
+      const products = productSet();
+      if (!products.length) {
+        selectedProduct = "";
+        $("productTabs").innerHTML = "";
+        return;
+      }
+      if (!selectedProduct || !products.includes(selectedProduct)) selectedProduct = products[0];
+      $("productTabs").innerHTML = products.map(product => (
+        `<button class="product-tab ${product === selectedProduct ? "active" : ""}" data-product="${esc(product)}">${esc(product)}</button>`
+      )).join("");
+      $("productTabs").querySelectorAll("button").forEach(button => {
+        button.addEventListener("click", () => {
+          selectedProduct = button.dataset.product;
+          $("expiryFilter").value = "";
+          render();
+        });
+      });
+    }
+
+    function renderDataStatus(accountRows, chainRowsForProduct, barsForProduct) {
+      const expiries = Array.from(new Set(chainRowsForProduct.map(row => txt(row.expiry || row.expiration)).filter(Boolean))).sort();
+      const barTimes = barsForProduct.map(barTime).filter(Number.isFinite).sort((a, b) => a - b);
+      const firstBar = barTimes.length ? new Date(barTimes[0]).toLocaleDateString() : "";
+      const lastBar = barTimes.length ? new Date(barTimes[barTimes.length - 1]).toLocaleDateString() : "";
+      const chainStatus = chainCoverageStatus(accountRows, chainRowsForProduct, expiries);
+      const latestBarAge = latestAgeHours(barsForProduct, ["dateChina", "date", "time", "datetime", "timestamp"]);
+      const barsFresh = Number.isFinite(latestBarAge) && latestBarAge <= MAX_BARS_AGE_HOURS;
+      const barsTone = barsForProduct.length >= MIN_BARS_ROWS && barsFresh ? "ready" : barsForProduct.length ? "partial" : "missing";
+      const barsSub = barsForProduct.length >= MIN_BARS_ROWS && barsFresh
+        ? `${firstBar} - ${lastBar}`
+        : barsForProduct.length
+          ? (barsFresh ? `部分K线，低于 ${MIN_BARS_ROWS} 根阈值` : `K线过期，最新约 ${num(latestBarAge, 1)} 小时前`)
+          : "等待 bars CSV";
+      const cards = [
+        {
+          label: "当前品种",
+          value: selectedProduct || "-",
+          tone: selectedProduct ? "ready" : "missing",
+          sub: productSet().length ? `可切换 ${productSet().join(" / ")}` : "等待数据"
+        },
+        {
+          label: "持仓数据",
+          value: `${accountRows.length} 行`,
+          tone: accountRows.length ? "ready" : "missing",
+          sub: accountRows.length ? "已按当前品种过滤" : "当前品种无持仓"
+        },
+        {
+          label: "期权链",
+          value: `${chainRowsForProduct.length} 行`,
+          tone: chainStatus.tone,
+          sub: chainStatus.sub
+        },
+        {
+          label: "K线",
+          value: `${barsForProduct.length} 根`,
+          tone: barsTone,
+          sub: barsSub
+        }
+      ];
+      $("dataStatus").innerHTML = cards.map(card => (
+        `<div class="status-pill ${card.tone}"><strong>${esc(card.value)}</strong><span>${esc(card.label)} · ${esc(card.sub)}</span></div>`
+      )).join("");
+    }
+
+    function latestAgeHours(rows, fields) {
+      const latest = Math.max(...rows.map(row => {
+        const value = fields.map(field => txt(row[field])).find(Boolean);
+        return value ? Date.parse(value) : NaN;
+      }).filter(Number.isFinite));
+      if (!Number.isFinite(latest)) return NaN;
+      return Math.max((Date.now() - latest) / 3600000, 0);
+    }
+
+    function optionPositionCount(rows) {
+      return rows.filter(row => {
+        const right = txt(row.right || row.direction).toUpperCase();
+        return right === "C" || right === "P" || right === "CALL" || right === "PUT";
+      }).length;
+    }
+
+    function chainCoverageStatus(accountRows, chainRowsForProduct, expiries = []) {
+      const latestChainAge = latestAgeHours(chainRowsForProduct, ["snapshotTimeUtc", "snapshotTime", "timestamp"]);
+      const chainFresh = Number.isFinite(latestChainAge) && latestChainAge <= MAX_CHAIN_AGE_HOURS;
+      if (chainRowsForProduct.length >= MIN_CHAIN_ROWS && chainFresh) {
+        return {
+          tone: "ready",
+          view: "chain",
+          sub: `${expiries.length} 个到期，最近 ${expiries[0] || "-"}`
+        };
+      }
+      if (chainRowsForProduct.length) {
+        const stale = !chainFresh && Number.isFinite(latestChainAge);
+        return {
+          tone: "partial",
+          view: stale ? "stale_chain" : "partial_chain",
+          sub: stale ? `期权链过期，最新约 ${num(latestChainAge, 1)} 小时前` : `部分链，低于 ${MIN_CHAIN_ROWS} 行阈值`
+        };
+      }
+      if (optionPositionCount(accountRows)) {
+        return { tone: "partial", view: "positions", sub: "暂无完整链，使用持仓腿兜底" };
+      }
+      return { tone: "missing", view: "missing", sub: "等待期权链 CSV" };
+    }
+
+    function barTime(row) {
+      return Date.parse(txt(row.dateChina || row.date || row.time || row.datetime || row.timestamp || row.snapshotTimeUtc));
+    }
+
+    function renderKlineChart(rows) {
+      const bars = rows.map(row => ({
+        time: barTime(row),
+        open: toNum(row.open),
+        high: toNum(row.high),
+        low: toNum(row.low),
+        close: toNum(row.close),
+        volume: toNum(row.volume)
+      })).filter(row =>
+        Number.isFinite(row.time) &&
+        Number.isFinite(row.open) &&
+        Number.isFinite(row.high) &&
+        Number.isFinite(row.low) &&
+        Number.isFinite(row.close)
+      ).sort((a, b) => a.time - b.time);
+
+      const chart = $("klineChart");
+      if (!bars.length) {
+        $("klineCaption").textContent = selectedProduct ? `${selectedProduct} K线数据未生成` : "等待持仓或K线数据";
+        chart.innerHTML = `<div class="muted" style="padding:24px; line-height:1.7;">等待 <strong>data/carry_dashboard_bars.csv</strong>。<br>期望字段：symbol,date,open,high,low,close,volume。<br>生成后刷新页面即可显示近一个月 30 分钟K线。</div>`;
+        return;
+      }
+
+      const latest = bars[bars.length - 1].time;
+      const cutoff = latest - 31 * 86400000;
+      const visible = bars.filter(row => row.time >= cutoff);
+      const data = visible.length ? visible : bars;
+      const width = 1200;
+      const height = 310;
+      const pad = { left: 52, right: 62, top: 18, bottom: 34 };
+      const plotW = width - pad.left - pad.right;
+      const plotH = height - pad.top - pad.bottom;
+      const minLow = Math.min(...data.map(row => row.low));
+      const maxHigh = Math.max(...data.map(row => row.high));
+      const spread = Math.max(maxHigh - minLow, 0.0001);
+      const yMin = minLow - spread * 0.06;
+      const yMax = maxHigh + spread * 0.06;
+      const x = index => pad.left + (data.length === 1 ? plotW / 2 : index * plotW / (data.length - 1));
+      const y = value => pad.top + (yMax - value) * plotH / (yMax - yMin);
+      const candleW = clamp(plotW / Math.max(data.length, 1) * 0.62, 2, 11);
+      const grid = Array.from({ length: 5 }, (_, i) => {
+        const value = yMin + (yMax - yMin) * i / 4;
+        const yy = y(value);
+        return `<line x1="${pad.left}" y1="${yy}" x2="${width - pad.right}" y2="${yy}" stroke="#e5eaf1"/><text x="${width - pad.right + 8}" y="${yy + 4}" fill="#667085" font-size="12">${num(value, 3)}</text>`;
+      }).join("");
+      const candles = data.map((row, i) => {
+        const xx = x(i);
+        const up = row.close >= row.open;
+        const color = up ? "#087443" : "#c7352b";
+        const bodyTop = y(Math.max(row.open, row.close));
+        const bodyBottom = y(Math.min(row.open, row.close));
+        const bodyH = Math.max(bodyBottom - bodyTop, 1);
+        return `<line x1="${xx}" y1="${y(row.low)}" x2="${xx}" y2="${y(row.high)}" stroke="${color}" stroke-width="1.4"/><rect x="${xx - candleW / 2}" y="${bodyTop}" width="${candleW}" height="${bodyH}" fill="${up ? "#d1fadf" : "#fee4e2"}" stroke="${color}" stroke-width="1"/>`;
+      }).join("");
+      const firstDate = new Date(data[0].time).toLocaleDateString();
+      const lastDate = new Date(data[data.length - 1].time).toLocaleDateString();
+      const ageHours = Math.max((Date.now() - latest) / 3600000, 0);
+      const freshnessNote = Number.isFinite(ageHours) && ageHours > MAX_BARS_AGE_HOURS
+        ? ` | K线过期，最新约 ${num(ageHours, 1)} 小时前`
+        : "";
+      const sampleNote = data.length < MIN_BARS_ROWS ? ` | 样本不足，低于 ${MIN_BARS_ROWS} 根阈值` : "";
+      $("klineCaption").textContent = `${selectedProduct || "全部"} | ${data.length} 根 | ${firstDate} - ${lastDate}${freshnessNote}${sampleNote}`;
+      chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="K线图">${grid}<line x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}" stroke="#cfd6e2"/><text x="${pad.left}" y="${height - 10}" fill="#667085" font-size="12">${esc(firstDate)}</text><text x="${width - pad.right - 70}" y="${height - 10}" fill="#667085" font-size="12">${esc(lastDate)}</text>${candles}</svg>`;
+    }
+
+    function renderOptionChainBoard(chain, source = "chain") {
+      const expirations = Array.from(new Set(chain.map(row => row.expiry).filter(Boolean))).sort();
+      if (!expirations.length) {
+        $("chainBoardTitle").textContent = `${selectedProduct || ""} 标准链表`;
+        $("chainBoardCaption").textContent = "等待期权链数据";
+        $("optionChainBoard").innerHTML = `<table><thead><tr><th class="text">暂无数据</th></tr></thead><tbody><tr><td class="text muted">等待期权链CSV</td></tr></tbody></table>`;
+        return;
+      }
+      let selectedExpiry = txt($("expiryFilter").value);
+      if (!expirations.includes(selectedExpiry)) {
+        selectedExpiry = expirations[0];
+        $("expiryFilter").value = selectedExpiry;
+      }
+      const rows = chain.filter(row => row.expiry === selectedExpiry);
+      const calls = new Map(rows.filter(row => row.direction === "call").map(row => [String(row.strike), row]));
+      const puts = new Map(rows.filter(row => row.direction === "put").map(row => [String(row.strike), row]));
+      const strikes = Array.from(new Set(rows.map(row => row.strike).filter(Number.isFinite))).sort((a, b) => b - a);
+      const head = [
+        ["call", "C Last"], ["call", "C Bid"], ["call", "C Ask"], ["call", "C Delta"], ["call", "C Gamma"], ["call", "C IV"], ["call", "C OI"], ["call", "C Vol"],
+        ["strike", "Strike"],
+        ["put", "P Last"], ["put", "P Bid"], ["put", "P Ask"], ["put", "P Delta"], ["put", "P Gamma"], ["put", "P IV"], ["put", "P OI"], ["put", "P Vol"]
+      ].map(([cls, label]) => `<th class="${cls}">${label}</th>`).join("");
+      const body = strikes.map(strike => {
+        const call = calls.get(String(strike)) || {};
+        const put = puts.get(String(strike)) || {};
+        const callCells = [call.last, call.bid, call.ask, call.signedDelta, call.gamma, call.iv, call.openInterest, call.volume].map((value, i) => chainCell(value, i >= 6, "call")).join("");
+        const putCells = [put.last, put.bid, put.ask, put.signedDelta, put.gamma, put.iv, put.openInterest, put.volume].map((value, i) => chainCell(value, i >= 6, "put")).join("");
+        return `<tr>${callCells}<td class="strike">${num(strike, 3)}</td>${putCells}</tr>`;
+      }).join("");
+      const sourceMeta = {
+        chain: ["标准链表", ""],
+        stale_chain: ["过期期权链", " | 期权链快照已超过新鲜度阈值"],
+        partial_chain: ["部分链表", " | 期权链行数低于完整阈值"],
+        positions: ["持仓链视图", " | 暂无完整期权链，当前为持仓腿报价"]
+      }[source] || ["标准链表", ""];
+      $("chainBoardTitle").textContent = `${selectedProduct || ""} ${sourceMeta[0]}`;
+      $("chainBoardCaption").textContent = `${selectedExpiry} | ${strikes.length} strikes | last / bid / ask / delta / gamma / iv / oi / volume${sourceMeta[1]}`;
+      $("optionChainBoard").innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function chainCell(value, integerLike, side) {
+      if (!Number.isFinite(value)) return `<td class="${side}">-</td>`;
+      if (integerLike) return `<td class="${side}">${num(value, 0)}</td>`;
+      return `<td class="${side}">${Math.abs(value) < 0.01 ? num(value, 5) : num(value, 3)}</td>`;
     }
 
     function renderDecisionCards(m, matrix, events, danger) {
@@ -905,17 +1430,18 @@
     }
 
     function riskColumns() {
-      return ["风险等级", "操作候选", "标记", "DTE", "方向", "行权价", "|Delta|", "Delta", "价格", "Gamma", "持仓", "Delta暴露", "Gamma暴露", "Theta暴露", "剩余权利金", "有效收益", "风险权利金", "合约", "到期", "IV", "Theta", "市值", "未实现盈亏"];
+      return ["风险等级", "操作候选", "品种", "标记", "DTE", "方向", "行权价", "|Delta|", "Delta", "价格", "Gamma", "持仓", "Delta暴露", "Gamma暴露", "Theta暴露", "剩余权利金", "有效收益", "风险权利金", "合约", "到期", "IV", "Theta", "市值", "未实现盈亏"];
     }
 
     function detailColumns() {
-      return ["标记", "DTE", "方向", "行权价", "|Delta|", "价格", "Gamma", "Delta", "持仓", "每张权利金", "剩余权利金", "目标月收益", "目标张数", "目标Delta", "合约", "到期", "IV", "Theta", "市值", "未实现盈亏", "Delta暴露", "Gamma暴露", "Theta暴露", "是否卖权", "是否买权", "风险等级", "操作候选"];
+      return ["品种", "标记", "DTE", "方向", "行权价", "|Delta|", "价格", "Gamma", "Delta", "持仓", "每张权利金", "剩余权利金", "目标月收益", "目标张数", "目标Delta", "合约", "到期", "IV", "Theta", "市值", "未实现盈亏", "Delta暴露", "Gamma暴露", "Theta暴露", "是否卖权", "是否买权", "风险等级", "操作候选"];
     }
 
     function translateRow(row) {
       return {
         "风险等级": row.riskLevel,
         "操作候选": row.actionCandidate,
+        "品种": row.product,
         "标记": row.flag,
         "DTE": row.dte,
         "方向": row.direction === "put" ? "Put" : row.direction === "call" ? "Call" : row.direction,
@@ -953,7 +1479,7 @@
     };
 
     function isText(col) {
-      return ["到期", "Delta桶", "方向", "样例合约", "窗口", "消耗剩余权利金", "压力占权利金", "风险等级", "操作候选", "标记", "合约"].includes(col);
+      return ["品种", "到期", "Delta桶", "方向", "样例合约", "窗口", "消耗剩余权利金", "压力占权利金", "风险等级", "操作候选", "标记", "合约"].includes(col);
     }
 
     function format(col, value) {
@@ -1012,40 +1538,74 @@
 
     function samplePositions() {
       return [
-        { flag: "", dte: 0, direction: "put", strike: 107.25, delta: 0.45, price: 0.065, gamma: 1.2, signedDelta: -0.45, position: -1, premiumPerContract: 65, localSymbol: "VF5M6 P1072", expiry: "20260629", iv: 0.10, theta: -0.020, marketValue: -65, unrealizedPnL: 11 },
-        { flag: "", dte: 1, direction: "put", strike: 106.50, delta: 0.18, price: 0.003, gamma: 0.12, signedDelta: -0.18, position: -2, premiumPerContract: 3, localSymbol: "GF5M6 P1065", expiry: "20260630", iv: 0.05, theta: -0.002, marketValue: -6, unrealizedPnL: 20 },
-        { flag: "", dte: 8, direction: "call", strike: 108.00, delta: 0.12, price: 0.007, gamma: 0.05, signedDelta: 0.12, position: -3, premiumPerContract: 7, localSymbol: "OZFN6 C1080", expiry: "20260707", iv: 0.08, theta: -0.003, marketValue: -21, unrealizedPnL: 9 },
-        { flag: "", dte: 11, direction: "call", strike: 108.50, delta: 0.08, price: 0.002, gamma: 0.03, signedDelta: 0.08, position: 1, premiumPerContract: 2, localSymbol: "OZFN6 C1085", expiry: "20260710", iv: 0.08, theta: -0.001, marketValue: 2, unrealizedPnL: -1 }
+        { symbol: "ZF", flag: "", dte: 0, direction: "put", strike: 107.25, delta: 0.45, price: 0.065, gamma: 1.2, signedDelta: -0.45, position: -1, premiumPerContract: 65, localSymbol: "VF5M6 P1072", expiry: "20260629", iv: 0.10, theta: -0.020, marketValue: -65, unrealizedPnL: 11 },
+        { symbol: "ZF", flag: "", dte: 1, direction: "put", strike: 106.50, delta: 0.18, price: 0.003, gamma: 0.12, signedDelta: -0.18, position: -2, premiumPerContract: 3, localSymbol: "GF5M6 P1065", expiry: "20260630", iv: 0.05, theta: -0.002, marketValue: -6, unrealizedPnL: 20 },
+        { symbol: "ZN", flag: "", dte: 8, direction: "call", strike: 111.00, delta: 0.14, price: 0.035, gamma: 0.08, signedDelta: 0.14, position: -2, premiumPerContract: 35, localSymbol: "OZNN6 C1110", expiry: "20260707", iv: 0.09, theta: -0.004, marketValue: -70, unrealizedPnL: 18 },
+        { symbol: "ZN", flag: "", dte: 11, direction: "put", strike: 109.50, delta: 0.10, price: 0.021, gamma: 0.04, signedDelta: -0.10, position: 1, premiumPerContract: 21, localSymbol: "OZNN6 P1095", expiry: "20260710", iv: 0.08, theta: -0.002, marketValue: 21, unrealizedPnL: -2 },
+        { symbol: "ZC", flag: "", dte: 14, direction: "put", strike: 420.00, delta: 0.12, price: 3.25, gamma: 0.03, signedDelta: -0.12, position: -1, premiumPerContract: 162.5, multiplier: 50, localSymbol: "OZCU6 P420", expiry: "20260717", iv: 0.22, theta: -0.015, marketValue: -162.5, unrealizedPnL: 9 }
       ];
     }
 
     function sampleChain() {
       const rows = [];
-      for (const dte of [1, 2, 5, 14, 28]) {
-        for (const direction of ["put", "call"]) {
-          for (const delta of [0.07, 0.12, 0.18, 0.28, 0.38]) {
+      const snapshotTimeUtc = new Date().toISOString();
+      for (const product of ["ZF", "ZN", "ZC"]) {
+        const base = product === "ZF" ? 107 : product === "ZN" ? 110 : 420;
+        const multiplier = product === "ZC" ? 50 : 1000;
+        for (const dte of [1, 2, 5, 14, 28]) {
+          for (const direction of ["put", "call"]) {
+            for (const delta of [0.07, 0.12, 0.18, 0.28, 0.38]) {
             const signed = direction === "put" ? -delta : delta;
+            const price = product === "ZC" ? 1.2 + delta * 9 + dte * 0.08 : 0.002 + delta * 0.08 + dte * 0.0006;
             rows.push({
+              symbol: product,
               dte,
               direction,
-              strike: direction === "put" ? 107 - delta * 4 : 107 + delta * 4,
+              strike: direction === "put" ? base - delta * (product === "ZC" ? 70 : 4) : base + delta * (product === "ZC" ? 70 : 4),
               delta,
               signedDelta: signed,
-              price: 0.002 + delta * 0.08 + dte * 0.0006,
+              price,
+              bid: price * 0.94,
+              ask: price * 1.06,
+              last: price,
               gamma: Math.max(0.02, 0.6 / Math.sqrt(dte + 1) * delta),
               theta: -(0.001 + delta * 0.01),
-              premiumPerContract: (0.002 + delta * 0.08 + dte * 0.0006) * 1000,
-              localSymbol: `${direction === "put" ? "P" : "C"}${dte}-${Math.round(delta * 100)}`,
+              openInterest: Math.round(50 + dte * 4 + delta * 700),
+              volume: Math.round(dte + delta * 80),
+              multiplier,
+              premiumPerContract: price * multiplier,
+              localSymbol: `${product}${direction === "put" ? "P" : "C"}${dte}-${Math.round(delta * 100)}`,
               expiry: "20260724",
-              iv: 0.06 + delta * 0.05
+              iv: 0.06 + delta * 0.05,
+              snapshotTimeUtc
             });
+            }
           }
         }
       }
       return rows;
     }
 
-    render();
+    function sampleBars() {
+      const rows = [];
+      const now = Date.now();
+      for (const product of ["ZF", "ZN", "ZC"]) {
+        let price = product === "ZF" ? 107 : product === "ZN" ? 110 : 420;
+        for (let i = 31 * 48; i >= 0; i--) {
+          const time = new Date(now - i * 30 * 60000);
+          const drift = Math.sin(i / 12) * (product === "ZC" ? 0.75 : 0.025) + (product === "ZN" ? 0.01 : product === "ZC" ? 0.12 : -0.006);
+          const open = price;
+          const close = price + drift;
+          const high = Math.max(open, close) + (product === "ZC" ? 1.0 : 0.025) + Math.abs(Math.sin(i)) * (product === "ZC" ? 0.25 : 0.01);
+          const low = Math.min(open, close) - (product === "ZC" ? 1.0 : 0.025) - Math.abs(Math.cos(i)) * (product === "ZC" ? 0.25 : 0.01);
+          rows.push({ symbol: product, date: time.toISOString(), open, high, low, close, volume: 200 + (i % 17) * 8 });
+          price = close;
+        }
+      }
+      return rows;
+    }
+
+    loadDefaultData();
   </script>
 </body>
 </html>

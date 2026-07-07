@@ -1,89 +1,102 @@
 # Cleanup Review
 
-本文件是核验清单，不代表已经删除。当前阶段只新增 `target_treasury_monitor_clean`，不清理旧文件，避免误删仍有价值的调试资产。
+This file records the cleanup state after consolidating the active treasury workflow around `target_treasury_monitor_clean/`.
 
-## 明确不碰
+## Kept Intentionally
 
 - `news_api/`
 - `prediction_market/`
-- `data/prediction_market_*.csv`
+- `target_treasury_monitor_clean/`
+- `carry_risk_dashboard.html`
+- `sell_side_inventory_planner.html`
+- `verify_clean_workflows.ipynb`
+- `run_clean_treasury_monitor.ps1`
+- `data/carry_dashboard_positions.csv`
+- `data/carry_dashboard_chain.csv`
+- `data/carry_dashboard_bars.csv`
 
-## 新目录覆盖的核心需求
+## Removed
 
-- 账户 dashboard：`account_dashboard.py` + `app.py` 的 `Account dashboard` 页签。
-- 期权链批量快速更新：`chain_batch.py` + CLI `batch-chain`。
-- 期权链实时监控：`chain_realtime.py` + CLI `live-chain`，使用持久订阅，避免每次刷新都重新请求全量行情。
-- 统一入口：`run_clean_treasury_monitor.ps1`、`python -m target_treasury_monitor_clean.cli ...`。
-
-## 核验后优先清理候选
-
-这些大概率是运行产物或临时文件，可在你确认新目录可用后删除：
+Runtime/cache artifacts:
 
 ```text
 __pycache__/
 target_treasury_account_monitor/__pycache__/
-streamlit_8502.err.log
-streamlit_8502.out.log
-~$live_carry.xlsx
-carry_risk_dashboard.html
-live_carry.csv
-live_carry.xlsx
-live_chain_carry.csv
-zf_option_chain_account_frame.xlsx
-zf_option_chain_monitor_frame.xlsx
+target_treasury_monitor_clean/__pycache__/
+data/.DS_Store
 ```
 
-## 外层 notebook 梳理
+Historical exports and old data snapshots:
 
 ```text
-test.ipynb
+live_carry.xlsx
+zf_option_chain_account_frame.xlsx
+zf_option_chain_monitor_frame.xlsx
+data/clean_verify/ZF_FOP_Static_202609_202612_from_20260630_to_all_*
+data/clean_verify/ZF_FOP_Static_202609_202612_from_20260702_to_all_*
+data/clean_verify/ZF_FOP_Static_202609_202612_from_20260703_to_all_*
+data/clean_verify/chain_monitor.csv
 ```
 
-早期临时实验 notebook，仓库 `.gitignore` 已经标记为不提交。新目录验证后可删除。
+Old notebooks:
 
 ```text
 ZF_FOP_Debug.ipynb
-```
-
-大型 ZF 期权链调试 notebook。核心逻辑已经沉淀到 `treasury_fop_chain.py` 以及新目录的 `chain_batch.py` / `chain_realtime.py`。核验后建议归档或删除。
-
-```text
 treasury_carry_planner_validation.ipynb
-```
-
-carry planner 验证 notebook。建议先保留，等 `Account dashboard` 和 `Batch chain` 输出与你现有看板一致后，再决定是否删除。
-
-```text
 target_treasury_account_monitor/test_target_treasury_monitor.ipynb
 ```
 
-旧目标账户 monitor 的 smoke test notebook。新 CLI 的 `dashboard-snapshot` 验证通过后，可归档或删除。
-
-## 旧 Python 文件暂时保留
-
-这些仍被新目录复用，现阶段不能删：
+Old entry points and dashboards:
 
 ```text
-treasury_fop_chain.py
-target_treasury_account_monitor/
+run_zf_dashboard.ps1
+run_target_treasury_monitor.ps1
+zf_option_dashboard.py
+portfolio_monitor.py
+zf_viz.py
 ```
 
-这些是旧入口或旧看板，等新目录验证通过、底层函数迁移完成后再清理：
+Old tests and diagnostics:
 
 ```text
-portfolio_monitor.py
-zf_option_dashboard.py
-zf_viz.py
-treasury_fop_chain.py
+test_static_zf_option_chain.py
+test_live_zf_near_expiry_chain.py
+target_treasury_account_monitor/test_position_snapshot.py
+target_treasury_account_monitor/test_margin_whatif.py
+target_treasury_account_monitor/inspect_combo_sources.py
+```
+
+Old UI modules that are no longer imported by the clean workflow:
+
+```text
 target_treasury_account_monitor/app.py
+target_treasury_account_monitor/carry_dashboard.py
+target_treasury_account_monitor/margin.py
+target_treasury_account_monitor/notebook_view.py
+target_treasury_account_monitor/portfolio_view.py
+target_treasury_account_monitor/wechat.py
+target_treasury_account_monitor/README.md
+```
+
+## Still Required Legacy Layer
+
+These files remain because the clean workflow imports them directly or indirectly:
+
+```text
+treasury_fop_chain.py
+target_treasury_account_monitor/__init__.py
+target_treasury_account_monitor/config.py
+target_treasury_account_monitor/contracts.py
+target_treasury_account_monitor/market_data.py
+target_treasury_account_monitor/utils.py
+target_treasury_account_monitor/carry_view.py
+target_treasury_account_monitor/frames.py
+target_treasury_account_monitor/greeks.py
+target_treasury_account_monitor/ib_client.py
+target_treasury_account_monitor/spreads.py
+target_treasury_account_monitor/option_chain_view.py
 target_treasury_account_monitor/static_option_chain.py
 target_treasury_account_monitor/live_option_chain.py
 ```
 
-## 建议核验顺序
-
-1. 先运行新 Streamlit：`.\run_clean_treasury_monitor.ps1`
-2. 在 `Account dashboard` 页签确认账户持仓、资金、Greeks、PnL 与旧看板一致。
-3. 在 `Batch chain` 页签用 delayed 数据刷新 `202609,202612`，确认保存的 CSV 可用。
-4. 在 `Live chain` 页签启动订阅，确认后续刷新速度明显快于重复 batch snapshot。
-5. 核验通过后，再按上面的清理候选删除旧产物和 notebook。
+Next cleanup step: migrate these lower-level helpers into `target_treasury_monitor_clean/`, update imports, then delete `target_treasury_account_monitor/` entirely.

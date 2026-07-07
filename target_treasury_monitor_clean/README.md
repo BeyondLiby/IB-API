@@ -92,6 +92,171 @@ partial
 python -m target_treasury_monitor_clean.cli live-chain --market-data-type live --months 202609,202612 --poll-seconds 1
 ```
 
+## Carry HTML 同步
+
+`carry_risk_dashboard.html` 会自动读取仓库根目录下的稳定 CSV；当前按 `ZF` / `ZN` / `ZC` 三个资产识别和切换：
+
+```text
+data/carry_dashboard_positions.csv
+data/carry_dashboard_chain.csv
+data/carry_dashboard_bars.csv
+```
+
+建议通过本地 HTTP 打开页面，这样浏览器能稳定自动读取 `data/*.csv`：
+
+```powershell
+python -m target_treasury_monitor_clean.cli serve-carry-html `
+  --directory . `
+  --host 127.0.0.1 `
+  --port 8765
+```
+
+如果端口被占用，可以改成其他端口，或用 `--port 0` 让系统自动分配；命令会打印实际 URL。
+
+然后打开：
+
+```text
+http://127.0.0.1:8765/carry_risk_dashboard.html
+```
+
+从 notebook 或其他脚本生成 CSV 后，可以让 CLI 自动挑 `data/clean_verify` 下面最新的持仓和各资产 `*_monitor_frame.csv` 发布到 HTML：
+
+```powershell
+python -m target_treasury_monitor_clean.cli sync-latest-carry-html `
+  --input-dir data/clean_verify `
+  --output-dir data `
+  --products ZF,ZN,ZC `
+  --summary-only `
+  --require-ready
+```
+
+自动发现规则：
+
+```text
+positions : data/clean_verify/dashboard_treasury_positions.csv
+chain     : data/clean_verify/{ZF,ZN,ZC}_FOP_Static_*_monitor_frame.csv 中每个资产最新文件
+bars      : 优先 data/clean_verify/carry_dashboard_bars.csv，否则复用 data/carry_dashboard_bars.csv
+```
+
+如果想手动指定 CSV，也可以发布到 HTML：
+
+```powershell
+python -m target_treasury_monitor_clean.cli sync-carry-html `
+  --positions data/clean_verify/dashboard_treasury_positions.csv `
+  --chain data/clean_verify/ZF_FOP_Static_202609_202612_from_20260630_to_all_monitor_frame.csv `
+  --bars data/carry_dashboard_bars.csv `
+  --output-dir data `
+  --summary-only `
+  --require-ready
+```
+
+`--positions`、`--chain`、`--bars` 支持逗号或分号分隔的多个文件，也支持 pandas notebook 直接复制出来的 HTML dataframe 文本文件；pandas 截断表里的 `...` 省略号行会被过滤。若输入文件名包含 `ZF` / `ZN` / `ZC`，且部分行内部无法识别品种，发布时会用文件名补 `product`，例如 `ZF_chain.csv,ZN_chain.csv,ZC_chain.csv`。
+`--summary-only` 会在发布后打印简洁状态；`--require-ready` 会复用后面的完整性规则，在缺新鲜完整链或 K 线时返回非 0。
+
+一键刷新 ZF/ZN 持仓、期权链和 30 分钟 K 线；`ZF/ZN` 共用 `--chain-specs`，`ZC` 预留 `--zc-chain-specs` 单独配置：
+
+```powershell
+python -m target_treasury_monitor_clean.cli refresh-carry-html `
+  --host 127.0.0.1 --port 4001 --market-data-type delayed `
+  --positions-csv data/carry_dashboard_positions.csv `
+  --chain-specs "ZF=202609,202612;ZN=202609,202612" `
+  --zc-chain-specs "" `
+  --bars-contracts "ZF:202609,ZN:202609" `
+  --html-data-dir data `
+  --min-chain-rows 50 `
+  --min-bars-rows 100 `
+  --max-chain-age-hours 24 `
+  --max-bars-age-hours 72 `
+  --require-ready
+```
+
+`--require-ready` 会在发布后检查有持仓的资产是否都有新鲜完整期权链和 K 线；如果 IB 请求超时导致数据不完整，命令会返回非 0。等 ZC 参数确认后，把 `--zc-chain-specs` 改成类似 `"ZC=202609,202612"` 即可纳入同一流程。
+
+只刷新 K 线时：
+
+```powershell
+python -m target_treasury_monitor_clean.cli future-bars `
+  --host 127.0.0.1 --port 4001 --market-data-type delayed `
+  --contracts ZF:202609,ZN:202609 `
+  --bar-size "30 mins" --duration "1 M" --keep-going `
+  --prefer-local-symbol `
+  --cache-dir data/clean_verify `
+  --output data/carry_dashboard_bars.csv
+```
+
+`--prefer-local-symbol` 会在没有缓存 conId 时直接构造 `ZFU6` / `ZNU6` 这类标准 localSymbol，减少对 `qualifyContracts` 的依赖；如果 IB 历史数据请求本身超时，这个参数也无法绕过。
+
+如果 `future-bars` 或 `refresh-carry-html` 卡住，先跑轻量诊断：
+
+```powershell
+python -m target_treasury_monitor_clean.cli ib-smoke `
+  --host 127.0.0.1 --port 4001 --market-data-type delayed `
+  --contracts ZF:202609,ZN:202609 `
+  --timeout 6
+```
+
+`connected=true` 且 `server_time` 有值说明 socket 和 IB server 时间正常；如果 `contracts[].error` 是 `TimeoutError`，说明合约详情/qualify 请求没有返回，期权链发现和 K 线拉取也会被卡住。
+
+检查 HTML 当前数据是否完整：
+
+```powershell
+python -m target_treasury_monitor_clean.cli validate-carry-html `
+  --data-dir data `
+  --expected-products ZF,ZN,ZC `
+  --min-chain-rows 50 `
+  --min-bars-rows 100 `
+  --max-chain-age-hours 24 `
+  --max-bars-age-hours 72
+```
+
+如果要在脚本里强制拦住不完整数据，加 `--require-ready`；当任一有持仓资产缺新鲜完整链或 K 线时，命令会返回非 0。
+如果只想快速看结论，加 `--summary-only` 输出简洁状态。
+
+重点看 `readiness`：
+
+```text
+criteria           : 判定完整链/K线的最小行数阈值
+missing_full_chain : 还有哪些品种缺完整且新鲜的期权链；低于 min_chain_rows 或超过 max_chain_age_hours 都会算缺
+missing_bars       : 还有哪些品种缺 30 分钟 K 线；低于 min_bars_rows 或超过 max_bars_age_hours 都会算缺
+chain_view         : standard_chain 标准且新鲜；stale_chain 过期链；partial_chain 截断/样本链；position_fallback 持仓腿报价兜底
+```
+
+## 卖方期权库存规划器
+
+`sell_side_inventory_planner.html` 是一个新的独立 dashboard，暂时不和旧 `carry_risk_dashboard.html` 合并。它的定位不是自动给交易建议，也不会自动下单，而是把当前卖方期权库存、候选链、目标压力、节点集中度和手动 what-if 放在一个中文看板里。
+
+默认读取：
+
+```text
+data/carry_dashboard_positions.csv
+data/carry_dashboard_chain.csv
+```
+
+启动本地服务：
+
+```powershell
+python -m target_treasury_monitor_clean.cli serve-inventory-planner `
+  --directory . `
+  --host 127.0.0.1 `
+  --port 8766
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:8766/sell_side_inventory_planner.html
+```
+
+这个新 planner 的核心约束：
+
+- 核心库存只统计 `position < 0` 的期权；多头期权不参与核心计算。
+- 0DTE 只作为普通 DTE 桶，不按来源分类，也不会自动标高风险。
+- Put / Call 分开看，并按用户配置的 DTE 窗口、支撑区/压力区、Delta 区间扫描候选。
+- 候选排序使用收益、分布平衡、风险、目标贴合的综合分；不会只按最高权利金排序。
+- 手动填写候选数量后，页面会即时重算 Before / Added / After、压力场景和节点集中度。
+- 节点集中度只给提示，不会禁止用户覆盖。
+- Put / Call 候选热力图按“行权价 x DTE 桶”展示；选中的手动计划可导出 JSON、CSV 和 Markdown。
+
 ## 当前仍复用的旧代码
 
 为了避免重写后引入不必要风险，这一版仍复用：
