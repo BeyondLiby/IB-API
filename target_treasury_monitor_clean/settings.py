@@ -11,6 +11,8 @@ MARKET_DATA_TYPES = {
     "delayed_frozen": 4,
 }
 
+DEFAULT_IB_ACCOUNT = "U16251798"
+
 
 @dataclass(frozen=True)
 class IBSettings:
@@ -19,7 +21,7 @@ class IBSettings:
     host: str = "127.0.0.1"
     port: int = 4001
     client_id: int = 351
-    account: str = ""
+    account: str = DEFAULT_IB_ACCOUNT
     market_data_type: int = 1
     readonly: bool = True
 

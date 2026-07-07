@@ -252,6 +252,8 @@ def parse_short_positions(rows: Iterable[dict[str, Any]], config: PlannerConfig,
         if allowed and underlying not in allowed:
             continue
         dte = dte_from_row(row, today)
+        if dte < 0:
+            continue
         if right == "P" and not (config.put_dte_min <= dte <= config.put_dte_max):
             continue
         if right == "C" and not (config.call_dte_min <= dte <= config.call_dte_max):

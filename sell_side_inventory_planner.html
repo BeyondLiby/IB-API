@@ -340,6 +340,19 @@
       margin: 0;
     }
 
+    .limit-choice label {
+      min-width: 56px;
+      justify-content: center;
+    }
+
+    .candidate-filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      align-items: end;
+      margin: 4px 0 10px;
+    }
+
     .top-layout {
       display: grid;
       grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
@@ -387,8 +400,8 @@
       text-align: center;
       font-weight: 700;
       color: var(--ink);
-      width: 86px;
-      white-space: normal;
+      width: 62px;
+      white-space: nowrap;
     }
 
     .option-cross td {
@@ -436,7 +449,7 @@
     td.put .chain-cell { justify-content: flex-start; text-align: left; }
 
     .strike-meta {
-      display: block;
+      display: none;
       color: var(--muted);
       font-size: 10px;
       font-weight: 600;
@@ -445,9 +458,10 @@
 
     .strike-value {
       display: block;
-      font-size: 20px;
+      font-size: 12px;
       font-weight: 800;
       line-height: 1.1;
+      color: #155eef;
     }
 
     .chart-panel {
@@ -462,12 +476,155 @@
       align-items: end;
     }
 
+    .chart-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .chart-controls select {
+      width: 80px;
+    }
+
+    .chart-controls button {
+      min-width: 34px;
+      padding: 7px 9px;
+    }
+
     .price-chart {
       width: 100%;
       height: 240px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fff;
+    }
+
+    .price-chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .product-overview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .product-card {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 10px;
+      height: auto;
+      min-height: 128px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-left: 3px solid transparent;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 12px 14px;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+      white-space: normal;
+    }
+
+    .product-card.active {
+      border-color: var(--blue);
+      border-left-color: var(--blue);
+      background: #f8fbff;
+      box-shadow: inset 0 0 0 1px rgba(21, 94, 239, 0.12);
+    }
+
+    .product-card.missing {
+      opacity: 0.72;
+      background: #f8fafc;
+    }
+
+    .product-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .product-symbol {
+      display: block;
+      font-size: 20px;
+      color: var(--ink);
+      line-height: 1.1;
+      font-weight: 800;
+    }
+
+    .product-price {
+      display: grid;
+      gap: 2px;
+      justify-items: end;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .product-price b {
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .product-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .product-metrics span {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      border: 1px solid #eef2f7;
+      border-radius: 6px;
+      background: #f8fafc;
+      padding: 7px 8px;
+    }
+
+    .product-metrics em {
+      overflow: hidden;
+      color: var(--muted);
+      font-style: normal;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .product-metrics b {
+      display: block;
+      overflow: hidden;
+      color: var(--ink);
+      font-weight: 800;
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .product-status {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .chart-box {
+      min-width: 0;
+    }
+
+    .chart-box h3 {
+      margin: 0 0 6px;
     }
 
     .future-price-prompt {
@@ -479,16 +636,175 @@
     }
 
     .spot-row td {
-      background: #ecfdf3;
+      background: #f0fdf4;
       color: var(--green);
       text-align: center;
-      font-weight: 700;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 5px;
     }
 
     .chain-expiry {
-      margin: 0 0 10px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin: 10px 0 6px;
       color: #344054;
+      font-size: 12px;
+    }
+
+    .chain-expiry strong {
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .chain-expiry span {
+      color: var(--muted);
+    }
+
+    .expiry-sketch {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    .chain-map {
+      display: grid;
+      gap: 4px;
+      min-width: max-content;
+      align-items: stretch;
+    }
+
+    .chain-map-head,
+    .chain-map-strike,
+    .chain-map-cell,
+    .chain-spot-line {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .chain-map-head {
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 8px;
+      text-align: center;
+    }
+
+    .chain-map-head.center,
+    .chain-map-strike {
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .chain-map-strike {
+      display: grid;
+      place-items: center;
+      min-height: 54px;
+      background: #f8fafc;
+      color: #155eef;
       font-size: 13px;
+    }
+
+    .chain-map-cell {
+      min-height: 54px;
+      min-width: 136px;
+      padding: 7px 8px;
+      background: #ffffff;
+      font-size: 12px;
+    }
+
+    .chain-map-cell.call {
+      background: #fff7ed;
+      text-align: right;
+    }
+
+    .chain-map-cell.put {
+      background: #eff6ff;
+    }
+
+    .chain-map-cell.editable {
+      position: relative;
+      padding-bottom: 34px;
+    }
+
+    .chain-map-cell.editable .qty {
+      position: absolute;
+      right: 8px;
+      bottom: 7px;
+      width: 56px;
+      height: 26px;
+      padding: 2px 6px;
+      text-align: center;
+    }
+
+    .chain-map-cell.editable.call .qty {
+      left: 8px;
+      right: auto;
+    }
+
+    .chain-map-cell.has-position {
+      background: #fff1f3;
+      border-color: #f63d68;
+      box-shadow: inset 0 0 0 1px rgba(246, 61, 104, 0.16);
+    }
+
+    .chain-map-cell.has-position strong::before {
+      content: "当前 ";
+      color: #c01048;
+    }
+
+    .chain-map-cell.empty {
+      background: #f8fafc;
+      border-style: dashed;
+      color: var(--muted);
+    }
+
+    .chain-map-cell.empty.invalid-zone {
+      background: #ffffff;
+      border-color: #e6edf5;
+      color: #cbd5e1;
+    }
+
+    .chain-map-cell strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .chain-map-cell span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .chain-map-cell strong .title-income {
+      display: inline;
+      margin-left: 4px;
+      color: #047857;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chain-spot-line {
+      background: #f0fdf4;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      text-align: center;
+    }
+
+    .chain-spot-line.call,
+    .chain-spot-line.put {
+      background: #f8fafc;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .chain-spot-line.center {
+      color: var(--green);
     }
 
     .selected-list {
@@ -546,11 +862,71 @@
       line-height: 1.4;
     }
 
+    .refresh-progress {
+      display: none;
+      width: min(520px, 100%);
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .refresh-progress.active {
+      display: grid;
+      gap: 5px;
+    }
+
+    .refresh-progress-track {
+      height: 8px;
+      overflow: hidden;
+      border: 1px solid #c7d7fe;
+      border-radius: 999px;
+      background: #eff4ff;
+    }
+
+    .refresh-progress-bar {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #155eef, #06aed4);
+      transition: width 420ms ease;
+    }
+
+    .refresh-progress.success .refresh-progress-bar {
+      background: linear-gradient(90deg, #039855, #12b76a);
+    }
+
+    .refresh-progress.error .refresh-progress-track {
+      border-color: #fecdca;
+      background: #fff1f3;
+    }
+
+    .refresh-progress.error .refresh-progress-bar {
+      background: linear-gradient(90deg, #d92d20, #f04438);
+    }
+
+    .refresh-progress-text {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      line-height: 1.3;
+    }
+
     @media (max-width: 1100px) {
-      .toolbar, .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .chart-toolbar, .future-price-prompt, .combo-grid {
+      .toolbar, .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid {
         grid-template-columns: 1fr;
       }
       table { min-width: 0; }
+    }
+
+    @media (max-width: 720px) {
+      .product-overview {
+        grid-template-columns: 1fr;
+      }
+
+      .product-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
   </style>
 </head>
@@ -577,10 +953,18 @@
         </select>
       </label>
       <button id="loadDefault">读取默认CSV</button>
+      <button id="refreshDefault" class="secondary">刷新底层数据</button>
       <button id="loadSample" class="secondary">加载样例</button>
       <button id="exportJson" class="secondary">导出JSON</button>
       <button id="exportCsv" class="secondary">导出CSV</button>
       <button id="exportMarkdown" class="secondary">导出Markdown</button>
+    </div>
+    <div id="refreshStatus" class="note"></div>
+    <div id="refreshProgress" class="refresh-progress" aria-hidden="true">
+      <div class="refresh-progress-track">
+        <span id="refreshProgressBar" class="refresh-progress-bar"></span>
+      </div>
+      <div id="refreshProgressText" class="refresh-progress-text"></div>
     </div>
     <div id="error" class="error"></div>
   </header>
@@ -595,22 +979,6 @@
           <label>本月已完成PnL<input id="realizedPnl" type="number" value="0" step="10" /></label>
           <label>剩余交易日<input id="remainingDays" type="number" value="20" step="1" /></label>
           <label>当前期货价<input id="manualFuturePrice" type="number" value="" step="0.001" placeholder="可手填" /></label>
-          <label>Put 支撑区
-            <select id="putZonePreset">
-              <option value="normal">默认支撑区</option>
-              <option value="wide">更宽</option>
-              <option value="tight">更贴近</option>
-            </select>
-          </label>
-          <label>Call 压力区
-            <select id="callZonePreset">
-              <option value="normal">默认压力区</option>
-              <option value="wide">更宽</option>
-              <option value="tight">更贴近</option>
-            </select>
-          </label>
-          <label>Put Delta 上限<div id="putDeltaChoices" class="choice-box"></div></label>
-          <label>Call Delta 上限<div id="callDeltaChoices" class="choice-box"></div></label>
           <label>库存DTE
             <select id="inventoryDtePreset">
               <option value="all" selected>全部库存</option>
@@ -618,22 +986,26 @@
               <option value="near">0-2DTE</option>
             </select>
           </label>
-          <label>新开DTE<div id="newDteChoices" class="choice-box"></div></label>
-          <label>权利金口径
-            <select id="creditSource">
-              <option value="mid">mid</option>
-              <option value="bid">bid</option>
-            </select>
-          </label>
-          <label>候选显示数量<input id="candidateLimit" type="number" value="80" min="10" step="10" /></label>
+          <label>链表DTE<div id="chainDteChoices" class="choice-box"></div></label>
           <button id="recompute">重新计算</button>
         </div>
-        <p class="note">当前只分析选中品种。核心规划只统计卖出期权库存；多头期权视为彩票/凸性仓位，不参与核心库存计算。到期轴会补齐两周内的空白日期，并把更远到期汇总到 15DTE+。</p>
+        <p class="note">当前只分析选中品种。核心规划只统计卖出期权库存；多头期权视为彩票/凸性仓位，不参与核心库存计算。库存DTE控制统计范围，链表DTE控制下方期权链展示哪些到期列。</p>
       </div>
       <div class="panel">
         <h2>目标压力</h2>
         <section id="targetSummary" class="target-grid"></section>
       </div>
+    </section>
+
+    <h2>组合资产总览</h2>
+    <section class="panel">
+      <div id="productOverview" class="product-overview"></div>
+    </section>
+
+    <h2>当前库存行权节点</h2>
+    <section class="panel option-cross">
+      <div class="note" id="inventoryChainNote"></div>
+      <div id="inventoryChain"></div>
     </section>
 
     <h2>当前卖方库存</h2>
@@ -655,15 +1027,31 @@
     <section class="panel chart-panel">
       <div class="chart-toolbar">
         <div id="priceChartNote" class="note"></div>
-        <button id="loadDefaultBars" class="secondary">读取默认K线</button>
+        <div class="chart-controls">
+          <select id="chartRange">
+            <option value="1D">1D</option>
+            <option value="1W">1W</option>
+            <option value="1M" selected>1M</option>
+            <option value="ALL">全部</option>
+          </select>
+          <button id="chartPanLeft" class="secondary">←</button>
+          <button id="chartZoomOut" class="secondary">−</button>
+          <button id="chartZoomIn" class="secondary">＋</button>
+          <button id="chartPanRight" class="secondary">→</button>
+          <button id="chartReset" class="secondary">重置</button>
+          <button id="loadDefaultBars" class="secondary">读取默认K线</button>
+        </div>
       </div>
-      <canvas id="priceChart" class="price-chart"></canvas>
-    </section>
-
-    <h2>当前库存行权节点</h2>
-    <section class="panel option-cross">
-      <div class="note" id="inventoryChainNote"></div>
-      <div id="inventoryChain"></div>
+      <div class="price-chart-grid">
+        <div class="chart-box">
+          <h3>日线</h3>
+          <canvas id="dailyPriceChart" class="price-chart"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>30分钟</h3>
+          <canvas id="intradayPriceChart" class="price-chart"></canvas>
+        </div>
+      </div>
     </section>
 
     <h2>候选期权链与新增敞口</h2>
@@ -684,7 +1072,24 @@
           </div>
         </aside>
         <div class="option-cross chain-scroll">
-          <h3>按到期日排列的候选期权链</h3>
+          <h3>按 Strike 距离排列的候选期权链</h3>
+          <div class="candidate-filters">
+            <label>Put Delta 上限<div id="putDeltaChoices" class="choice-box limit-choice"></div></label>
+            <label>Call Delta 上限<div id="callDeltaChoices" class="choice-box limit-choice"></div></label>
+            <label>Put 最低 Strike
+              <select id="putStrikeMin"></select>
+            </label>
+            <label>Call 最高 Strike
+              <select id="callStrikeMax"></select>
+            </label>
+            <label>权利金口径
+              <select id="creditSource">
+                <option value="bid" selected>bid</option>
+                <option value="mid">mid</option>
+              </select>
+            </label>
+            <label>候选显示数量<input id="candidateLimit" type="number" value="80" min="10" step="10" /></label>
+          </div>
           <div class="note" id="candidateNote"></div>
           <div id="candidateTable"></div>
         </div>
@@ -700,43 +1105,26 @@
   </main>
 
   <script>
-    const DEFAULT_POSITIONS_PATH = "data/carry_dashboard_positions.csv";
-    const DEFAULT_CHAIN_PATH = "data/carry_dashboard_chain.csv";
-    const DEFAULT_BARS_PATH = "data/carry_dashboard_future_bars.csv";
-    const CLEAN_VERIFY_PATHS = {
-      ZF: {
-        positions: "data/clean_verify/dashboard_treasury_positions.csv",
-        chain: "data/clean_verify/ZF_FOP_Static_202609_202612_from_20260706_to_all_snapshot.csv",
-        futurePrices: "data/clean_verify/ZF_FOP_Static_202609_202612_from_20260706_to_all_future_prices.csv"
-      },
-      ZN: {
-        positions: "data/clean_verify/dashboard_treasury_positions.csv",
-        chain: "data/clean_verify/ZN_FOP_Static_202609_202612_from_20260702_to_all_snapshot.csv",
-        futurePrices: "data/clean_verify/ZN_FOP_Static_202609_202612_from_20260702_to_all_future_prices.csv"
-      }
-    };
+    const DEFAULT_POSITIONS_PATH = "data/planner/carry_dashboard_positions.csv";
+    const DEFAULT_CHAIN_PATH = "data/planner/carry_dashboard_chain.csv";
+    const DEFAULT_BARS_PATH = "data/planner/carry_dashboard_bars.csv";
+    const DEFAULT_MANIFEST_PATH = "inventory-planner-defaults.json";
     const EPS = 1e-9;
     const PRODUCT_PRESETS = {
       ZF: {
         multiplier: 1000,
-        spotFallback: 107,
-        putZones: { normal: [106, 107], wide: [105, 107.25], tight: [106.5, 107.25] },
-        callZones: { normal: [107.25, 108.5], wide: [107, 110], tight: [107.25, 108] }
+        spotFallback: 107
       },
       ZN: {
         multiplier: 1000,
-        spotFallback: 111,
-        putZones: { normal: [109, 111], wide: [108, 111.5], tight: [110, 111] },
-        callZones: { normal: [110.5, 112.5], wide: [110, 114], tight: [111, 112] }
+        spotFallback: 111
       },
       ZC: {
         multiplier: 50,
-        spotFallback: 420,
-        putZones: { normal: [390, 420], wide: [360, 425], tight: [405, 425] },
-        callZones: { normal: [430, 470], wide: [425, 500], tight: [430, 455] }
+        spotFallback: 420
       }
     };
-    const DELTA_THRESHOLDS = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35];
+    const DELTA_THRESHOLDS = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50];
     const DTE_PRESETS = {
       inventory: { short: { put: [0, 7], call: [0, 7] }, all: { put: [0, 999], call: [0, 999] }, near: { put: [0, 2], call: [0, 2] } },
       newOpen: { balanced: { put: [1, 15], call: [1, 4] }, today: { put: [0, 2], call: [0, 2] }, week: { put: [0, 7], call: [0, 7] } }
@@ -749,28 +1137,63 @@
     let shortPositions = [];
     let futurePositions = [];
     let proposed = {};
+    let choiceUserTouched = {};
+    let discoveredDefaultPaths = {};
+    let discoveredFallbackPaths = {};
+    let dataUpdatedAt = "";
+    let refreshProgressTimer = null;
+    let refreshProgressValue = 0;
+    let chartView = { range: "1M", zoom: 1, offset: 0 };
+    let chartDrag = null;
 
     const $ = id => document.getElementById(id);
     const controls = [
-      "activeUnderlying", "capital", "targetReturn", "realizedPnl", "remainingDays", "manualFuturePrice", "putZonePreset",
-      "callZonePreset", "inventoryDtePreset", "creditSource", "candidateLimit", "heatMetric"
+      "activeUnderlying", "capital", "targetReturn", "realizedPnl", "remainingDays", "manualFuturePrice",
+      "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
     ];
     controls.forEach(id => $(id).addEventListener("input", render));
-    ["newDteChoices", "putDeltaChoices", "callDeltaChoices"].forEach(id => $(id).addEventListener("change", render));
-    $("activeUnderlying").addEventListener("change", () => { proposed = {}; render(); });
+    ["putDeltaChoices", "callDeltaChoices", "chainDteChoices"].forEach(id => $(id).addEventListener("change", () => {
+      choiceUserTouched[id] = true;
+      render();
+    }));
+    $("activeUnderlying").addEventListener("change", () => {
+      proposed = {};
+      render();
+    });
     $("recompute").addEventListener("click", render);
     $("loadDefault").addEventListener("click", loadDefaultData);
+    $("refreshDefault").addEventListener("click", refreshDefaultData);
     $("loadDefaultBars").addEventListener("click", loadDefaultBars);
+    $("chartRange").addEventListener("change", () => {
+      chartView.range = $("chartRange").value;
+      chartView.offset = 0;
+      render();
+    });
+    $("chartZoomIn").addEventListener("click", () => adjustChartZoom(1.35));
+    $("chartZoomOut").addEventListener("click", () => adjustChartZoom(1 / 1.35));
+    $("chartPanLeft").addEventListener("click", () => panChart(12));
+    $("chartPanRight").addEventListener("click", () => panChart(-12));
+    $("chartReset").addEventListener("click", () => {
+      chartView = { range: "1M", zoom: 1, offset: 0 };
+      $("chartRange").value = "1M";
+      render();
+    });
+    ["dailyPriceChart", "intradayPriceChart"].forEach(id => attachChartPointerHandlers($(id)));
     $("loadSample").addEventListener("click", () => {
       positionRows = samplePositions();
       chainRows = sampleChain();
       futurePriceRows = sampleFuturePrices();
       barsRows = sampleBars();
       proposed = {};
+      choiceUserTouched = {};
       render();
     });
     $("positionFile").addEventListener("change", event => loadFile(event, rows => { positionRows = rows; proposed = {}; render(); }));
-    $("chainFile").addEventListener("change", event => loadFile(event, rows => { chainRows = rows; proposed = {}; render(); }));
+    $("chainFile").addEventListener("change", event => loadFile(event, rows => {
+      chainRows = rows;
+      proposed = {};
+      render();
+    }));
     $("barsFile").addEventListener("change", event => loadFile(event, rows => { barsRows = rows; render(); }));
     $("exportJson").addEventListener("click", () => downloadText("sell-side-plan.json", JSON.stringify(exportPlan(), null, 2)));
     $("exportCsv").addEventListener("click", () => downloadText("sell-side-plan.csv", exportCsv()));
@@ -784,18 +1207,28 @@
 
     async function loadDefaultData() {
       try {
-        const paths = defaultPathsFor(config().underlying);
-        const [positions, chain, futurePrices, bars] = await Promise.all([
-          fetchRows(paths.positions),
-          fetchRows(paths.chain),
-          paths.futurePrices ? fetchRows(paths.futurePrices).catch(() => []) : Promise.resolve([]),
-          fetchRows(DEFAULT_BARS_PATH).catch(() => [])
+        await fetchDefaultManifest().catch(() => undefined);
+        const activePaths = defaultPathsFor(config().underlying);
+        const productEntries = Object.keys(discoveredDefaultPaths).length
+          ? Object.values(discoveredDefaultPaths)
+          : [activePaths];
+        const uniqueChainPaths = uniquePaths(productEntries.map(paths => paths.chain));
+        const uniqueFuturePricePaths = uniquePaths(productEntries.map(paths => paths.futurePrices));
+        const positionsPath = activePaths.positions || discoveredFallbackPaths.positions || DEFAULT_POSITIONS_PATH;
+        const barsPath = activePaths.bars || discoveredFallbackPaths.bars || DEFAULT_BARS_PATH;
+        const [positions, chainSets, futurePriceSets, bars] = await Promise.all([
+          fetchRows(positionsPath),
+          Promise.all(uniqueChainPaths.map(path => fetchRows(path).catch(() => []))),
+          Promise.all(uniqueFuturePricePaths.map(path => fetchRows(path).catch(() => []))),
+          fetchRows(barsPath).catch(() => [])
         ]);
         positionRows = positions;
-        chainRows = chain;
-        futurePriceRows = futurePrices;
+        chainRows = chainSets.flat();
+        futurePriceRows = futurePriceSets.flat();
         barsRows = bars;
         proposed = {};
+        choiceUserTouched = {};
+        setRefreshStatus(`已读取默认数据：${chainRows.length} 条期权链，${futurePriceRows.length} 条期货报价。${dataRefreshTimeText()}`);
         setError("");
         render();
       } catch (error) {
@@ -803,17 +1236,136 @@
       }
     }
 
+    function uniquePaths(paths) {
+      return Array.from(new Set(paths.filter(Boolean)));
+    }
+
+    async function refreshDefaultData() {
+      const button = $("refreshDefault");
+      if (window.location.protocol === "file:") {
+        setError("刷新底层数据需要通过本地 HTTP server 打开页面。");
+        return;
+      }
+      button.disabled = true;
+      setRefreshStatus("正在刷新底层数据，这可能需要几分钟...");
+      startRefreshProgress();
+      try {
+        const response = await fetch("/api/refresh-inventory-data", { method: "POST", cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (response.status === 501) {
+          throw new Error("Current HTTP server does not support refresh API. Start this page with: python open_inventory_planner.py --port 8766");
+        }
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.stderr || payload.error || `refresh failed: ${response.status}`);
+        }
+        if (payload.manifest) {
+          discoveredDefaultPaths = payload.manifest.products || {};
+          discoveredFallbackPaths = payload.manifest.defaults || {};
+          dataUpdatedAt = payload.finished || payload.manifest.dataUpdatedAt || dataUpdatedAt;
+        } else {
+          await fetchDefaultManifest().catch(() => undefined);
+          dataUpdatedAt = payload.finished || dataUpdatedAt;
+        }
+        setRefreshStatus(`刷新完成。${dataRefreshTimeText()}`);
+        finishRefreshProgress(true, "刷新完成，正在读取最新CSV...");
+        await loadDefaultData();
+      } catch (error) {
+        setError(`刷新底层数据失败：${error.message || error}`);
+        setRefreshStatus("刷新失败。");
+        finishRefreshProgress(false, "刷新失败");
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     function defaultPathsFor(underlying) {
-      return CLEAN_VERIFY_PATHS[underlying] || {
+      if (discoveredDefaultPaths[underlying]) {
+        return discoveredDefaultPaths[underlying];
+      }
+      if (discoveredFallbackPaths.positions && discoveredFallbackPaths.chain) {
+        return discoveredFallbackPaths;
+      }
+      return {
         positions: DEFAULT_POSITIONS_PATH,
         chain: DEFAULT_CHAIN_PATH,
+        bars: DEFAULT_BARS_PATH,
         futurePrices: ""
       };
     }
 
+    async function fetchDefaultManifest() {
+      if (typeof window === "undefined" || window.location.protocol === "file:") return;
+      const rows = await fetch(DEFAULT_MANIFEST_PATH, { cache: "no-store" });
+      if (!rows.ok) throw new Error(`${DEFAULT_MANIFEST_PATH}: ${rows.status}`);
+      const manifest = await rows.json();
+      discoveredDefaultPaths = manifest.products || {};
+      discoveredFallbackPaths = manifest.defaults || {};
+      dataUpdatedAt = manifest.dataUpdatedAt || dataUpdatedAt;
+      if (discoveredFallbackPaths.bars && !discoveredFallbackPaths.futurePrices) {
+        discoveredFallbackPaths.futurePrices = "";
+      }
+    }
+
+    function dataRefreshTimeText() {
+      return dataUpdatedAt ? ` 数据刷新时间：${dataUpdatedAt}。` : "";
+    }
+
+    function startRefreshProgress() {
+      clearRefreshProgressTimer();
+      refreshProgressValue = 4;
+      setRefreshProgress(4, "提交刷新任务", "4%");
+      const startedAt = Date.now();
+      refreshProgressTimer = window.setInterval(() => {
+        const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0);
+        const target = Math.min(92, 8 + Math.log1p(elapsedSeconds) * 20);
+        refreshProgressValue = Math.min(92, refreshProgressValue + Math.max(0.6, (target - refreshProgressValue) * 0.18));
+        setRefreshProgress(refreshProgressValue, refreshProgressStage(refreshProgressValue), `${Math.round(refreshProgressValue)}%`);
+      }, 900);
+    }
+
+    function refreshProgressStage(value) {
+      if (value < 24) return "连接IB并读取持仓";
+      if (value < 56) return "刷新期权链报价";
+      if (value < 78) return "更新期货K线";
+      return "发布CSV并等待后端完成";
+    }
+
+    function finishRefreshProgress(ok, message) {
+      clearRefreshProgressTimer();
+      setRefreshProgress(ok ? 100 : Math.max(refreshProgressValue, 18), message, ok ? "100%" : "失败");
+      $("refreshProgress").classList.toggle("success", ok);
+      $("refreshProgress").classList.toggle("error", !ok);
+    }
+
+    function clearRefreshProgressTimer() {
+      if (refreshProgressTimer) {
+        window.clearInterval(refreshProgressTimer);
+        refreshProgressTimer = null;
+      }
+    }
+
+    function setRefreshProgress(value, label, percentText) {
+      const panel = $("refreshProgress");
+      const bar = $("refreshProgressBar");
+      const text = $("refreshProgressText");
+      panel.classList.add("active");
+      panel.classList.remove("success", "error");
+      panel.setAttribute("aria-hidden", "false");
+      bar.style.width = `${Math.max(0, Math.min(value, 100))}%`;
+      text.innerHTML = `<span>${esc(label || "")}</span><strong>${esc(percentText || "")}</strong>`;
+    }
+
+    function setRefreshStatus(message) {
+      $("refreshStatus").textContent = message || "";
+    }
+
     async function loadDefaultBars() {
       try {
-        barsRows = await fetchRows(DEFAULT_BARS_PATH);
+        if (!Object.keys(discoveredDefaultPaths).length) {
+          await fetchDefaultManifest().catch(() => undefined);
+        }
+        const paths = defaultPathsFor(config().underlying);
+        barsRows = await fetchRows(paths.bars || discoveredFallbackPaths.bars || DEFAULT_BARS_PATH);
         setError("");
         render();
       } catch (error) {
@@ -873,9 +1425,9 @@
       const underlying = $("activeUnderlying").value || "ZF";
       const preset = PRODUCT_PRESETS[underlying] || PRODUCT_PRESETS.ZF;
       const inventoryDte = DTE_PRESETS.inventory[$("inventoryDtePreset").value] || DTE_PRESETS.inventory.short;
-      const selectedNewDtes = checkedNumbers("newDteChoices");
       const selectedPutDelta = checkedNumbers("putDeltaChoices");
       const selectedCallDelta = checkedNumbers("callDeltaChoices");
+      const selectedChainDtes = checkedNumbers("chainDteChoices").map(value => Math.max(0, Math.round(value)));
       return {
         underlying,
         capital: numIn("capital", 20000),
@@ -884,13 +1436,13 @@
         remainingDays: Math.max(numIn("remainingDays", 20), 1),
         manualFuturePrice: toNum($("manualFuturePrice").value),
         allowed: [underlying],
-        putZone: { [underlying]: preset.putZones[$("putZonePreset").value] || preset.putZones.normal },
-        callZone: { [underlying]: preset.callZones[$("callZonePreset").value] || preset.callZones.normal },
         putDeltaMax: selectedPutDelta.length ? Math.max(...selectedPutDelta) : 0.35,
         callDeltaMax: selectedCallDelta.length ? Math.max(...selectedCallDelta) : 0.20,
         putInventoryDte: inventoryDte.put,
         callInventoryDte: inventoryDte.call,
-        selectedNewDtes,
+        selectedChainDtes,
+        putStrikeMin: numIn("putStrikeMin", NaN),
+        callStrikeMax: numIn("callStrikeMax", NaN),
         creditSource: $("creditSource").value,
         candidateLimit: Math.max(numIn("candidateLimit", 80), 10),
         multiplier: Object.fromEntries(Object.entries(PRODUCT_PRESETS).map(([key, value]) => [key, value.multiplier])),
@@ -928,10 +1480,11 @@
         futurePositions = parseFuturePositions(positionRows, cfg);
         const inventory = aggregateInventory(shortPositions);
         const pressure = targetPressure(shortPositions, cfg);
-        candidates = scanCandidates(chainRows, shortPositions, cfg, pressure, inventory).slice(0, cfg.candidateLimit);
+        candidates = candidateRowsWithInventory(scanCandidates(chainRows, shortPositions, cfg, pressure, inventory).slice(0, cfg.candidateLimit), shortPositions, cfg);
         renderTargetSummary(pressure, shortPositions);
         renderInventory(inventory, futurePositions, cfg);
         renderPriceChart(cfg, futurePositions);
+        renderProductOverview(cfg);
         renderInventoryChain(shortPositions, candidates, cfg);
         renderCandidates(candidates, cfg);
         renderBeforeAfter(shortPositions, candidates, cfg);
@@ -943,37 +1496,120 @@
     }
 
     function syncFilterChoices() {
-      const underlying = $("activeUnderlying").value || "ZF";
-      renderChoiceBox("putDeltaChoices", DELTA_THRESHOLDS, [0.35], value => value.toFixed(2));
-      renderChoiceBox("callDeltaChoices", DELTA_THRESHOLDS, [0.20], value => value.toFixed(2));
-      const axis = expiryAxisFromChain(chainRows, { underlying });
-      const dtes = axis.map(axisKeyToNumber).filter(Number.isFinite);
-      const defaults = dtes.filter(dte => dte >= 0 && dte <= 7);
-      renderChoiceBox("newDteChoices", dtes, defaults.length ? defaults : dtes.slice(0, 6), value => `${value}DTE`);
+      renderLimitChoiceBox("putDeltaChoices", DELTA_THRESHOLDS, 0.35);
+      renderLimitChoiceBox("callDeltaChoices", DELTA_THRESHOLDS, 0.20);
+      renderChainDteChoices();
+      renderStrikeSelects();
     }
 
-    function renderChoiceBox(id, values, defaultValues, labelFn) {
+    function renderChainDteChoices() {
+      const box = $("chainDteChoices");
+      const underlying = $("activeUnderlying").value || "ZF";
+      const values = chainDteValues(underlying);
+      const currentValues = Array.from(box.querySelectorAll ? box.querySelectorAll("input[type=checkbox]") : []).map(input => Number(input.value));
+      const currentChecked = checkedNumbers("chainDteChoices").map(value => Math.max(0, Math.round(value)));
+      const defaultSelected = defaultChainDtes(values);
+      const selected = choiceUserTouched.chainDteChoices && currentChecked.some(value => values.includes(value))
+        ? currentChecked.filter(value => values.includes(value))
+        : defaultSelected;
+      if (currentValues.join(",") === values.join(",") && currentChecked.join(",") === selected.join(",")) return;
+      box.innerHTML = values.length
+        ? values.map(value => `<label><input type="checkbox" value="${esc(value)}"${selected.includes(value) ? " checked" : ""}>${esc(value)}DTE</label>`).join("")
+        : `<span class="note">暂无DTE</span>`;
+    }
+
+    function chainDteValues(underlying) {
+      return Array.from(new Set(
+        chainRows
+          .filter(row => productOf(row) === underlying)
+          .map(row => Math.max(0, Math.round(dteFromRow(row))))
+          .filter(Number.isFinite)
+      )).sort((a, b) => a - b);
+    }
+
+    function defaultChainDtes(values) {
+      const near = values.filter(value => value <= 10);
+      return (near.length ? near : values.slice(0, 8)).slice(0, 10);
+    }
+
+    function renderStrikeSelects() {
+      const underlying = $("activeUnderlying").value || "ZF";
+      const preset = PRODUCT_PRESETS[underlying] || PRODUCT_PRESETS.ZF;
+      const draftCfg = {
+        underlying,
+        allowed: [underlying],
+        manualFuturePrice: toNum($("manualFuturePrice").value),
+        spotFallback: preset.spotFallback,
+        multiplier: Object.fromEntries(Object.entries(PRODUCT_PRESETS).map(([key, value]) => [key, value.multiplier]))
+      };
+      const spot = referencePriceFor(underlying, chainRows, shortPositions, draftCfg, futurePositions).price;
+      const strikes = uniqueSortedStrikes(chainRows.filter(row => productOf(row) === underlying));
+      const puts = strikes.filter(strike => !Number.isFinite(spot) || strike < spot);
+      const calls = strikes.filter(strike => !Number.isFinite(spot) || strike > spot);
+      const defaultPut = Number.isFinite(spot) ? strikeAtOrAbove(puts, spot - 2.5) : puts[0];
+      const defaultCall = Number.isFinite(spot) ? strikeAtOrBelow(calls, spot + 1.5) : calls[calls.length - 1];
+      renderStrikeSelect("putStrikeMin", puts, defaultPut);
+      renderStrikeSelect("callStrikeMax", calls, defaultCall);
+    }
+
+    function uniqueSortedStrikes(rows) {
+      return Array.from(new Set(rows
+        .map(row => toNum(row.strike))
+        .filter(Number.isFinite)
+        .map(value => Number(value.toFixed(3)))))
+        .sort((a, b) => a - b);
+    }
+
+    function strikeAtOrAbove(values, target) {
+      if (!values.length) return NaN;
+      return values.find(value => value >= target - EPS) ?? values[values.length - 1];
+    }
+
+    function strikeAtOrBelow(values, target) {
+      if (!values.length) return NaN;
+      for (let i = values.length - 1; i >= 0; i -= 1) {
+        if (values[i] <= target + EPS) return values[i];
+      }
+      return values[0];
+    }
+
+    function renderStrikeSelect(id, values, defaultValue) {
+      const select = $(id);
+      const current = toNum(select.value);
+      const selected = values.some(value => Math.abs(value - current) < EPS)
+        ? current
+        : defaultValue;
+      if (!values.length) {
+        select.innerHTML = `<option value="">无可选 Strike</option>`;
+        select.value = "";
+        return;
+      }
+      select.innerHTML = values.map(value => {
+        const checked = Math.abs(value - selected) < EPS ? " selected" : "";
+        return `<option value="${esc(value)}"${checked}>${esc(num(value, 3))}</option>`;
+      }).join("");
+      select.value = Number.isFinite(selected) ? String(selected) : String(values[0]);
+    }
+
+    function renderLimitChoiceBox(id, values, defaultValue) {
       const box = $(id);
-      const existing = checkedNumbers(id);
-      const selected = new Set((existing.length ? existing : defaultValues).map(String));
-      const currentValues = Array.from(box.querySelectorAll ? box.querySelectorAll("input[type=checkbox]") : []).map(input => input.value).join(",");
+      const validValues = new Set(values.map(String));
+      const existing = checkedNumbers(id).map(String).find(value => validValues.has(value));
+      const selected = choiceUserTouched[id] && existing ? existing : String(defaultValue);
+      const currentValues = Array.from(box.querySelectorAll ? box.querySelectorAll("input[type=radio]") : []).map(input => input.value).join(",");
+      const currentChecked = checkedNumbers(id).map(String).find(value => validValues.has(value)) || "";
       const nextValues = values.join(",");
-      if (currentValues === nextValues) return;
+      if (currentValues === nextValues && currentChecked === selected) return;
       box.innerHTML = values.map(value => {
-        const checked = selected.has(String(value)) ? " checked" : "";
-        return `<label><input type="checkbox" value="${esc(value)}"${checked}>${esc(labelFn(value))}</label>`;
+        const checked = String(value) === selected ? " checked" : "";
+        return `<label><input type="radio" name="${esc(id)}" value="${esc(value)}"${checked}>≤${esc(value.toFixed(2))}</label>`;
       }).join("");
     }
 
     function checkedNumbers(id) {
-      return Array.from($(id).querySelectorAll ? $(id).querySelectorAll("input[type=checkbox]:checked") : [])
+      return Array.from($(id).querySelectorAll ? $(id).querySelectorAll("input:checked") : [])
         .map(input => toNum(input.value))
         .filter(Number.isFinite);
-    }
-
-    function axisKeyToNumber(key) {
-      const match = txt(key).match(/^(\d+)DTE/);
-      return match ? Number(match[1]) : NaN;
     }
 
     function parseShortPositions(rows, cfg) {
@@ -984,6 +1620,7 @@
         const underlying = productOf(row);
         const dte = dteFromRow(row);
         if (!Number.isFinite(position) || position >= 0) return null;
+        if (!Number.isFinite(dte) || dte < 0) return null;
         if (right !== "P" && right !== "C") return null;
         if (row.secType && !["FOP", "OPT"].includes(String(row.secType).toUpperCase())) return null;
         if (allowed.size && !allowed.has(underlying)) return null;
@@ -1095,39 +1732,43 @@
     function targetPressure(positions, cfg) {
       const monthlyTargetProfit = cfg.capital * cfg.targetReturn;
       const completedProfit = cfg.realizedPnl;
-      const remainingTarget = Math.max(monthlyTargetProfit - completedProfit, 0);
-      const dailyTargetReference = remainingTarget / Math.max(cfg.remainingDays, 1);
       const currentShortRemainingPremium = sum(positions, "remainingPremium");
+      const grossRemainingTarget = Math.max(monthlyTargetProfit - completedProfit, 0);
+      const remainingTarget = Math.max(grossRemainingTarget - currentShortRemainingPremium, 0);
+      const dailyTargetReference = remainingTarget / Math.max(cfg.remainingDays, 1);
       const ratio = remainingTarget / Math.max(currentShortRemainingPremium, EPS);
       const label = ratio < 0.5 ? "LOW" : ratio <= 1 ? "NORMAL" : ratio <= 1.5 ? "ELEVATED" : "HIGH";
-      return { monthlyTargetProfit, completedProfit, remainingTarget, dailyTargetReference, currentShortRemainingPremium, ratio, label };
+      return { monthlyTargetProfit, completedProfit, grossRemainingTarget, remainingTarget, dailyTargetReference, currentShortRemainingPremium, ratio, label };
     }
 
     function scanCandidates(rows, positions, cfg, pressure, inventory) {
       const allowed = new Set(cfg.allowed);
+      const ref = referencePriceFor(cfg.underlying, rows, positions, cfg, futurePositions);
+      const spot = ref.price;
       return rows.map((row, index) => {
         const underlying = productOf(row);
         const right = normRight(row.right || row.direction);
         const dte = dteFromRow(row);
         const strike = toNum(row.strike);
+        if (!Number.isFinite(dte) || dte < 0) return null;
         if (allowed.size && !allowed.has(underlying)) return null;
         if (right !== "P" && right !== "C") return null;
-        if (cfg.selectedNewDtes.length && !cfg.selectedNewDtes.includes(Math.max(0, Math.round(dte)))) return null;
         if (!Number.isFinite(strike)) return null;
-        if (right === "P" && !strikeAllowed(strike, cfg.putZone[underlying], "P")) return null;
-        if (right === "C" && !strikeAllowed(strike, cfg.callZone[underlying], "C")) return null;
+        if (!strikeWithinOpenWindow(strike, right, spot, cfg)) return null;
         const delta = signedDelta(row, right);
         const absDelta = Math.abs(delta);
         const maxDelta = right === "P" ? cfg.putDeltaMax : cfg.callDeltaMax;
         if (!(absDelta > 0 && absDelta <= maxDelta)) return null;
         const bid = firstNum(row.bid);
         const ask = firstNum(row.ask);
+        if (!Number.isFinite(bid) || bid <= 0) return null;
         let mid = firstNum(row.mid, row.price, row.last, row.modelOptionPrice, row.optPrice);
         if (!Number.isFinite(mid) && Number.isFinite(bid) && Number.isFinite(ask)) mid = (bid + ask) / 2;
         const estimatedCredit = cfg.creditSource === "bid" && Number.isFinite(bid) ? bid : mid;
         if (!Number.isFinite(estimatedCredit) || estimatedCredit <= 0) return null;
         const multiplier = multiplierFor(row, underlying, cfg);
         const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
+        const current = currentInventoryFor(positions, { underlying, right, strike, expiry, dte });
         const bucket = dteLabel(dte);
         const dateBand = dateBandFor(expiry, dte);
         const node = `${underlying}-${right}-${num(strike, 3)}`;
@@ -1145,6 +1786,10 @@
         return {
           id, underlying, expiry, dte, bucket, dateBand,
           right, strike, bid, ask, mid, estimatedCredit, delta, gamma, theta, vega,
+          multiplier,
+          currentContracts: current.contracts,
+          currentPosition: current.position,
+          currentMarketValue: current.marketValue,
           localSymbol: txt(row.localSymbol),
           volume: firstNum(row.volume, row.rawVolume, row.callVolume, row.putVolume, 0),
           openInterest: firstNum(row.openInterest, row.rawOpenInterest, row.callOpenInterest, row.putOpenInterest, 0),
@@ -1164,6 +1809,67 @@
         + (sideW < 0.35 ? 20 : sideW > 0.70 ? -20 : 5);
     }
 
+    function currentInventoryFor(positions, candidate) {
+      const matches = positions.filter(row => optionIdentityMatches(row, candidate));
+      return {
+        contracts: sum(matches, "contracts"),
+        position: sum(matches, "position"),
+        marketValue: sum(matches, "marketValue")
+      };
+    }
+
+    function candidateRowsWithInventory(candidateRows, positions, cfg) {
+      const rows = candidateRows.map(row => ({ ...row }));
+      positions
+        .filter(row => row.underlying === cfg.underlying)
+        .forEach(position => {
+          const existing = rows.find(row => optionIdentityMatches(row, position));
+          if (existing) {
+            const current = currentInventoryFor(positions, existing);
+            existing.currentContracts = current.contracts;
+            existing.currentPosition = current.position;
+            existing.currentMarketValue = current.marketValue;
+            return;
+          }
+          rows.push(candidateRowFromPosition(position, cfg));
+        });
+      return rows.sort((a, b) => Math.max(0, Math.round(a.dte)) - Math.max(0, Math.round(b.dte)) || b.strike - a.strike);
+    }
+
+    function candidateRowFromPosition(position, cfg) {
+      const enriched = enrichPositionQuote(position, cfg);
+      const estimatedCredit = firstNum(
+        enriched.estimatedCredit,
+        enriched.remainingPremium / Math.max(enriched.contracts * enriched.multiplier, EPS),
+        enriched.mid,
+        enriched.bid,
+        enriched.ask,
+        0
+      );
+      return {
+        ...enriched,
+        id: `current-${enriched.underlying}-${enriched.expiry}-${enriched.right}-${num(enriched.strike, 3)}`,
+        estimatedCredit,
+        currentContracts: enriched.contracts,
+        currentPosition: enriched.position,
+        currentMarketValue: enriched.marketValue,
+        finalScore: 0,
+        marginEstimate: estimatedCredit * enriched.multiplier * 6,
+        spread: Math.max((Number.isFinite(enriched.ask) ? enriched.ask : estimatedCredit) - (Number.isFinite(enriched.bid) ? enriched.bid : estimatedCredit), 0),
+        isCurrentOnly: true
+      };
+    }
+
+    function optionIdentityMatches(a, b) {
+      if (!a || !b) return false;
+      if (a.underlying !== b.underlying || a.right !== b.right) return false;
+      if (Math.abs(a.strike - b.strike) > 0.0001) return false;
+      const expiryA = txt(a.expiry);
+      const expiryB = txt(b.expiry);
+      if (expiryA && expiryB) return expiryA === expiryB;
+      return Math.max(0, Math.round(a.dte)) === Math.max(0, Math.round(b.dte));
+    }
+
     function warningsFor(inventory, right, bucket, node, score) {
       const warnings = [];
       if (weightFor(inventory.byNode, node, "premiumWeight") > 0.25) warnings.push("该节点正在变得集中");
@@ -1179,7 +1885,7 @@
       $("targetSummary").innerHTML = [
         metric("本月目标", money(pressure.monthlyTargetProfit), "目标仅作压力参考", "blue"),
         metric("本月已完成", money(pressure.completedProfit), "来自输入的已实现PnL", pressure.completedProfit >= pressure.monthlyTargetProfit ? "green" : "cyan"),
-        metric("还需完成", money(pressure.remainingTarget), "不强制补卖", tone),
+        metric("还需完成", money(pressure.remainingTarget), "已扣已实现PnL和卖方剩余权利金", tone),
         metric("日均参考", money(pressure.dailyTargetReference), `${$("remainingDays").value} 个交易日`, "cyan"),
         metric("卖方剩余权利金", money(pressure.currentShortRemainingPremium), "只统计短期期权", "violet"),
         metric("目标压力", pressure.label, `压力比 ${num(pressure.ratio, 2)}`, tone)
@@ -1201,12 +1907,68 @@
       $("greekSummary").innerHTML = [
         metric("合约张数", num(inventory.totalContracts, 0), "只统计卖方库存", "blue"),
         metric("期货张数", num(futuresQty, 0), futuresText, "cyan"),
-        metric("Delta", num(inventory.deltaExposure, 2), "净暴露", "cyan"),
+        metric("期权Delta", num(inventory.deltaExposure, 2), "卖方期权库存，不含期货", "cyan"),
         metric("Gamma", num(inventory.gammaExposure, 2), "净暴露", "amber"),
         metric("Theta", num(inventory.thetaExposure, 2), "净暴露", "green")
       ].join("");
       renderFuturePricePrompt(cfg, futures);
       renderGreekDte(expiryRows);
+    }
+
+    function renderProductOverview(activeCfg) {
+      const products = Array.from(new Set(
+        Object.keys(PRODUCT_PRESETS)
+          .concat(positionRows.map(productOf))
+          .concat(chainRows.map(productOf))
+      )).filter(Boolean);
+      $("productOverview").innerHTML = products.map(underlying => {
+        const cfg = configForUnderlying(activeCfg, underlying);
+        const positions = parseShortPositions(positionRows, cfg);
+        const futures = parseFuturePositions(positionRows, cfg);
+        const inventory = aggregateInventory(positions);
+        const futuresQty = futures.reduce((acc, row) => acc + row.position, 0);
+        const futuresLabel = futures.length
+          ? futures.map(row => `${row.localSymbol || row.underlying} ${num(row.position, 0)}`).join(" / ")
+          : "无";
+        const ref = referencePriceFor(underlying, chainRows, positions, cfg, futures);
+        const active = underlying === activeCfg.underlying ? " active" : "";
+        const hasChain = chainRows.some(row => productOf(row) === underlying);
+        const hasFuturePrice = futurePriceRows.some(row => txt(row.root || row.symbol).toUpperCase() === underlying);
+        const status = hasChain || hasFuturePrice || positions.length ? "数据已载入" : "暂无默认链数据";
+        const missing = hasChain || hasFuturePrice || positions.length ? "" : " missing";
+        return `<button class="product-card${active}${missing}" data-underlying="${esc(underlying)}">
+          <div class="product-card-top">
+            <span class="product-symbol">${esc(underlying)}</span>
+            <span class="product-price"><span>期货价</span><b>${num(ref.price, 3)}</b></span>
+          </div>
+          <div class="product-metrics">
+            <span><em>合约</em><b>${num(inventory.totalContracts, 0)}</b></span>
+            <span title="${esc(futuresLabel)}"><em>期货</em><b>${num(futuresQty, 0)}</b></span>
+            <span><em>权利金</em><b>${money(inventory.remainingPremium)}</b></span>
+            <span><em>期权Delta</em><b>${num(inventory.deltaExposure, 2)}</b></span>
+            <span><em>Gamma</em><b>${num(inventory.gammaExposure, 2)}</b></span>
+            <span><em>Theta</em><b>${num(inventory.thetaExposure, 2)}</b></span>
+          </div>
+          <div class="product-status">${esc(status)}</div>
+        </button>`;
+      }).join("");
+      $("productOverview").querySelectorAll("[data-underlying]").forEach(button => {
+        button.addEventListener("click", () => {
+          $("activeUnderlying").value = button.dataset.underlying;
+          proposed = {};
+          render();
+        });
+      });
+    }
+
+    function configForUnderlying(baseCfg, underlying) {
+      const preset = PRODUCT_PRESETS[underlying] || PRODUCT_PRESETS.ZF;
+      return {
+        ...baseCfg,
+        underlying,
+        allowed: [underlying],
+        spotFallback: preset.spotFallback
+      };
     }
 
     function renderGreekDte(rows) {
@@ -1227,7 +1989,11 @@
       const input = $("manualFuturePricePanel");
       input.addEventListener("input", () => {
         $("manualFuturePrice").value = input.value;
-        render();
+      });
+      input.addEventListener("change", render);
+      input.addEventListener("blur", render);
+      input.addEventListener("keydown", event => {
+        if (event.key === "Enter") render();
       });
     }
 
@@ -1236,10 +2002,8 @@
       const totalGamma = positions.reduce((acc, row) => acc + Math.abs(row.position * row.gamma), 0);
       const totalTheta = positions.reduce((acc, row) => acc + Math.abs(row.position * row.theta), 0);
       const buckets = new Map();
-      const axis = expiryAxisFromChain(chain, cfg);
-      axis.forEach(key => buckets.set(key, []));
       positions.forEach(row => {
-        const key = bucketForExpiryAxis(row.dte, axis);
+        const key = dteLabel(row.dte);
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push(row);
       });
@@ -1259,7 +2023,7 @@
           gammaWeight: gammaAbs / Math.max(totalGamma, EPS),
           thetaWeight: thetaAbs / Math.max(totalTheta, EPS)
         };
-      });
+      }).sort(dteGroupSort);
     }
 
     function expiryAxisFromChain(chain, cfg) {
@@ -1288,45 +2052,131 @@
     }
 
     function renderPriceChart(cfg, futures) {
-      const canvas = $("priceChart");
       const note = $("priceChartNote");
-      const ctx = canvas.getContext && canvas.getContext("2d");
+      const rows = chartRowsFor(cfg.underlying);
+      const dailyRows = visibleChartRows(aggregateDailyRows(rows), "daily");
+      const intradayRows = visibleChartRows(rows.filter(row => row.interval !== "daily"), "intraday");
+      const priceRows = futurePriceSeries(cfg.underlying);
+      const ref = priceRows[0];
+      const contractText = ref ? `参考 ${ref.label} ${num(ref.close, 3)}` : "未找到本地合约报价";
+      note.textContent = `${cfg.underlying} ${contractText} · 范围 ${chartView.range} · 缩放 ${num(chartView.zoom, 1)}x · 日线 ${dailyRows.length} 根 · 30分钟 ${intradayRows.length} 根`;
+      drawCandleChart($("dailyPriceChart"), dailyRows, "暂无日线K线数据");
+      drawCandleChart($("intradayPriceChart"), intradayRows, "暂无30分钟K线数据");
+    }
+
+    function visibleChartRows(rows, interval) {
+      const sorted = rows.slice().sort((a, b) => a.time - b.time);
+      if (!sorted.length) return sorted;
+      const base = chartBaseBars(chartView.range, interval, sorted.length);
+      const count = clamp(Math.round(base / chartView.zoom), 5, sorted.length);
+      const maxOffset = Math.max(sorted.length - count, 0);
+      chartView.offset = clamp(Math.round(chartView.offset), 0, maxOffset);
+      const end = sorted.length - chartView.offset;
+      return sorted.slice(Math.max(end - count, 0), end);
+    }
+
+    function chartBaseBars(range, interval, length) {
+      if (range === "ALL") return length;
+      if (interval === "daily") {
+        return { "1D": 2, "1W": 7, "1M": 30 }[range] || 30;
+      }
+      return { "1D": 48, "1W": 240, "1M": 1200 }[range] || 120;
+    }
+
+    function adjustChartZoom(factor) {
+      chartView.zoom = clamp(chartView.zoom * factor, 0.5, 12);
+      render();
+    }
+
+    function panChart(delta) {
+      chartView.offset = Math.max(chartView.offset + delta, 0);
+      render();
+    }
+
+    function attachChartPointerHandlers(canvas) {
+      if (!canvas || !canvas.addEventListener) return;
+      canvas.addEventListener("wheel", event => {
+        event.preventDefault && event.preventDefault();
+        adjustChartZoom(event.deltaY < 0 ? 1.2 : 1 / 1.2);
+      });
+      canvas.addEventListener("mousedown", event => {
+        chartDrag = { x: event.clientX || 0 };
+      });
+      canvas.addEventListener("mousemove", event => {
+        if (!chartDrag) return;
+        const x = event.clientX || 0;
+        const delta = x - chartDrag.x;
+        if (Math.abs(delta) < 18) return;
+        panChart(delta < 0 ? 6 : -6);
+        chartDrag.x = x;
+      });
+      canvas.addEventListener("mouseup", () => { chartDrag = null; });
+      canvas.addEventListener("mouseleave", () => { chartDrag = null; });
+    }
+
+    function chartRowsFor(underlying) {
+      const rows = barsRows
+        .filter(row => barMatchesUnderlying(row, underlying))
+        .map(parseBarRow)
+        .filter(row => Number.isFinite(row.time) && Number.isFinite(row.open) && Number.isFinite(row.high) && Number.isFinite(row.low) && Number.isFinite(row.close))
+        .sort((a, b) => a.time - b.time);
+      const dailyCount = aggregateDailyRows(rows).length;
+      if (rows.length > dailyCount * 2) {
+        rows.forEach(row => { row.interval = "intraday"; });
+      }
+      return rows;
+    }
+
+    function barMatchesUnderlying(row, underlying) {
+      const explicit = txt(row.root || row.underlying || row.product).toUpperCase();
+      if (explicit) return explicit === underlying;
+      const symbol = txt(row.symbol || row.localSymbol).toUpperCase();
+      return symbol === underlying || symbol.startsWith(underlying);
+    }
+
+    function aggregateDailyRows(rows) {
+      const groups = new Map();
+      rows.forEach(row => {
+        const date = new Date(row.time);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+      });
+      return Array.from(groups.entries()).map(([key, items]) => ({
+        time: items[0].time,
+        label: key.slice(5),
+        open: items[0].open,
+        high: Math.max(...items.map(row => row.high)),
+        low: Math.min(...items.map(row => row.low)),
+        close: items[items.length - 1].close,
+        interval: "daily"
+      })).sort((a, b) => a.time - b.time);
+    }
+
+    function drawCandleChart(canvas, rows, emptyText) {
+      const ctx = canvas && canvas.getContext && canvas.getContext("2d");
       if (!ctx) return;
-      const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { width: 900, height: 240 };
+      const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { width: 440, height: 240 };
       const scale = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
-      const width = Math.max(Math.floor(rect.width || 900), 320);
+      const width = Math.max(Math.floor(rect.width || 440), 260);
       const height = Math.max(Math.floor(rect.height || 240), 180);
       canvas.width = Math.floor(width * scale);
       canvas.height = Math.floor(height * scale);
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      const rows = barsRows
-        .filter(row => productOf(row) === cfg.underlying || txt(row.symbol).toUpperCase() === cfg.underlying)
-        .map(parseBarRow)
-        .filter(row => Number.isFinite(row.time) && Number.isFinite(row.open) && Number.isFinite(row.high) && Number.isFinite(row.low) && Number.isFinite(row.close))
-        .sort((a, b) => a.time - b.time)
-        .slice(-80);
       if (!rows.length) {
-        const priceRows = futurePriceSeries(cfg.underlying);
-        if (priceRows.length) {
-          note.textContent = `${cfg.underlying} 本地期货价 · 来自 clean_verify future_prices · ${priceRows.length} 个合约/报价`;
-          drawPriceLine(ctx, priceRows, width, height);
-          return;
-        }
-        note.textContent = `暂无 ${cfg.underlying} K线数据，也未找到 future_prices。可上传K线CSV/JSON，或让同步脚本输出 ${DEFAULT_BARS_PATH}。`;
         ctx.fillStyle = "#667085";
         ctx.font = "13px Segoe UI, Arial";
-        ctx.fillText("暂无K线或本地期货价数据", 16, 34);
+        ctx.fillText(emptyText, 16, 34);
         return;
       }
-      note.textContent = `${cfg.underlying} K线 · ${rows[0].label} 至 ${rows[rows.length - 1].label} · ${rows.length} bars`;
-      const pad = { left: 48, right: 16, top: 16, bottom: 24 };
+      const pad = { left: 48, right: 24, top: 16, bottom: 36 };
       const min = Math.min(...rows.map(row => row.low));
       const max = Math.max(...rows.map(row => row.high));
       const span = Math.max(max - min, EPS);
       const xStep = (width - pad.left - pad.right) / Math.max(rows.length, 1);
       const y = value => pad.top + (max - value) / span * (height - pad.top - pad.bottom);
-      ctx.strokeStyle = "#d0d7e2";
+      ctx.strokeStyle = "#e4e7ec";
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let i = 0; i < 4; i++) {
@@ -1341,21 +2191,54 @@
         const value = max - i * span / 3;
         ctx.fillText(num(value, 3), 6, pad.top + i * (height - pad.top - pad.bottom) / 3 + 4);
       }
+      const tickIndexes = chartTickIndexes(rows.length);
+      ctx.textAlign = "center";
+      tickIndexes.forEach(index => {
+        const x = pad.left + index * xStep + xStep / 2;
+        const label = chartTickLabel(rows[index]);
+        ctx.fillText(label, x, height - 10);
+      });
+      ctx.textAlign = "left";
       rows.forEach((row, index) => {
         const x = pad.left + index * xStep + xStep / 2;
         const up = row.close >= row.open;
-        ctx.strokeStyle = up ? "#087443" : "#b42318";
-        ctx.fillStyle = up ? "#dcfae6" : "#fee4e2";
+        ctx.strokeStyle = up ? "#099250" : "#d92d20";
+        ctx.fillStyle = up ? "#ecfdf3" : "#fff1f0";
         ctx.beginPath();
         ctx.moveTo(x, y(row.high));
         ctx.lineTo(x, y(row.low));
         ctx.stroke();
         const bodyTop = y(Math.max(row.open, row.close));
         const bodyBottom = y(Math.min(row.open, row.close));
-        const bodyWidth = Math.max(Math.min(xStep * 0.62, 9), 3);
+        const bodyWidth = Math.max(Math.min(xStep * 0.62, 8), 2);
         ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, Math.max(bodyBottom - bodyTop, 1));
         ctx.strokeRect(x - bodyWidth / 2, bodyTop, bodyWidth, Math.max(bodyBottom - bodyTop, 1));
       });
+      const last = rows[rows.length - 1];
+      const lastY = y(last.close);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "#98a2b3";
+      ctx.beginPath();
+      ctx.moveTo(pad.left, lastY);
+      ctx.lineTo(width - pad.right, lastY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#344054";
+      ctx.textAlign = "right";
+      ctx.fillText(num(last.close, 3), width - 4, lastY - 5);
+      ctx.textAlign = "left";
+    }
+
+    function chartTickIndexes(length) {
+      if (length <= 1) return [0];
+      return Array.from(new Set([0, Math.floor((length - 1) / 3), Math.floor((length - 1) * 2 / 3), length - 1]));
+    }
+
+    function chartTickLabel(row) {
+      const raw = txt(row && row.label);
+      if (!raw) return "";
+      if (row.interval === "daily") return raw.replace(/^(\d{4})-/, "");
+      return raw;
     }
 
     function futurePriceSeries(underlying) {
@@ -1415,6 +2298,11 @@
 
     function parseBarRow(row) {
       const date = new Date(txt(row.dateChina || row.date || row.datetime || row.time || row.timestamp));
+      const intervalText = txt(row.barSize || row.interval || row.timeframe || row.granularity).toLowerCase();
+      const hasIntradayTime = Number.isFinite(date.getTime()) && (date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0);
+      const interval = /day|daily|1d|日/.test(intervalText) && !/30/.test(intervalText)
+        ? "daily"
+        : (hasIntradayTime || /min|30|hour|分钟/.test(intervalText) ? "intraday" : "daily");
       return {
         time: date.getTime(),
         label: Number.isFinite(date.getTime()) ? `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}` : "",
@@ -1422,7 +2310,8 @@
         high: firstNum(row.high),
         low: firstNum(row.low),
         close: firstNum(row.close),
-        symbol: txt(row.symbol)
+        symbol: txt(row.symbol),
+        interval
       };
     }
 
@@ -1434,7 +2323,7 @@
     }
 
     function renderCandidates(rows, cfg) {
-      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；按到期日展开为期权链，左 Call / 中 Strike / 右 Put。单元格里输入数量，右侧立即更新组合变化。`;
+      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；候选按真实 Strike 筛选：Call ≤ ${num(cfg.callStrikeMax, 3)}，Put ≥ ${num(cfg.putStrikeMin, 3)}。当前持仓会额外叠加显示。`;
       $("candidateTable").innerHTML = optionChainHtml(rows, cfg, { editable: true, showGreeks: true, futures: futurePositions });
       $("candidateTable").querySelectorAll("input[data-id]").forEach(input => {
         input.addEventListener("input", () => {
@@ -1445,16 +2334,52 @@
       });
     }
 
+    function enrichPositionQuote(row, cfg) {
+      const quote = quoteForPosition(row, cfg);
+      return {
+        ...row,
+        bid: firstNum(row.bid, quote.bid),
+        ask: firstNum(row.ask, quote.ask),
+        mid: firstNum(row.mid, quote.mid),
+        delta: firstNum(row.delta, quote.delta),
+        gamma: firstNum(row.gamma, quote.gamma),
+        theta: firstNum(row.theta, quote.theta),
+        vega: firstNum(row.vega, quote.vega)
+      };
+    }
+
+    function quoteForPosition(row, cfg) {
+      const right = normRight(row.right);
+      const strike = toNum(row.strike);
+      const expiry = txt(row.expiry);
+      const dte = Math.max(0, Math.round(row.dte));
+      return chainRows
+        .filter(candidate => productOf(candidate) === cfg.underlying)
+        .filter(candidate => normRight(candidate.right || candidate.direction) === right)
+        .filter(candidate => Math.abs(toNum(candidate.strike) - strike) < 0.0001)
+        .filter(candidate => {
+          const candidateExpiry = txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth);
+          return candidateExpiry === expiry || Math.max(0, Math.round(dteFromRow(candidate))) === dte;
+        })
+        .map(candidate => ({
+          bid: firstNum(candidate.bid),
+          ask: firstNum(candidate.ask),
+          mid: firstNum(candidate.mid, candidate.price, candidate.modelOptionPrice, candidate.optPrice),
+          delta: signedDelta(candidate, right),
+          gamma: firstNum(candidate.gamma, candidate.modelGreeks_gamma, candidate.bidGreeks_gamma, candidate.askGreeks_gamma),
+          theta: firstNum(candidate.theta, candidate.modelGreeks_theta, candidate.bidGreeks_theta, candidate.askGreeks_theta),
+          vega: firstNum(candidate.vega, candidate.modelGreeks_vega, candidate.bidGreeks_vega, candidate.askGreeks_vega)
+        }))
+        .find(quote => Number.isFinite(quote.bid) || Number.isFinite(quote.ask) || Number.isFinite(quote.mid)) || {};
+    }
+
     function renderInventoryChain(positions, candidateRows, cfg) {
-      const inventoryRows = positions.map(row => ({
+      const inventoryRows = positions.map(row => enrichPositionQuote({
         ...row,
         id: `inventory-${row.node}-${row.expiry}`,
         estimatedCredit: row.remainingPremium / Math.max(row.contracts * row.multiplier, EPS),
-        bid: NaN,
-        ask: NaN,
-        mid: NaN,
         finalScore: 0
-      }));
+      }, cfg));
       const ref = referencePriceFor(cfg.underlying, chainRows, shortPositions, cfg, futurePositions);
       $("inventoryChainNote").textContent = Number.isFinite(ref.price)
         ? `当前品种 ${cfg.underlying}；绿色行是当前期货价位置。`
@@ -1463,60 +2388,152 @@
     }
 
     function optionChainHtml(rows, cfg, options) {
-      const productRows = rows.filter(row => row.underlying === cfg.underlying);
+      const selectedDtes = Array.isArray(cfg.selectedChainDtes) ? cfg.selectedChainDtes : [];
+      const selectedDteSet = new Set(selectedDtes);
+      const productRows = rows
+        .filter(row => row.underlying === cfg.underlying)
+        .filter(row => !selectedDteSet.size || selectedDteSet.has(Math.max(0, Math.round(row.dte))));
       if (!productRows.length) return `<div class="note">当前品种暂无可展示期权链。</div>`;
       const ref = referencePriceFor(cfg.underlying, chainRows, shortPositions, cfg, options.futures || []);
       const spot = ref.price;
-      const expiries = Array.from(new Set(productRows.map(row => row.expiry || "-"))).sort((a, b) => expirySortKey(a) - expirySortKey(b));
-      return expiries.map(expiry => {
-        const expiryRows = productRows.filter(row => (row.expiry || "-") === expiry);
-        const strikes = Array.from(new Set(expiryRows.map(row => row.strike).filter(Number.isFinite))).sort((a, b) => b - a);
-        const head = options.editable
-          ? `<tr><th class="call">Call</th><th class="call">Bid/Ask</th><th class="call">Mid</th><th class="call">Δ/Γ</th><th class="call">分</th><th class="call">数量</th><th class="strike">Strike</th><th class="put">数量</th><th class="put">分</th><th class="put">Δ/Γ</th><th class="put">Mid</th><th class="put">Bid/Ask</th><th class="put">Put</th></tr>`
-          : `<tr><th class="call">Call</th><th class="call">市值</th><th class="call">未实现</th><th class="call">Bid/Ask</th><th class="call">Delta</th><th class="strike">Strike</th><th class="put">Delta</th><th class="put">Bid/Ask</th><th class="put">未实现</th><th class="put">市值</th><th class="put">Put</th></tr>`;
-        const colspan = options.editable ? 13 : 11;
-        const body = [];
-        let insertedSpot = false;
-        strikes.forEach((strike, index) => {
-          if (!insertedSpot && Number.isFinite(spot) && index > 0 && spot <= strikes[index - 1] && spot >= strike) {
-            body.push(`<tr class="spot-row"><td colspan="${colspan}">当前期货价 ${num(spot, 3)}</td></tr>`);
-            insertedSpot = true;
-          }
-          const calls = expiryRows.filter(row => row.right === "C" && row.strike === strike).sort((a, b) => b.finalScore - a.finalScore);
-          const puts = expiryRows.filter(row => row.right === "P" && row.strike === strike).sort((a, b) => b.finalScore - a.finalScore);
-          const call = calls[0];
-          const put = puts[0];
-          body.push(options.editable
-            ? `<tr>${chainCandidateCells(call, "call")}<td class="strike"><span class="strike-meta">${esc(expiryRows[0] ? expiryRows[0].bucket : "")}</span><span class="strike-value">${num(strike, 3)}</span></td>${chainCandidateCells(put, "put")}</tr>`
-            : `<tr>${chainReadonlyCells(call, "call")}<td class="strike"><span class="strike-meta">${esc(expiryRows[0] ? expiryRows[0].bucket : "")}</span><span class="strike-value">${num(strike, 3)}</span></td>${chainReadonlyCells(put, "put")}</tr>`);
-        });
-        if (!insertedSpot && Number.isFinite(spot)) body.push(`<tr class="spot-row"><td colspan="${colspan}">当前期货价 ${num(spot, 3)}</td></tr>`);
-        return `<div class="chain-expiry">${esc(expiryRows[0] ? expiryRows[0].bucket : expiryLabelFromExpiry(expiry))} · ${strikes.length} strikes</div><div class="table-wrap"><table><thead>${head}</thead><tbody>${body.join("")}</tbody></table></div>`;
-      }).join("");
+      const dtes = unifiedDtes(productRows, selectedDtes);
+      const leftDtes = dtes.slice().reverse();
+      const strikes = Array.from(new Set(productRows.map(row => row.strike).filter(Number.isFinite))).sort((a, b) => b - a);
+      const colTemplate = `${leftDtes.map(() => "minmax(150px, 1fr)").join(" ")} 74px ${dtes.map(() => "minmax(150px, 1fr)").join(" ")}`;
+      const cells = [];
+      leftDtes.forEach(dte => cells.push(`<div class="chain-map-head call">${dte}DTE Call</div>`));
+      cells.push(`<div class="chain-map-head center">Strike</div>`);
+      dtes.forEach(dte => cells.push(`<div class="chain-map-head put">${dte}DTE Put</div>`));
+      let insertedSpot = false;
+      strikes.forEach((strike, index) => {
+        if (!insertedSpot && Number.isFinite(spot) && index > 0 && spot <= strikes[index - 1] && spot >= strike) {
+          cells.push(...spotHeaderCells(leftDtes, dtes, spot));
+          insertedSpot = true;
+        }
+        leftDtes.forEach(dte => cells.push(chainMapCell(findChainMapRow(productRows, strike, dte, "C"), "call", options, strike, spot)));
+        cells.push(`<div class="chain-map-strike">${num(strike, 3)}</div>`);
+        dtes.forEach(dte => cells.push(chainMapCell(findChainMapRow(productRows, strike, dte, "P"), "put", options, strike, spot)));
+      });
+      if (!insertedSpot && Number.isFinite(spot)) {
+        cells.push(...spotHeaderCells(leftDtes, dtes, spot));
+      }
+      return `<div class="expiry-sketch"><div class="chain-map" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
+    }
+
+    function unifiedDtes(rows, selectedDtes) {
+      const available = Array.from(new Set(rows
+        .map(row => Math.max(0, Math.round(row.dte)))
+        .filter(Number.isFinite)))
+        .sort((a, b) => a - b);
+      const selected = (selectedDtes || []).filter(value => available.includes(value));
+      return selected.length ? selected : available;
+    }
+
+    function sideDtes(rows, right) {
+      return Array.from(new Set(rows
+        .filter(row => row.right === right)
+        .map(row => Math.max(0, Math.round(row.dte)))
+        .filter(Number.isFinite)))
+        .sort((a, b) => a - b);
+    }
+
+    function spotHeaderCells(leftDtes, rightDtes, spot) {
+      return [
+        ...leftDtes.map(dte => `<div class="chain-spot-line call">${dte}DTE Call</div>`),
+        `<div class="chain-spot-line center">当前期货价 ${num(spot, 3)}</div>`,
+        ...rightDtes.map(dte => `<div class="chain-spot-line put">${dte}DTE Put</div>`)
+      ];
+    }
+
+    function findChainMapRow(rows, strike, dte, right) {
+      return rows
+        .filter(row => row.right === right && row.strike === strike && Math.max(0, Math.round(row.dte)) === dte)
+        .sort((a, b) => firstNum(b.finalScore, 0) - firstNum(a.finalScore, 0))[0];
+    }
+
+    function chainMapCell(row, side, options, strike, spot) {
+      const invalidZone = Number.isFinite(spot) && (
+        (side === "call" && Number.isFinite(strike) && strike < spot) ||
+        (side === "put" && Number.isFinite(strike) && strike > spot)
+      );
+      if (!row) return `<div class="chain-map-cell ${side} empty${invalidZone ? " invalid-zone" : ""}">-</div>`;
+      return options.editable ? chainEditableMapCell(row, side) : chainReadonlyMapCell(row, side);
+    }
+
+    function chainReadonlyMapCell(row, side) {
+      const label = esc(compactPositionName(row));
+      const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
+      return `<div class="chain-map-cell ${side}"><strong>${label}</strong><span>Delta ${num(row.delta, 2)} · 市值 ${money(row.marketValue)}</span><span>${esc(formatExpiryDate(row.expiry))} · ${esc(row.bucket || "")}</span><span>Bid/Ask ${quote}</span></div>`;
+    }
+
+    function chainEditableMapCell(row, side) {
+      const current = currentContracts(row);
+      const qty = targetQuantity(row);
+      const qtyInput = `<input class="qty" data-id="${esc(row.id)}" type="number" min="0" step="1" value="${qty}" />`;
+      const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
+      const quoteLabel = row.isCurrentOnly && !(Number.isFinite(row.bid) && row.bid > 0) ? "当前报价" : "Bid/Ask";
+      const badge = current > 0 ? `<span>当前 ${num(current, 0)}张 · 目标张数</span>` : `<span>目标张数</span>`;
+      const positionClass = current > 0 ? " has-position" : "";
+      return `<div class="chain-map-cell ${side} editable${positionClass}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)}</span><span>${esc(formatExpiryDate(row.expiry))} · 分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
+    }
+
+    function creditIncome(row, quantity = 1) {
+      const multiplier = firstNum(row.multiplier, PRODUCT_PRESETS[row.underlying] && PRODUCT_PRESETS[row.underlying].multiplier, 1000);
+      return quantity * row.estimatedCredit * multiplier;
+    }
+
+    function currentContracts(row) {
+      return Math.max(firstNum(row.currentContracts, 0), 0);
+    }
+
+    function targetQuantity(row) {
+      const value = toNum(proposed[row.id]);
+      return Number.isFinite(value) ? Math.max(value, 0) : currentContracts(row);
+    }
+
+    function adjustmentQuantity(row) {
+      return targetQuantity(row) - currentContracts(row);
+    }
+
+    function compactStrike(value) {
+      if (!Number.isFinite(value)) return "-";
+      return String(Number(value.toFixed(3)));
+    }
+
+    function compactOptionName(row) {
+      if (!row) return "-";
+      return `${txt(row.underlying).toLowerCase()} ${compactStrike(row.strike)} ${txt(row.right).toLowerCase()}`.trim();
+    }
+
+    function compactPositionName(row) {
+      if (!row) return "-";
+      const qty = Number.isFinite(row.position) ? row.position : -Math.abs(firstNum(row.contracts, 0));
+      return `${num(qty, 0)} 张 ${compactOptionName(row)}`;
+    }
+
+    function formatExpiryDate(expiry) {
+      const raw = txt(expiry);
+      const match = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+      if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+      return raw || "-";
     }
 
     function chainReadonlyCells(row, side) {
-      const blank = side === "call"
-        ? `<td class="${side}">-</td><td class="${side}">-</td><td class="${side}">-</td><td class="${side}">-</td><td class="${side}">-</td>`
-        : `<td class="${side}">-</td><td class="${side}">-</td><td class="${side}">-</td><td class="${side}">-</td><td class="${side}">-</td>`;
+      const blank = Array.from({ length: 4 }, () => `<td class="${side}">-</td>`).join("");
       if (!row) return blank;
-      const name = `${num(Math.abs(row.position || 0), 0)}张 ${esc(row.localSymbol || "")}`;
-      const cells = [
-        name,
-        money(row.marketValue),
-        money(row.unrealizedPnL),
-        `${optPx(row.bid)} / ${optPx(row.ask)}`,
-        num(row.delta, 2)
-      ];
-      const ordered = side === "call" ? cells : [cells[4], cells[3], cells[2], cells[1], cells[0]];
-      return ordered.map(value => `<td class="${side}">${value}</td>`).join("");
+      const name = esc(compactPositionName(row));
+      const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
+      const cells = side === "call"
+        ? [quote, num(row.delta, 2), money(row.marketValue), name]
+        : [name, money(row.marketValue), num(row.delta, 2), quote];
+      return cells.map(value => `<td class="${side}">${value}</td>`).join("");
     }
 
     function chainCandidateCells(row, side) {
       if (!row) return Array.from({ length: 6 }, () => `<td class="${side}">-</td>`).join("");
       const qty = proposed[row.id] || 0;
       const qtyInput = `<input class="qty" data-id="${esc(row.id)}" type="number" min="0" step="1" value="${qty}" />`;
-      const name = esc(row.localSymbol || `${row.underlying} ${row.right}${num(row.strike, 3)}`);
+      const name = esc(compactOptionName(row));
       const cells = [
         name,
         `${optPx(row.bid)} / ${optPx(row.ask)}`,
@@ -1578,8 +2595,8 @@
 
     function exposureFromCandidates(rows, cfg) {
       return rows.reduce((acc, row) => {
-        const qty = toNum(proposed[row.id]);
-        if (!(qty > 0)) return acc;
+        const qty = adjustmentQuantity(row);
+        if (Math.abs(qty) <= EPS) return acc;
         const multiplier = cfg.multiplier[row.underlying] || 1000;
         acc.premium += qty * row.estimatedCredit * multiplier;
         acc.netDelta += -qty * row.delta;
@@ -1592,30 +2609,62 @@
     }
 
     function selectedCandidateRows(rows) {
-      return rows.filter(row => toNum(proposed[row.id]) > 0).map(row => ({ ...row, proposedQuantity: toNum(proposed[row.id]) }));
+      return rows
+        .map(row => ({
+          ...row,
+          proposedQuantity: targetQuantity(row),
+          adjustmentQuantity: adjustmentQuantity(row)
+        }))
+        .filter(row => Math.abs(row.adjustmentQuantity) > EPS);
     }
 
     function renderSelectedOptions(rows) {
       const selected = selectedCandidateRows(rows);
       $("selectedOptions").innerHTML = selected.length ? selected.map(row => (
-        `<div class="selected-item"><strong>${esc(row.underlying)} ${esc(row.expiry)} ${esc(row.right)} ${num(row.strike, 3)} × ${num(row.proposedQuantity, 0)}</strong><span>credit ${num(row.estimatedCredit, 5)} · Δ ${num(row.delta, 3)} · Γ ${num(row.gamma, 4)} · Θ ${num(row.theta, 4)}</span></div>`
+        `<div class="selected-item"><strong>${esc(row.underlying)} ${esc(row.expiry)} ${esc(row.right)} ${num(row.strike, 3)} 目标 ${num(row.proposedQuantity, 0)}张 / 调整 ${signedQty(row.adjustmentQuantity)}张</strong><span>收入变化 ${money(creditIncome(row, row.adjustmentQuantity))} · Δ ${num(row.delta, 3)} · Γ ${num(row.gamma, 4)} · Θ ${num(row.theta, 4)}</span></div>`
       )).join("") : `<div class="note">在左侧期权链输入数量后，这里会列出新增期权。</div>`;
     }
 
     function renderAfterDte(positions, rows, cfg) {
-      const added = selectedCandidateRows(rows).map(row => ({
-        ...row,
-        position: -row.proposedQuantity,
-        contracts: row.proposedQuantity,
-        remainingPremium: row.proposedQuantity * row.estimatedCredit * (cfg.multiplier[row.underlying] || 1000)
-      }));
-      const combined = positions.concat(added);
+      const combined = adjustedPortfolio(positions, rows, cfg);
       const totalPremium = sum(combined, "remainingPremium");
       const totalGamma = combined.reduce((acc, row) => acc + Math.abs(row.position * row.gamma), 0);
       const totalTheta = combined.reduce((acc, row) => acc + Math.abs(row.position * row.theta), 0);
       renderTable("afterDteTable", groupInventory(combined, row => row.bucket, totalPremium, totalGamma, totalTheta, dteGroupSort), ["key", "contracts", "remainingPremium", "deltaExposure", "gammaExposure", "thetaExposure"], {
         key: "DTE分组", contracts: "张数", remainingPremium: "权利金", deltaExposure: "Delta", gammaExposure: "Gamma", thetaExposure: "Theta"
       });
+    }
+
+    function adjustedPortfolio(positions, rows, cfg) {
+      const selected = selectedCandidateRows(rows);
+      const adjusted = [];
+      const consumed = new Set();
+      positions.forEach(position => {
+        const match = selected.find(row => row.currentContracts > 0 && optionIdentityMatches(position, row));
+        if (!match) {
+          adjusted.push(position);
+          return;
+        }
+        consumed.add(match.id);
+        if (match.proposedQuantity > 0) adjusted.push(positionFromCandidate(match, match.proposedQuantity, cfg, "调整后"));
+      });
+      selected
+        .filter(row => !consumed.has(row.id) && row.proposedQuantity > 0)
+        .forEach(row => adjusted.push(positionFromCandidate(row, row.proposedQuantity, cfg, "新增")));
+      return adjusted;
+    }
+
+    function positionFromCandidate(row, quantity, cfg, label) {
+      const premium = creditIncome(row, quantity);
+      return {
+        ...row,
+        position: -quantity,
+        contracts: quantity,
+        remainingPremium: premium,
+        marketValue: -premium,
+        unrealizedPnL: 0,
+        localSymbol: `${label} ${quantity} 张`
+      };
     }
 
     function renderNodes(positions, rows, cfg) {
@@ -1632,8 +2681,8 @@
         nodes.set(row.node, node);
       });
       rows.forEach(row => {
-        const qty = toNum(proposed[row.id]);
-        if (!(qty > 0)) return;
+        const qty = adjustmentQuantity(row);
+        if (Math.abs(qty) <= EPS) return;
         const node = nodes.get(row.node) || { node: row.node, current: 0, proposed: 0, premium: 0, delta: 0, gamma: 0, theta: 0, vega: 0, warnings: [] };
         node.proposed += qty;
         nodes.set(row.node, node);
@@ -1649,14 +2698,8 @@
         if (row.proposed > 0 && premiumWeight < 0.10) warnings.push("加入这里有助于改善分布平衡");
         return { ...row, after: row.current + row.proposed, premiumWeight, gammaWeight, warnings };
       }).sort((a, b) => b.after - a.after).slice(0, 80);
-      const selected = selectedCandidateRows(rows).map(row => ({
-        ...row,
-        position: -row.proposedQuantity,
-        contracts: row.proposedQuantity,
-        remainingPremium: row.proposedQuantity * row.estimatedCredit * (cfg.multiplier[row.underlying] || 1000),
-        localSymbol: `新增 ${row.proposedQuantity} 张`
-      }));
-      $("nodeTable").innerHTML = optionChainHtml(positions.concat(selected), cfg, { editable: false, showGreeks: false, futures: futurePositions });
+      const adjusted = adjustedPortfolio(positions, rows, cfg).map(row => enrichPositionQuote(row, cfg));
+      $("nodeTable").innerHTML = optionChainHtml(adjusted, cfg, { editable: false, showGreeks: false, futures: futurePositions });
       const warningItems = nodeRows.flatMap(row => row.warnings.map(warning => `${row.node}: ${warning}`));
       $("warnings").innerHTML = warningItems.length
         ? warningItems.map(item => `<div class="warning">${esc(item)}<br><span class="note">提示只做可视化，不会禁止你覆盖。</span></div>`).join("")
@@ -1691,7 +2734,7 @@
     }
 
     function exportPlan() {
-      const selected = candidates.filter(row => toNum(proposed[row.id]) > 0).map(row => ({ ...row, proposedQuantity: toNum(proposed[row.id]) }));
+      const selected = selectedCandidateRows(candidates);
       return {
         generatedAt: new Date().toISOString(),
         config: config(),
@@ -1702,13 +2745,13 @@
 
     function exportMarkdown() {
       const plan = exportPlan();
-      const selected = plan.selected.map(row => `- ${row.underlying} ${row.expiry} ${row.right} ${num(row.strike, 3)} x ${row.proposedQuantity}, 综合分 ${num(row.finalScore, 1)}`).join("\n") || "- 暂无手动选择";
+      const selected = plan.selected.map(row => `- ${row.underlying} ${row.expiry} ${row.right} ${num(row.strike, 3)} 目标 ${row.proposedQuantity}, 调整 ${signedQty(row.adjustmentQuantity)}, 综合分 ${num(row.finalScore, 1)}`).join("\n") || "- 暂无手动选择";
       return `# 卖方期权库存手动规划\n\n生成时间：${plan.generatedAt}\n\n## 选中候选\n${selected}\n\n## 说明\n本导出不是交易建议，不会自动下单，也不会强制为了目标缺口开仓。\n`;
     }
 
     function exportCsv() {
       const selected = exportPlan().selected;
-      const headers = ["underlying", "expiry", "dte", "right", "strike", "estimatedCredit", "delta", "gamma", "theta", "vega", "finalScore", "proposedQuantity"];
+      const headers = ["underlying", "expiry", "dte", "right", "strike", "estimatedCredit", "delta", "gamma", "theta", "vega", "finalScore", "currentContracts", "proposedQuantity", "adjustmentQuantity"];
       const rows = selected.map(row => headers.map(header => csvCell(row[header])).join(","));
       return [headers.join(","), ...rows].join("\n");
     }
@@ -1746,9 +2789,18 @@
       return row ? row[field] || 0 : 0;
     }
 
-    function strikeAllowed(strike, zone, right) {
-      if (!zone) return true;
-      return right === "P" ? strike <= zone[1] : strike >= zone[0];
+    function strikeWithinOpenWindow(strike, right, spot, cfg) {
+      if (right === "C") {
+        const aboveSpot = !Number.isFinite(spot) || strike > spot;
+        const withinMax = !Number.isFinite(cfg.callStrikeMax) || strike <= cfg.callStrikeMax + EPS;
+        return aboveSpot && withinMax;
+      }
+      if (right === "P") {
+        const belowSpot = !Number.isFinite(spot) || strike < spot;
+        const withinMin = !Number.isFinite(cfg.putStrikeMin) || strike >= cfg.putStrikeMin - EPS;
+        return belowSpot && withinMin;
+      }
+      return false;
     }
 
     function productOf(row) {
@@ -1765,11 +2817,11 @@
     }
 
     function dteFromRow(row) {
+      const explicit = toNum(row.DTE ?? row.dte);
+      if (Number.isFinite(explicit)) return Math.round(explicit);
       const raw = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth).slice(0, 10).replace(/-/g, "");
       const fromExpiry = dteFromExpiry(raw);
       if (Number.isFinite(fromExpiry)) return fromExpiry;
-      const explicit = toNum(row.DTE ?? row.dte);
-      if (Number.isFinite(explicit)) return Math.round(explicit);
       return 999;
     }
 
@@ -1910,6 +2962,11 @@
       return Number.isFinite(value) ? "$" + value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "-";
     }
 
+    function signedQty(value) {
+      if (!Number.isFinite(value)) return "0";
+      return value > 0 ? `+${num(value, 0)}` : num(value, 0);
+    }
+
     function pct(value) {
       return Number.isFinite(value) ? (value * 100).toFixed(1) + "%" : "-";
     }
@@ -1935,14 +2992,16 @@
     }
 
     function samplePositions() {
+      const nearExpiry = expiryFromToday(1);
+      const farExpiry = expiryFromToday(10);
       return [
         { symbol: "ZF", secType: "FUT", position: 1, localSymbol: "ZFU6", marketValue: 107000, delta: 1 },
-        { symbol: "ZF", secType: "FOP", position: -2, expiry: "20260706", strike: 106.5, right: "P", marketValue: -120, unrealizedPnL: 20, delta: -0.18, gamma: 0.08, theta: -0.02, vega: 0.01, localSymbol: "ZF1N6 P1065" },
-        { symbol: "ZF", secType: "FOP", position: 1, expiry: "20260706", strike: 105.5, right: "P", marketValue: 20, delta: -0.08, gamma: 0.04, theta: -0.01, vega: 0.01, localSymbol: "ZF1N6 P1055" },
+        { symbol: "ZF", secType: "FOP", position: -2, expiry: nearExpiry, strike: 106.5, right: "P", marketValue: -120, unrealizedPnL: 20, delta: -0.18, gamma: 0.08, theta: -0.02, vega: 0.01, localSymbol: "ZF1N6 P1065" },
+        { symbol: "ZF", secType: "FOP", position: 1, expiry: nearExpiry, strike: 105.5, right: "P", marketValue: 20, delta: -0.08, gamma: 0.04, theta: -0.01, vega: 0.01, localSymbol: "ZF1N6 P1055" },
         { symbol: "ZN", secType: "FUT", position: -1, localSymbol: "ZNU6", marketValue: -111000, delta: 1 },
-        { symbol: "ZN", secType: "FOP", position: -1, expiry: "20260706", strike: 111.5, right: "C", marketValue: -80, unrealizedPnL: -5, delta: 0.12, gamma: 0.05, theta: -0.01, vega: 0.02, localSymbol: "OZNN6 C1115" },
+        { symbol: "ZN", secType: "FOP", position: -1, expiry: nearExpiry, strike: 111.5, right: "C", marketValue: -80, unrealizedPnL: -5, delta: 0.12, gamma: 0.05, theta: -0.01, vega: 0.02, localSymbol: "OZNN6 C1115" },
         { symbol: "ZC", secType: "FUT", position: 2, localSymbol: "ZCU6", marketValue: 42000, delta: 1 },
-        { symbol: "ZC", secType: "FOP", position: -1, expiry: "20260717", strike: 420, right: "P", marketValue: -150, unrealizedPnL: 12, delta: -0.14, gamma: 0.03, theta: -0.02, vega: 0.04, localSymbol: "OZCU6 P420" }
+        { symbol: "ZC", secType: "FOP", position: -1, expiry: farExpiry, strike: 420, right: "P", marketValue: -150, unrealizedPnL: 12, delta: -0.14, gamma: 0.03, theta: -0.02, vega: 0.04, localSymbol: "OZCU6 P420" }
       ];
     }
 
@@ -2005,10 +3064,29 @@
       const rows = [];
       const bases = { ZF: 107, ZN: 111, ZC: 420 };
       for (const [symbol, base] of Object.entries(bases)) {
-        let close = base;
-        for (let i = 79; i >= 0; i--) {
+        let dailyClose = base;
+        for (let i = 59; i >= 0; i--) {
           const date = new Date();
-          date.setHours(date.getHours() - i);
+          date.setDate(date.getDate() - i);
+          date.setHours(0, 0, 0, 0);
+          const drift = Math.sin(i / 6) * (symbol === "ZC" ? 2.4 : 0.09);
+          const open = dailyClose;
+          dailyClose = base + drift + Math.cos(i / 9) * (symbol === "ZC" ? 1.4 : 0.06);
+          rows.push({
+            symbol,
+            barSize: "1 day",
+            date: date.toISOString(),
+            open,
+            high: Math.max(open, dailyClose) + (symbol === "ZC" ? 1.2 : 0.035),
+            low: Math.min(open, dailyClose) - (symbol === "ZC" ? 1.2 : 0.035),
+            close: dailyClose,
+            volume: 600 + i * 8
+          });
+        }
+        let close = dailyClose;
+        for (let i = 119; i >= 0; i--) {
+          const date = new Date();
+          date.setMinutes(date.getMinutes() - i * 30);
           const drift = Math.sin(i / 5) * (symbol === "ZC" ? 0.8 : 0.03);
           const open = close;
           close = base + drift + Math.cos(i / 7) * (symbol === "ZC" ? 0.55 : 0.025);
@@ -2016,6 +3094,7 @@
           const low = Math.min(open, close) - (symbol === "ZC" ? 0.8 : 0.025);
           rows.push({
             symbol,
+            barSize: "30 mins",
             date: date.toISOString(),
             open,
             high,
@@ -2028,7 +3107,13 @@
       return rows;
     }
 
-    render();
+    async function initialize() {
+      render();
+      if (typeof window === "undefined" || window.location.protocol === "file:") return;
+      await loadDefaultData();
+    }
+
+    initialize();
   </script>
 </body>
 </html>

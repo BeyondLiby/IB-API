@@ -13,6 +13,7 @@ from target_treasury_monitor_clean.chain_realtime import LiveChainMonitor
 from target_treasury_monitor_clean.ib_session import connect_ib
 from target_treasury_monitor_clean.settings import (
     AccountDashboardSettings,
+    DEFAULT_IB_ACCOUNT,
     IBSettings,
     LiveChainSettings,
     StaticChainSettings,
@@ -23,7 +24,7 @@ from target_treasury_monitor_clean.settings import (
 def _sidebar() -> tuple[bool, IBSettings]:
     with st.sidebar:
         enabled = st.checkbox("Enable IB connection", value=False)
-        account = st.text_input("Target account", value="")
+        account = st.text_input("Target account", value=DEFAULT_IB_ACCOUNT)
         host = st.text_input("Host", value="127.0.0.1")
         port = st.number_input("Port", min_value=1, max_value=65535, value=4001, step=1)
         client_id = st.number_input("Client ID", min_value=1, max_value=9999, value=351, step=1)

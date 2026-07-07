@@ -5,8 +5,10 @@ import asyncio
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 import random
 from pathlib import Path
+import webbrowser
 
 import pandas as pd
 from ib_async import Future
@@ -23,9 +25,11 @@ from .chain_batch import refresh_static_chain
 from .chain_realtime import LiveChainMonitor
 from .future_bars import fetch_future_bars, parse_contract_specs, save_future_bars
 from .ib_session import ib_connection
+from .inventory_planner_server import inventory_planner_handler
 from .quality import evaluate_option_chain_data, print_option_chain_quality_report
 from .settings import (
     AccountDashboardSettings,
+    DEFAULT_IB_ACCOUNT,
     IBSettings,
     LiveChainSettings,
     StaticChainSettings,
@@ -41,7 +45,7 @@ def _add_ib_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4001)
     parser.add_argument("--client-id", type=int, default=random.randint(3000, 9999))
-    parser.add_argument("--account", default="")
+    parser.add_argument("--account", default=os.environ.get("IB_ACCOUNT", DEFAULT_IB_ACCOUNT))
     parser.add_argument("--market-data-type", default="delayed", help="live, frozen, delayed, delayed_frozen, or 1/2/3/4")
 
 
@@ -184,10 +188,10 @@ def build_parser() -> argparse.ArgumentParser:
     bars.add_argument("--duration", default="1 M")
     bars.add_argument("--what-to-show", default="TRADES")
     bars.add_argument("--timeout", type=float, default=45.0)
-    bars.add_argument("--cache-dir", default="data", help="Search recursively for *_future_prices.csv to avoid re-qualifying futures.")
+    bars.add_argument("--cache-dir", default="data/planner/debug", help="Search recursively for *_future_prices.csv to avoid re-qualifying futures.")
     bars.add_argument("--keep-going", action="store_true", help="Continue with later contracts if one historical data request fails.")
     bars.add_argument("--prefer-local-symbol", action="store_true", help="Use standard futures localSymbol such as ZFU6/ZNU6 when no cached conId is available, instead of qualifying first.")
-    bars.add_argument("--output", default="data/carry_dashboard_bars.csv")
+    bars.add_argument("--output", default="data/planner/carry_dashboard_bars.csv")
 
     smoke = sub.add_parser("ib-smoke", help="Diagnose IB connectivity and futures contract qualification without writing dashboard files.")
     _add_ib_args(smoke)
@@ -214,7 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--summary-only", action="store_true", help="After publishing, print a concise readiness summary instead of full JSON.")
 
     sync_latest = sub.add_parser("sync-latest-carry-html", help="Publish the latest notebook output CSVs for carry_risk_dashboard.html.")
-    sync_latest.add_argument("--input-dir", default="data/clean_verify", help="Directory where verify_clean_workflows.ipynb writes dashboard_treasury_positions.csv and *_monitor_frame.csv.")
+    sync_latest.add_argument("--input-dir", default="data/planner/debug", help="Directory where refresh/debug workflows write dashboard_treasury_positions.csv and *_monitor_frame.csv.")
     sync_latest.add_argument("--output-dir", default="data", help="Directory served beside carry_risk_dashboard.html.")
     sync_latest.add_argument("--products", default=DEFAULT_DASHBOARD_PRODUCTS, help="Comma-separated products to discover, e.g. ZF,ZN,ZC.")
     sync_latest.add_argument("--positions", default="", help="Optional explicit positions CSV. Defaults to latest notebook position output.")
@@ -244,11 +248,13 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--directory", default=".", help="Project directory containing carry_risk_dashboard.html and data/.")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--open", action="store_true", help="Open the dashboard URL in the default browser.")
 
     serve_inventory = sub.add_parser("serve-inventory-planner", help="Serve sell_side_inventory_planner.html and data/*.csv over local HTTP.")
     serve_inventory.add_argument("--directory", default=".", help="Project directory containing sell_side_inventory_planner.html and data/.")
     serve_inventory.add_argument("--host", default="127.0.0.1")
     serve_inventory.add_argument("--port", type=int, default=8766)
+    serve_inventory.add_argument("--open", action="store_true", help="Open the planner URL in the default browser.")
 
     refresh = sub.add_parser("refresh-carry-html", help="Refresh positions, ZF/ZN chains, optional ZC chain, optional bars, then publish HTML CSVs.")
     _add_ib_args(refresh)
@@ -285,8 +291,8 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--min-bars-rows", type=int, default=100, help="Minimum per-product futures bars required by --require-ready.")
     refresh.add_argument("--max-chain-age-hours", type=float, default=24.0, help="Maximum option-chain snapshot age allowed by --require-ready.")
     refresh.add_argument("--max-bars-age-hours", type=float, default=72.0, help="Maximum futures bar age allowed by --require-ready.")
-    refresh.add_argument("--working-dir", default="data/clean_verify")
-    refresh.add_argument("--html-data-dir", default="data")
+    refresh.add_argument("--working-dir", default="data/planner/debug")
+    refresh.add_argument("--html-data-dir", default="data/planner")
     refresh.add_argument("--require-ready", action="store_true", help="Exit non-zero after publishing unless the HTML inputs are ready for all products with positions.")
 
     return parser
@@ -688,16 +694,19 @@ def command_serve_carry_html(args: argparse.Namespace) -> None:
 
 
 def command_serve_inventory_planner(args: argparse.Namespace) -> None:
-    _serve_static_html(args, "sell_side_inventory_planner.html")
+    _serve_static_html(args, "sell_side_inventory_planner.html", handler_factory=inventory_planner_handler)
 
 
-def _serve_static_html(args: argparse.Namespace, html_file: str) -> None:
+def _serve_static_html(args: argparse.Namespace, html_file: str, handler_factory=None) -> None:
     directory = Path(args.directory).resolve()
     html_path = directory / html_file
     if not html_path.exists():
         raise SystemExit(f"{html_file} not found under {directory}")
 
-    handler = partial(SimpleHTTPRequestHandler, directory=str(directory))
+    if handler_factory is None:
+        handler = partial(SimpleHTTPRequestHandler, directory=str(directory))
+    else:
+        handler = handler_factory(directory)
     try:
         server = ThreadingHTTPServer((args.host, args.port), handler)
     except OSError as exc:
@@ -707,6 +716,8 @@ def _serve_static_html(args: argparse.Namespace, html_file: str) -> None:
     print(f"serving: {directory}", flush=True)
     print(f"open: {url}", flush=True)
     print("press Ctrl+C to stop", flush=True)
+    if getattr(args, "open", False):
+        webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
