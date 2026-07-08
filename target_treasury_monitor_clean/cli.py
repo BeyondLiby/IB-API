@@ -24,6 +24,7 @@ from .carry_dashboard_sync import (
 from .chain_batch import refresh_static_chain
 from .chain_realtime import LiveChainMonitor
 from .future_bars import fetch_future_bars, parse_contract_specs, save_future_bars
+from .ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
 from .ib_session import ib_connection
 from .inventory_planner_server import inventory_planner_handler
 from .quality import evaluate_option_chain_data, print_option_chain_quality_report
@@ -294,6 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--working-dir", default="data/planner/debug")
     refresh.add_argument("--html-data-dir", default="data/planner")
     refresh.add_argument("--require-ready", action="store_true", help="Exit non-zero after publishing unless the HTML inputs are ready for all products with positions.")
+    refresh.add_argument("--no-client-lock", action="store_true", help="Disable the local process lock for this IB host/port/client-id.")
 
     return parser
 
@@ -555,6 +557,23 @@ def command_validate_carry_html(args: argparse.Namespace) -> None:
 
 def command_refresh_carry_html(args: argparse.Namespace) -> None:
     ib_settings = _ib_settings(args)
+    if getattr(args, "no_client_lock", False):
+        _run_refresh_carry_html(args, ib_settings)
+        return
+
+    try:
+        with acquire_ib_client_lock(
+            ib_settings.host,
+            ib_settings.port,
+            ib_settings.client_id,
+            purpose="refresh-carry-html",
+        ):
+            _run_refresh_carry_html(args, ib_settings)
+    except IbClientLockBusy as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -> None:
     chain_specs = _parse_chain_specs(args.chain_specs)
     chain_specs.update(_parse_chain_specs(args.zc_chain_specs))
     working_dir = Path(args.working_dir)

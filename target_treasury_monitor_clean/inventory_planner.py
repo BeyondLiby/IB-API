@@ -23,7 +23,7 @@ class PlannerConfig:
     monthly_target_return: float = 0.10
     month_to_date_realized_pnl: float = 0.0
     remaining_trading_days: int = 20
-    allowed_underlyings: tuple[str, ...] = ("ZF", "ZN")
+    allowed_underlyings: tuple[str, ...] = ("ZF", "ZN", "ZC")
     put_dte_min: int = 0
     put_dte_max: int = 15
     call_dte_min: int = 0
@@ -36,7 +36,7 @@ class PlannerConfig:
     preferred_put_delta_range: tuple[float, float] = (0.05, 0.35)
     preferred_call_delta_range: tuple[float, float] = (0.03, 0.20)
     max_margin_usage: float | None = None
-    contract_multiplier: dict[str, float] = field(default_factory=lambda: {"ZF": 1000.0, "ZN": 1000.0})
+    contract_multiplier: dict[str, float] = field(default_factory=lambda: {"ZF": 1000.0, "ZN": 1000.0, "ZC": 50.0})
     yield_to_price_sensitivity: dict[str, float] = field(default_factory=dict)
     credit_source: str = "mid"
     scoring_weights: dict[str, float] = field(
@@ -154,17 +154,19 @@ def text(value: Any) -> str:
 
 def parse_underlying(row: dict[str, Any]) -> str:
     explicit = text(row.get("underlying") or row.get("product") or row.get("symbol") or row.get("root") or row.get("tradingClass")).upper()
-    if explicit in {"ZF", "ZN", "ZT", "TN", "ZB", "UB"}:
+    if explicit in {"ZF", "ZN", "ZC", "ZT", "TN", "ZB", "UB"}:
         return explicit
     for key in ("optionName", "localSymbol", "contract", "description", "name", "conId"):
         candidate = text(row.get(key)).upper()
         if not candidate:
             continue
-        match = re.search(r"\b(ZF|ZN|ZT|TN|ZB|UB)\b|^(ZF|ZN|ZT|TN|ZB|UB)[-\s_]|^(ZF|ZN|ZT|TN|ZB|UB)[FGHJKMNQUVXZ]\d\b", candidate)
+        match = re.search(r"\b(ZF|ZN|ZC|ZT|TN|ZB|UB)\b|^(ZF|ZN|ZC|ZT|TN|ZB|UB)[-\s_]|^(ZF|ZN|ZC|ZT|TN|ZB|UB)[FGHJKMNQUVXZ]\d\b", candidate)
         if match:
             return next(group for group in match.groups() if group)
         if candidate.startswith("OZN"):
             return "ZN"
+        if candidate.startswith("OZC"):
+            return "ZC"
     return ""
 
 
@@ -228,6 +230,8 @@ def dte_from_row(row: dict[str, Any], as_of: date) -> int:
 
 
 def multiplier_for(row: dict[str, Any], underlying: str, config: PlannerConfig) -> float:
+    if underlying == "ZC":
+        return config.contract_multiplier.get("ZC", 50.0)
     value = to_float(row.get("multiplier"))
     if math.isfinite(value) and value > 0:
         return value

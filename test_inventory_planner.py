@@ -157,6 +157,30 @@ class InventoryPlannerTests(unittest.TestCase):
         self.assertTrue(all(position.position < 0 for position in parsed))
         self.assertEqual({position.underlying for position in parsed}, {"ZF", "ZN"})
 
+    def test_zc_short_option_is_kept_by_default_parser(self) -> None:
+        rows = [
+            {
+                "symbol": "ZC",
+                "secType": "FOP",
+                "position": "-1",
+                "expiry": "20260710",
+                "strike": "425",
+                "right": "P",
+                "marketValue": "-250",
+                "delta": "-0.20",
+                "gamma": "0.01",
+                "theta": "-0.02",
+                "vega": "0.03",
+                "localSymbol": "ZC2N6 P0425",
+            }
+        ]
+
+        parsed = parse_short_positions(rows, PlannerConfig(), as_of="20260707")
+
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0].underlying, "ZC")
+        self.assertEqual(parsed[0].strike, 425)
+
     def test_dte_bucket_assignment_does_not_make_0dte_special_risk(self) -> None:
         self.assertEqual(dte_bucket(0), "0DTE")
         self.assertEqual(dte_bucket(2), "1-2DTE")

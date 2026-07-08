@@ -11,7 +11,21 @@
 
 ## 一句话启动
 
-日常使用优先跑这个：
+macOS 上日常使用优先跑这个。本机当前有 `conda` 环境 `ib`，没有 `.venv` 目录：
+
+```bash
+cd /Users/antony/Desktop/IB-API
+conda run -n ib python refresh_inventory_data.py --serve-planner --open-browser
+```
+
+如果你之后改用项目内 `.venv`，macOS/Linux 的 Python 路径是 `.venv/bin/python`：
+
+```bash
+cd /Users/antony/Desktop/IB-API
+.venv/bin/python refresh_inventory_data.py --serve-planner --open-browser
+```
+
+Windows PowerShell 才使用下面这个：
 
 ```powershell
 cd E:\策略\IB-API
@@ -47,6 +61,15 @@ market-data-type: delayed
 
 4. 如果 `.venv` 不存在或依赖不完整：
 
+macOS/Linux：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements_dashboard.txt
+```
+
+Windows PowerShell：
+
 ```powershell
 cd E:\策略\IB-API
 .\.venv\Scripts\python.exe -m pip install -r .\requirements_dashboard.txt
@@ -55,6 +78,18 @@ cd E:\策略\IB-API
 ## 当前完整启动脚本
 
 ### 1. 启动页面并刷新一次数据
+
+macOS，本机推荐：
+
+```bash
+cd /Users/antony/Desktop/IB-API
+conda run -n ib python refresh_inventory_data.py \
+  --serve-planner \
+  --open-browser \
+  --planner-port 8766
+```
+
+Windows PowerShell：
 
 ```powershell
 cd E:\策略\IB-API
@@ -70,7 +105,20 @@ cd E:\策略\IB-API
 - 调用 IBKR 刷新持仓、ZF/ZN/ZC 期权链、期货 K 线。
 - 发布 CSV 到 `data/planner/`，供 HTML 页面读取。
 
+页面打开后，如果后台刷新仍在运行，会自动显示刷新进度和最近日志；从页面点 `刷新底层数据` 也会显示同样的进度。
+
 ### 2. 每 30 分钟自动刷新
+
+macOS：
+
+```bash
+conda run -n ib python refresh_inventory_data.py \
+  --serve-planner \
+  --open-browser \
+  --repeat-minutes 30
+```
+
+Windows PowerShell：
 
 ```powershell
 cd E:\策略\IB-API
@@ -85,6 +133,20 @@ cd E:\策略\IB-API
 ### 3. 只打开页面，不连接 IB
 
 已有 CSV 数据时，用这个最快：
+
+macOS，本机推荐：
+
+```bash
+./open_inventory_planner.sh
+```
+
+或者直接用 Python：
+
+```bash
+conda run -n ib python open_inventory_planner.py --port 8766
+```
+
+Windows PowerShell：
 
 ```powershell
 cd E:\策略\IB-API
@@ -103,6 +165,17 @@ cd E:\策略\IB-API
 ```
 
 ### 4. 没有 IB 连接，只复用已有持仓 CSV 调试
+
+macOS：
+
+```bash
+conda run -n ib python refresh_inventory_data.py \
+  --positions-csv data/planner/carry_dashboard_positions.csv \
+  --serve-planner \
+  --open-browser
+```
+
+Windows PowerShell：
 
 ```powershell
 cd E:\策略\IB-API
@@ -314,6 +387,42 @@ U16251798
 - API 是否启用。
 - 端口是 `4001`、`4002`、`7496` 还是 `7497`。
 - `client-id` 是否和其他程序冲突。
+
+### 5. 提示 client-id 已经在刷新
+
+刷新底层数据时会按 `host + port + client-id` 加本机进程锁。比如默认是：
+
+```text
+127.0.0.1:4001 client-id 7316
+```
+
+如果一个刷新还没结束，又从页面按钮或另一个终端发起同样 `client-id` 的刷新，新的刷新会直接退出并提示当前已有刷新在跑。处理方式：
+
+- 等当前刷新完成后再点。
+- 或者临时换一个 `--client-id`。
+- 如果你明确要绕过本机锁，可以传 `--no-client-lock`，但 IB 仍然可能返回 `Error 326`。
+
+### 6. 刷新耗时痛点
+
+最近一次完整刷新样本：
+
+```text
+20:41:05 -> 20:43:22，约 137 秒
+```
+
+主要耗时来自期权链 market data 批量请求：
+
+- ZF：576 张合约，4 个 batch。
+- ZN：480 张合约，4 个 batch。
+- ZC：72 张合约，1 个 batch。
+- 期货 K 线：ZF/ZN/ZC 各 1 个月 30min bars，当前不是最大瓶颈。
+
+后续可迭代方向：
+
+- 对页面默认视图只刷新近端 DTE 和当前持仓相关 strike，远端链用缓存。
+- ZF/ZN 分品种增量刷新，避免每次全量刷新 1000+ 张合约。
+- 当前持仓合约强制加入刷新 universe，避免深 OTM 当前仓位不在候选链中。
+- 将期权链刷新和 K 线刷新拆成独立按钮，日内频繁刷新时只跑必要部分。
 
 ## 测试
 

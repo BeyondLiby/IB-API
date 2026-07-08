@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -9,6 +10,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
+from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
 from target_treasury_monitor_clean.settings import DEFAULT_IB_ACCOUNT
 
 
@@ -146,12 +148,81 @@ def wait_for_planner_server(args: argparse.Namespace, server: subprocess.Popen[s
     )
 
 
+def refresh_status_path(args: argparse.Namespace) -> Path:
+    return Path(args.html_data_dir) / "refresh_status.json"
+
+
+def write_refresh_status(args: argparse.Namespace, payload: dict[str, object]) -> None:
+    path = refresh_status_path(args)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def run_refresh_once(args: argparse.Namespace) -> None:
     command = build_refresh_command(args)
     print("running:", " ".join(command), flush=True)
     if args.dry_run:
         return
-    subprocess.run(command, cwd=Path(__file__).resolve().parent, check=True)
+    lines: list[str] = []
+    started = time.strftime("%Y-%m-%d %H:%M:%S")
+    write_refresh_status(args, {
+        "ok": None,
+        "running": True,
+        "started": started,
+        "finished": "",
+        "returncode": None,
+        "progress": 8,
+        "stage": "启动刷新进程",
+        "lines": [],
+        "stdout": "",
+        "stderr": "",
+    })
+    process = subprocess.Popen(
+        command,
+        cwd=Path(__file__).resolve().parent,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    try:
+        for line in process.stdout:
+            text = line.rstrip()
+            print(text, flush=True)
+            lines.append(text)
+            progress, stage = refresh_progress_from_output(lines)
+            write_refresh_status(args, {
+                "ok": None,
+                "running": True,
+                "started": started,
+                "finished": "",
+                "returncode": None,
+                "progress": progress,
+                "stage": stage,
+                "lines": lines[-80:],
+                "stdout": "\n".join(lines),
+                "stderr": "",
+            })
+    finally:
+        process.stdout.close()
+    returncode = process.wait()
+    progress, stage = refresh_progress_from_output(lines, returncode)
+    finished = time.strftime("%Y-%m-%d %H:%M:%S")
+    write_refresh_status(args, {
+        "ok": returncode == 0,
+        "running": False,
+        "started": started,
+        "finished": finished,
+        "returncode": returncode,
+        "progress": progress,
+        "stage": stage,
+        "lines": lines[-80:],
+        "stdout": "\n".join(lines),
+        "stderr": "",
+    })
+    if returncode != 0:
+        raise SystemExit(f"refresh command failed with exit code {returncode}; see output above")
 
 
 def main() -> None:

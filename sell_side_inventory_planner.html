@@ -345,6 +345,56 @@
       justify-content: center;
     }
 
+    .multi-select {
+      position: relative;
+      min-width: 0;
+    }
+
+    .multi-select summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 34px;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .multi-select summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .multi-select summary::after {
+      content: "v";
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .multi-select[open] summary::after {
+      content: "^";
+    }
+
+    .multi-select-menu {
+      position: absolute;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(88px, 1fr));
+      gap: 6px;
+      width: min(320px, 80vw);
+      max-height: 260px;
+      overflow: auto;
+      margin-top: 4px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(16, 24, 40, 0.16);
+    }
+
     .candidate-filters {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -755,6 +805,10 @@
       color: #c01048;
     }
 
+    .chain-map-cell.quote-only {
+      background: #f8fafc;
+    }
+
     .chain-map-cell.empty {
       background: #f8fafc;
       border-style: dashed;
@@ -912,6 +966,26 @@
       line-height: 1.3;
     }
 
+    .refresh-log {
+      display: none;
+      max-height: 88px;
+      overflow: auto;
+      margin: 6px 0 0;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #101828;
+      color: #d0d5dd;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .refresh-log.active {
+      display: block;
+    }
+
     @media (max-width: 1100px) {
       .toolbar, .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid {
         grid-template-columns: 1fr;
@@ -966,6 +1040,7 @@
       </div>
       <div id="refreshProgressText" class="refresh-progress-text"></div>
     </div>
+    <pre id="refreshLog" class="refresh-log" aria-live="polite"></pre>
     <div id="error" class="error"></div>
   </header>
 
@@ -1108,20 +1183,28 @@
     const DEFAULT_POSITIONS_PATH = "data/planner/carry_dashboard_positions.csv";
     const DEFAULT_CHAIN_PATH = "data/planner/carry_dashboard_chain.csv";
     const DEFAULT_BARS_PATH = "data/planner/carry_dashboard_bars.csv";
+    const DEFAULT_ACCOUNT_SUMMARY_PATH = "data/planner/debug/dashboard_account_summary.csv";
     const DEFAULT_MANIFEST_PATH = "inventory-planner-defaults.json";
+    const REFRESH_STATUS_PATH = "/api/refresh-inventory-data/status";
     const EPS = 1e-9;
     const PRODUCT_PRESETS = {
       ZF: {
         multiplier: 1000,
-        spotFallback: 107
+        spotFallback: 107,
+        futureMargin: 1300,
+        optionMarginRate: 0.018
       },
       ZN: {
         multiplier: 1000,
-        spotFallback: 111
+        spotFallback: 111,
+        futureMargin: 2400,
+        optionMarginRate: 0.020
       },
       ZC: {
         multiplier: 50,
-        spotFallback: 420
+        spotFallback: 420,
+        futureMargin: 2100,
+        optionMarginRate: 0.080
       }
     };
     const DELTA_THRESHOLDS = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50];
@@ -1133,6 +1216,7 @@
     let chainRows = [];
     let futurePriceRows = [];
     let barsRows = [];
+    let accountRows = [];
     let candidates = [];
     let shortPositions = [];
     let futurePositions = [];
@@ -1184,6 +1268,7 @@
       chainRows = sampleChain();
       futurePriceRows = sampleFuturePrices();
       barsRows = sampleBars();
+      accountRows = [];
       proposed = {};
       choiceUserTouched = {};
       render();
@@ -1216,16 +1301,19 @@
         const uniqueFuturePricePaths = uniquePaths(productEntries.map(paths => paths.futurePrices));
         const positionsPath = activePaths.positions || discoveredFallbackPaths.positions || DEFAULT_POSITIONS_PATH;
         const barsPath = activePaths.bars || discoveredFallbackPaths.bars || DEFAULT_BARS_PATH;
-        const [positions, chainSets, futurePriceSets, bars] = await Promise.all([
+        const accountPath = activePaths.account || discoveredFallbackPaths.account || DEFAULT_ACCOUNT_SUMMARY_PATH;
+        const [positions, chainSets, futurePriceSets, bars, accountSummary] = await Promise.all([
           fetchRows(positionsPath),
           Promise.all(uniqueChainPaths.map(path => fetchRows(path).catch(() => []))),
           Promise.all(uniqueFuturePricePaths.map(path => fetchRows(path).catch(() => []))),
-          fetchRows(barsPath).catch(() => [])
+          fetchRows(barsPath).catch(() => []),
+          fetchRows(accountPath).catch(() => [])
         ]);
         positionRows = positions;
         chainRows = chainSets.flat();
         futurePriceRows = futurePriceSets.flat();
         barsRows = bars;
+        accountRows = accountSummary;
         proposed = {};
         choiceUserTouched = {};
         setRefreshStatus(`已读取默认数据：${chainRows.length} 条期权链，${futurePriceRows.length} 条期货报价。${dataRefreshTimeText()}`);
@@ -1258,24 +1346,95 @@
         if (!response.ok || payload.ok === false) {
           throw new Error(payload.stderr || payload.error || `refresh failed: ${response.status}`);
         }
-        if (payload.manifest) {
-          discoveredDefaultPaths = payload.manifest.products || {};
-          discoveredFallbackPaths = payload.manifest.defaults || {};
-          dataUpdatedAt = payload.finished || payload.manifest.dataUpdatedAt || dataUpdatedAt;
-        } else {
-          await fetchDefaultManifest().catch(() => undefined);
-          dataUpdatedAt = payload.finished || dataUpdatedAt;
+        const finalPayload = payload.jobId ? await waitForRefreshJob(payload.jobId, payload) : payload;
+        if (finalPayload.ok === false) {
+          throw new Error(finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed");
         }
+        applyRefreshManifest(finalPayload);
         setRefreshStatus(`刷新完成。${dataRefreshTimeText()}`);
         finishRefreshProgress(true, "刷新完成，正在读取最新CSV...");
         await loadDefaultData();
       } catch (error) {
-        setError(`刷新底层数据失败：${error.message || error}`);
+        setError(`刷新底层数据失败：${friendlyRefreshError(error)}`);
         setRefreshStatus("刷新失败。");
         finishRefreshProgress(false, "刷新失败");
       } finally {
         button.disabled = false;
       }
+    }
+
+    function friendlyRefreshError(error) {
+      const message = String(error && (error.message || error) || "");
+      if (/load failed|failed to fetch|networkerror|cancelled|cancel/i.test(message)) {
+        return "本地 planner server 没有响应。请确认 8766 服务仍在运行，或重新执行：conda run -n ib python refresh_inventory_data.py --serve-planner --open-browser --client-id 7316";
+      }
+      return message || "未知错误";
+    }
+
+    async function waitForRefreshJob(jobId, initialPayload) {
+      let payload = initialPayload || {};
+      updateRefreshFromPayload(payload);
+      while (payload.running || payload.ok === null || payload.ok === undefined) {
+        await sleep(1000);
+        const response = await fetch(`${REFRESH_STATUS_PATH}?job=${encodeURIComponent(jobId)}&t=${Date.now()}`, { cache: "no-store" });
+        payload = await response.json().catch(() => ({}));
+        if (!response.ok && payload.running !== false) {
+          throw new Error(payload.error || `refresh status failed: ${response.status}`);
+        }
+        updateRefreshFromPayload(payload);
+        if (payload.running === false) break;
+      }
+      return payload;
+    }
+
+    async function watchLatestRefreshIfRunning() {
+      try {
+        const response = await fetch(`${REFRESH_STATUS_PATH}?job=latest&t=${Date.now()}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!payload.running) return;
+        startRefreshProgress();
+        updateRefreshFromPayload(payload);
+        const finalPayload = await waitForRefreshJob("latest", payload);
+        if (finalPayload.ok) {
+          applyRefreshManifest(finalPayload);
+          finishRefreshProgress(true, "刷新完成，正在读取最新CSV...");
+          await loadDefaultData();
+        } else {
+          finishRefreshProgress(false, "刷新失败");
+          setError(`刷新底层数据失败：${friendlyRefreshError(finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed")}`);
+        }
+      } catch (_error) {
+        // No active external refresh; keep the page quiet.
+      }
+    }
+
+    function updateRefreshFromPayload(payload) {
+      const progress = Number(payload.progress);
+      const value = Number.isFinite(progress) ? progress : refreshProgressValue;
+      refreshProgressValue = Math.max(refreshProgressValue, value);
+      const stage = payload.stage || refreshProgressStage(refreshProgressValue);
+      const percent = payload.running === false && payload.ok === false ? "失败" : `${Math.round(refreshProgressValue)}%`;
+      setRefreshProgress(refreshProgressValue, stage, percent);
+      if (payload.lines && payload.lines.length) {
+        setRefreshLog(payload.lines.slice(-12).join("\n"));
+      }
+      if (payload.started) {
+        setRefreshStatus(`${stage}。开始时间：${payload.started}`);
+      }
+    }
+
+    function applyRefreshManifest(payload) {
+      if (payload.manifest) {
+        discoveredDefaultPaths = payload.manifest.products || {};
+        discoveredFallbackPaths = payload.manifest.defaults || {};
+        dataUpdatedAt = payload.finished || payload.manifest.dataUpdatedAt || dataUpdatedAt;
+        return;
+      }
+      dataUpdatedAt = payload.finished || dataUpdatedAt;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => window.setTimeout(resolve, ms));
     }
 
     function defaultPathsFor(underlying) {
@@ -1314,6 +1473,7 @@
       clearRefreshProgressTimer();
       refreshProgressValue = 4;
       setRefreshProgress(4, "提交刷新任务", "4%");
+      setRefreshLog("");
       const startedAt = Date.now();
       refreshProgressTimer = window.setInterval(() => {
         const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0);
@@ -1353,6 +1513,13 @@
       panel.setAttribute("aria-hidden", "false");
       bar.style.width = `${Math.max(0, Math.min(value, 100))}%`;
       text.innerHTML = `<span>${esc(label || "")}</span><strong>${esc(percentText || "")}</strong>`;
+    }
+
+    function setRefreshLog(message) {
+      const log = $("refreshLog");
+      log.textContent = message || "";
+      log.classList.toggle("active", Boolean(message));
+      if (message) log.scrollTop = log.scrollHeight;
     }
 
     function setRefreshStatus(message) {
@@ -1478,9 +1645,10 @@
         const cfg = config();
         shortPositions = parseShortPositions(positionRows, cfg);
         futurePositions = parseFuturePositions(positionRows, cfg);
-        const inventory = aggregateInventory(shortPositions);
+        const inventory = aggregateInventory(shortPositions, cfg);
         const pressure = targetPressure(shortPositions, cfg);
-        candidates = candidateRowsWithInventory(scanCandidates(chainRows, shortPositions, cfg, pressure, inventory).slice(0, cfg.candidateLimit), shortPositions, cfg);
+        const scoredCandidates = scanCandidates(chainRows, shortPositions, cfg, pressure, inventory);
+        candidates = candidateRowsWithInventory(buildCandidateDisplayRows(chainRows, scoredCandidates, shortPositions, cfg, pressure, inventory), shortPositions, cfg);
         renderTargetSummary(pressure, shortPositions);
         renderInventory(inventory, futurePositions, cfg);
         renderPriceChart(cfg, futurePositions);
@@ -1513,8 +1681,13 @@
         ? currentChecked.filter(value => values.includes(value))
         : defaultSelected;
       if (currentValues.join(",") === values.join(",") && currentChecked.join(",") === selected.join(",")) return;
+      const summary = selected.length
+        ? (selected.length <= 3 ? selected.map(value => `${value}DTE`).join(", ") : `${selected.length} 个DTE`)
+        : "选择DTE";
       box.innerHTML = values.length
-        ? values.map(value => `<label><input type="checkbox" value="${esc(value)}"${selected.includes(value) ? " checked" : ""}>${esc(value)}DTE</label>`).join("")
+        ? `<details class="multi-select"><summary>${esc(summary)}</summary><div class="multi-select-menu">${
+          values.map(value => `<label><input type="checkbox" value="${esc(value)}"${selected.includes(value) ? " checked" : ""}>${esc(value)}DTE</label>`).join("")
+        }</div></details>`
         : `<span class="note">暂无DTE</span>`;
     }
 
@@ -1674,20 +1847,22 @@
           position,
           localSymbol: txt(row.localSymbol),
           marketValue: toNum(row.marketValue),
-          price: firstNum(row.underlyingPrice, row.undPrice, row.futurePrice, row.futuresPrice, row.marketPrice, Math.abs(toNum(row.marketValue)) / Math.max(Math.abs(position) * multiplierFor(row, underlying, cfg), EPS)),
+          price: normalizeFuturePrice(underlying, firstNum(row.underlyingPrice, row.undPrice, row.futurePrice, row.futuresPrice, row.marketPrice, Math.abs(toNum(row.marketValue)) / Math.max(Math.abs(position) * multiplierFor(row, underlying, cfg), EPS))),
           delta: firstNum(row.delta, 1),
           multiplier: multiplierFor(row, underlying, cfg)
         };
       }).filter(Boolean);
     }
 
-    function aggregateInventory(positions) {
+    function aggregateInventory(positions, cfg) {
       const totalPremium = sum(positions, "remainingPremium");
       const totalGamma = positions.reduce((acc, row) => acc + Math.abs(row.position * row.gamma), 0);
       const totalTheta = positions.reduce((acc, row) => acc + Math.abs(row.position * row.theta), 0);
+      const margin = positions.reduce((acc, row) => acc + positionMarginEstimate(row, cfg), 0);
       return {
         totalContracts: sum(positions, "contracts"),
         remainingPremium: totalPremium,
+        margin,
         unrealizedPnL: sum(positions, "unrealizedPnL"),
         deltaExposure: positions.reduce((acc, row) => acc + row.position * row.delta, 0),
         gammaExposure: positions.reduce((acc, row) => acc + row.position * row.gamma, 0),
@@ -1778,7 +1953,7 @@
         const spread = Math.max((Number.isFinite(ask) ? ask : estimatedCredit) - (Number.isFinite(bid) ? bid : estimatedCredit), 0);
         const incomeScore = estimatedCredit * captureRate(bucket) * multiplier;
         const distributionScore = distributionScoreFor(inventory, right, bucket, node);
-        const marginEstimate = firstNum(row.marginEstimate, estimatedCredit * multiplier * 6);
+        const marginEstimate = estimatedOptionMargin({ underlying, right, strike, estimatedCredit, delta, multiplier }, cfg);
         const riskScore = absDelta * 12 + Math.abs(gamma) * 8 + Math.abs(vega) + marginEstimate * 0.001 + spread * 10;
         const targetFitScore = Math.min(estimatedCredit * multiplier / Math.max(pressure.dailyTargetReference, EPS), 3);
         const finalScore = incomeScore * cfg.weights.income + distributionScore * cfg.weights.distribution + targetFitScore * 100 * cfg.weights.target - riskScore * cfg.weights.risk;
@@ -1836,6 +2011,78 @@
       return rows.sort((a, b) => Math.max(0, Math.round(a.dte)) - Math.max(0, Math.round(b.dte)) || b.strike - a.strike);
     }
 
+    function candidateIdentity(row) {
+      return [row.underlying, row.expiry, row.right, Number(row.strike).toFixed(3), Math.max(0, Math.round(row.dte))].join("|");
+    }
+
+    function buildCandidateDisplayRows(rawRows, scoredRows, positions, cfg, pressure, inventory) {
+      const scoredByIdentity = new Map(scoredRows.map(row => [candidateIdentity(row), row]));
+      return rawRows.map((row, index) => {
+        const underlying = productOf(row);
+        const right = normRight(row.right || row.direction);
+        const dte = dteFromRow(row);
+        const strike = toNum(row.strike);
+        if (underlying !== cfg.underlying || (right !== "P" && right !== "C") || !Number.isFinite(dte) || !Number.isFinite(strike)) return null;
+        const bid = firstNum(row.bid);
+        const ask = firstNum(row.ask);
+        let mid = firstNum(row.mid, row.price, row.last, row.modelOptionPrice, row.optPrice);
+        if (!Number.isFinite(mid) && Number.isFinite(bid) && Number.isFinite(ask)) mid = (bid + ask) / 2;
+        const estimatedCredit = cfg.creditSource === "bid" && Number.isFinite(bid) ? bid : mid;
+        if (!Number.isFinite(estimatedCredit) || estimatedCredit <= 0) return null;
+        const multiplier = multiplierFor(row, underlying, cfg);
+        const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
+        const current = currentInventoryFor(positions, { underlying, right, strike, expiry, dte });
+        const bucket = dteLabel(dte);
+        const node = `${underlying}-${right}-${num(strike, 3)}`;
+        const delta = signedDelta(row, right);
+        const gamma = firstNum(row.gamma, row.modelGreeks_gamma, row.bidGreeks_gamma, row.askGreeks_gamma, 0);
+        const theta = firstNum(row.theta, row.modelGreeks_theta, row.bidGreeks_theta, row.askGreeks_theta, 0);
+        const vega = firstNum(row.vega, row.modelGreeks_vega, row.bidGreeks_vega, row.askGreeks_vega, 0);
+        const spread = Math.max((Number.isFinite(ask) ? ask : estimatedCredit) - (Number.isFinite(bid) ? bid : estimatedCredit), 0);
+        const base = {
+          id: txt(row.conId) || `${underlying}-${right}-${strike}-${dte}-${index}`,
+          underlying,
+          expiry,
+          dte,
+          bucket,
+          dateBand: dateBandFor(expiry, dte),
+          right,
+          strike,
+          bid,
+          ask,
+          mid,
+          estimatedCredit,
+          delta,
+          gamma,
+          theta,
+          vega,
+          multiplier,
+          currentContracts: current.contracts,
+          currentPosition: current.position,
+          currentMarketValue: current.marketValue,
+          localSymbol: txt(row.localSymbol),
+          volume: firstNum(row.volume, row.rawVolume, row.callVolume, row.putVolume, 0),
+          openInterest: firstNum(row.openInterest, row.rawOpenInterest, row.callOpenInterest, row.putOpenInterest, 0),
+          marginEstimate: estimatedOptionMargin({ underlying, right, strike, estimatedCredit, delta, multiplier }, cfg),
+          spread,
+          incomeScore: estimatedCredit * captureRate(bucket) * multiplier,
+          distributionScore: distributionScoreFor(inventory, right, bucket, node),
+          riskScore: 0,
+          targetFitScore: Math.min(estimatedCredit * multiplier / Math.max(pressure.dailyTargetReference, EPS), 3),
+          finalScore: -999,
+          node,
+          warnings: []
+        };
+        const scored = scoredByIdentity.get(candidateIdentity(base));
+        if (scored) return { ...base, ...scored };
+        return {
+          ...base,
+          warnings: ["不在当前开仓筛选范围内，仅展示报价"],
+          isQuoteOnly: true
+        };
+      }).filter(Boolean);
+    }
+
     function candidateRowFromPosition(position, cfg) {
       const enriched = enrichPositionQuote(position, cfg);
       const estimatedCredit = firstNum(
@@ -1882,13 +2129,16 @@
 
     function renderTargetSummary(pressure, positions) {
       const tone = pressure.label === "HIGH" ? "red" : pressure.label === "ELEVATED" ? "amber" : "green";
+      const margin = marginSummary(shortPositions, futurePositions, candidates, config());
       $("targetSummary").innerHTML = [
         metric("本月目标", money(pressure.monthlyTargetProfit), "目标仅作压力参考", "blue"),
         metric("本月已完成", money(pressure.completedProfit), "来自输入的已实现PnL", pressure.completedProfit >= pressure.monthlyTargetProfit ? "green" : "cyan"),
         metric("还需完成", money(pressure.remainingTarget), "已扣已实现PnL和卖方剩余权利金", tone),
         metric("日均参考", money(pressure.dailyTargetReference), `${$("remainingDays").value} 个交易日`, "cyan"),
         metric("卖方剩余权利金", money(pressure.currentShortRemainingPremium), "只统计短期期权", "violet"),
-        metric("目标压力", pressure.label, `压力比 ${num(pressure.ratio, 2)}`, tone)
+        metric("目标压力", pressure.label, `压力比 ${num(pressure.ratio, 2)}`, tone),
+        metric("当前保证金", money(margin.current), `IB初始保证金 ${money(margin.ibInitial)}`, "amber"),
+        metric("可用保证金", money(margin.available), `新增后约 ${money(margin.availableAfter)}`, margin.availableAfter < 0 ? "red" : "green")
       ].join("");
     }
 
@@ -1901,12 +2151,16 @@
         bars("按行权节点", inventory.byNode.slice(0, 10))
       ].join("");
       const futuresQty = futures.reduce((acc, row) => acc + row.position, 0);
+      const optionMargin = inventory.margin;
+      const futureMargin = futuresMarginEstimate(futures, cfg);
       const futuresText = futures.length
         ? futures.map(row => `${row.localSymbol || row.underlying} ${num(row.position, 0)}`).join(" / ")
         : "未识别到当前品种期货";
       $("greekSummary").innerHTML = [
         metric("合约张数", num(inventory.totalContracts, 0), "只统计卖方库存", "blue"),
         metric("期货张数", num(futuresQty, 0), futuresText, "cyan"),
+        metric("期权保证金", money(optionMargin), "卖方期权本地估算", "amber"),
+        metric("期货保证金", money(futureMargin), "期货持仓本地估算", "violet"),
         metric("期权Delta", num(inventory.deltaExposure, 2), "卖方期权库存，不含期货", "cyan"),
         metric("Gamma", num(inventory.gammaExposure, 2), "净暴露", "amber"),
         metric("Theta", num(inventory.thetaExposure, 2), "净暴露", "green")
@@ -1925,7 +2179,7 @@
         const cfg = configForUnderlying(activeCfg, underlying);
         const positions = parseShortPositions(positionRows, cfg);
         const futures = parseFuturePositions(positionRows, cfg);
-        const inventory = aggregateInventory(positions);
+        const inventory = aggregateInventory(positions, cfg);
         const futuresQty = futures.reduce((acc, row) => acc + row.position, 0);
         const futuresLabel = futures.length
           ? futures.map(row => `${row.localSymbol || row.underlying} ${num(row.position, 0)}`).join(" / ")
@@ -1945,6 +2199,7 @@
             <span><em>合约</em><b>${num(inventory.totalContracts, 0)}</b></span>
             <span title="${esc(futuresLabel)}"><em>期货</em><b>${num(futuresQty, 0)}</b></span>
             <span><em>权利金</em><b>${money(inventory.remainingPremium)}</b></span>
+            <span><em>保证金</em><b>${money(inventory.margin + futuresMarginEstimate(futures, cfg))}</b></span>
             <span><em>期权Delta</em><b>${num(inventory.deltaExposure, 2)}</b></span>
             <span><em>Gamma</em><b>${num(inventory.gammaExposure, 2)}</b></span>
             <span><em>Theta</em><b>${num(inventory.thetaExposure, 2)}</b></span>
@@ -2474,7 +2729,8 @@
       const quoteLabel = row.isCurrentOnly && !(Number.isFinite(row.bid) && row.bid > 0) ? "当前报价" : "Bid/Ask";
       const badge = current > 0 ? `<span>当前 ${num(current, 0)}张 · 目标张数</span>` : `<span>目标张数</span>`;
       const positionClass = current > 0 ? " has-position" : "";
-      return `<div class="chain-map-cell ${side} editable${positionClass}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)}</span><span>${esc(formatExpiryDate(row.expiry))} · 分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
+      const quoteOnlyClass = row.isQuoteOnly ? " quote-only" : "";
+      return `<div class="chain-map-cell ${side} editable${positionClass}${quoteOnlyClass}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>${esc(formatExpiryDate(row.expiry))} · 分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
     }
 
     function creditIncome(row, quantity = 1) {
@@ -2583,13 +2839,14 @@
     }
 
     function exposureFromPositions(positions) {
+      const cfg = config();
       return {
         premium: sum(positions, "remainingPremium"),
         netDelta: positions.reduce((acc, row) => acc + row.position * row.delta, 0),
         netGamma: positions.reduce((acc, row) => acc + row.position * row.gamma, 0),
         netTheta: positions.reduce((acc, row) => acc + row.position * row.theta, 0),
         netVega: positions.reduce((acc, row) => acc + row.position * row.vega, 0),
-        margin: 0
+        margin: positions.reduce((acc, row) => acc + positionMarginEstimate(row, cfg), 0) + futuresMarginEstimate(futurePositions, cfg)
       };
     }
 
@@ -2608,6 +2865,55 @@
       }, { premium: 0, netDelta: 0, netGamma: 0, netTheta: 0, netVega: 0, margin: 0 });
     }
 
+    function accountValue(tag) {
+      const row = accountRows.find(item => txt(item.tag).toUpperCase() === tag.toUpperCase());
+      return row ? toNum(row.value) : NaN;
+    }
+
+    function marginSummary(positions, futures, rows, cfg) {
+      const localCurrent = positions.reduce((acc, row) => acc + positionMarginEstimate(row, cfg), 0) + futuresMarginEstimate(futures, cfg);
+      const ibInitial = firstNum(accountValue("FullInitMarginReq"), accountValue("InitMarginReq"), localCurrent);
+      const ibMaint = firstNum(accountValue("FullMaintMarginReq"), accountValue("MaintMarginReq"));
+      const available = firstNum(accountValue("FullAvailableFunds"), accountValue("AvailableFunds"), accountValue("ExcessLiquidity"));
+      const added = exposureFromCandidates(rows || [], cfg).margin;
+      return {
+        current: Number.isFinite(ibInitial) ? ibInitial : localCurrent,
+        localCurrent,
+        ibInitial,
+        ibMaint,
+        available,
+        added,
+        availableAfter: Number.isFinite(available) ? available - added : NaN
+      };
+    }
+
+    function futuresMarginEstimate(futures, cfg) {
+      return futures.reduce((acc, row) => {
+        const preset = PRODUCT_PRESETS[row.underlying] || {};
+        return acc + Math.abs(toNum(row.position)) * firstNum(preset.futureMargin, 0);
+      }, 0);
+    }
+
+    function positionMarginEstimate(row, cfg) {
+      const underlying = row.underlying || cfg.underlying;
+      const multiplier = multiplierFor(row, underlying, cfg);
+      const credit = firstNum(row.estimatedCredit, row.remainingPremium / Math.max(row.contracts * multiplier, EPS), row.mid, row.price, 0);
+      const delta = Math.abs(firstNum(row.delta, 0));
+      return estimatedOptionMargin({ underlying, right: row.right, strike: row.strike, estimatedCredit: credit, delta, multiplier }, cfg) * Math.max(firstNum(row.contracts, Math.abs(row.position), 0), 0);
+    }
+
+    function estimatedOptionMargin(row, cfg) {
+      const underlying = row.underlying || cfg.underlying;
+      const preset = PRODUCT_PRESETS[underlying] || PRODUCT_PRESETS.ZF;
+      const multiplier = firstNum(row.multiplier, preset.multiplier, 1000);
+      const credit = Math.max(firstNum(row.estimatedCredit, 0), 0);
+      const spot = referencePriceFor(underlying, chainRows, shortPositions, cfg, futurePositions).price;
+      const underlyingRisk = Number.isFinite(spot)
+        ? Math.abs(spot) * multiplier * firstNum(preset.optionMarginRate, 0.02) * (0.6 + Math.min(Math.abs(firstNum(row.delta, 0)), 0.6))
+        : 0;
+      return Math.max(credit * multiplier * 6, underlyingRisk, credit * multiplier);
+    }
+
     function selectedCandidateRows(rows) {
       return rows
         .map(row => ({
@@ -2621,7 +2927,7 @@
     function renderSelectedOptions(rows) {
       const selected = selectedCandidateRows(rows);
       $("selectedOptions").innerHTML = selected.length ? selected.map(row => (
-        `<div class="selected-item"><strong>${esc(row.underlying)} ${esc(row.expiry)} ${esc(row.right)} ${num(row.strike, 3)} 目标 ${num(row.proposedQuantity, 0)}张 / 调整 ${signedQty(row.adjustmentQuantity)}张</strong><span>收入变化 ${money(creditIncome(row, row.adjustmentQuantity))} · Δ ${num(row.delta, 3)} · Γ ${num(row.gamma, 4)} · Θ ${num(row.theta, 4)}</span></div>`
+        `<div class="selected-item"><strong>${esc(row.underlying)} ${esc(row.expiry)} ${esc(row.right)} ${num(row.strike, 3)} 目标 ${num(row.proposedQuantity, 0)}张 / 调整 ${signedQty(row.adjustmentQuantity)}张</strong><span>收入变化 ${money(creditIncome(row, row.adjustmentQuantity))} · 保证金变化 ${money(row.marginEstimate * row.adjustmentQuantity)} · Δ ${num(row.delta, 3)} · Γ ${num(row.gamma, 4)} · Θ ${num(row.theta, 4)}</span></div>`
       )).join("") : `<div class="note">在左侧期权链输入数量后，这里会列出新增期权。</div>`;
     }
 
@@ -2883,27 +3189,38 @@
       if (Number.isFinite(cfg.manualFuturePrice) && cfg.manualFuturePrice > 0) return { price: cfg.manualFuturePrice, source: "manual" };
       const savedFuturePrice = futurePriceRows
         .filter(row => txt(row.root || row.symbol).toUpperCase() === underlying)
-        .map(row => firstNum(row.price, row.marketPrice, row.mid, row.last, row.close, row.bid, row.ask))
+        .map(row => normalizeFuturePrice(underlying, firstNum(row.price, row.marketPrice, row.mid, row.last, row.close, row.bid, row.ask)))
         .find(Number.isFinite);
       if (Number.isFinite(savedFuturePrice)) return { price: savedFuturePrice, source: "future_prices" };
-      const futurePrice = futures.map(row => row.price).find(Number.isFinite);
+      const futurePrice = futures.map(row => normalizeFuturePrice(underlying, row.price)).find(Number.isFinite);
       if (Number.isFinite(futurePrice)) return { price: futurePrice, source: "future-position" };
       const productRows = chain.filter(row => productOf(row) === underlying);
       const values = productRows.flatMap(row => [
-        toNum(row.underlyingPrice),
-        toNum(row.undPrice),
-        toNum(row.futurePrice),
-        toNum(row.futuresPrice),
-        toNum(row.referencePrice),
-        toNum(row.modelGreeks_undPrice),
-        toNum(row.bidGreeks_undPrice),
-        toNum(row.askGreeks_undPrice),
-        toNum(row.lastGreeks_undPrice)
+        normalizeFuturePrice(underlying, toNum(row.underlyingPrice)),
+        normalizeFuturePrice(underlying, toNum(row.undPrice)),
+        normalizeFuturePrice(underlying, toNum(row.futurePrice)),
+        normalizeFuturePrice(underlying, toNum(row.futuresPrice)),
+        normalizeFuturePrice(underlying, toNum(row.referencePrice)),
+        normalizeFuturePrice(underlying, toNum(row.modelGreeks_undPrice)),
+        normalizeFuturePrice(underlying, toNum(row.bidGreeks_undPrice)),
+        normalizeFuturePrice(underlying, toNum(row.askGreeks_undPrice)),
+        normalizeFuturePrice(underlying, toNum(row.lastGreeks_undPrice))
       ]).filter(Number.isFinite);
       if (values.length) return { price: values[values.length - 1], source: "chain" };
-      const positionValues = positions.flatMap(row => [toNum(row.underlyingPrice), toNum(row.undPrice), toNum(row.referencePrice)]).filter(Number.isFinite);
+      const positionValues = positions.flatMap(row => [
+        normalizeFuturePrice(underlying, toNum(row.underlyingPrice)),
+        normalizeFuturePrice(underlying, toNum(row.undPrice)),
+        normalizeFuturePrice(underlying, toNum(row.referencePrice))
+      ]).filter(Number.isFinite);
       if (positionValues.length) return { price: positionValues[positionValues.length - 1], source: "positions" };
       return { price: NaN, source: "" };
+    }
+
+    function normalizeFuturePrice(underlying, value) {
+      const price = toNum(value);
+      if (!Number.isFinite(price)) return NaN;
+      if (underlying === "ZC" && Math.abs(price) < 20) return price * 100;
+      return price;
     }
 
     function expirySortKey(value) {
@@ -2925,6 +3242,7 @@
     }
 
     function multiplierFor(row, underlying, cfg) {
+      if (underlying === "ZC") return cfg.multiplier.ZC || PRODUCT_PRESETS.ZC.multiplier;
       const value = toNum(row.multiplier);
       return Number.isFinite(value) && value > 0 ? value : (cfg.multiplier[underlying] || 1000);
     }
@@ -3110,6 +3428,7 @@
     async function initialize() {
       render();
       if (typeof window === "undefined" || window.location.protocol === "file:") return;
+      watchLatestRefreshIfRunning();
       await loadDefaultData();
     }
 
