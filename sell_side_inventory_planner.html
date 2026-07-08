@@ -1227,6 +1227,7 @@
     let dataUpdatedAt = "";
     let refreshProgressTimer = null;
     let refreshProgressValue = 0;
+    let refreshProgressHasBackend = false;
     let chartView = { range: "1M", zoom: 1, offset: 0 };
     let chartDrag = null;
 
@@ -1410,8 +1411,11 @@
 
     function updateRefreshFromPayload(payload) {
       const progress = Number(payload.progress);
-      const value = Number.isFinite(progress) ? progress : refreshProgressValue;
-      refreshProgressValue = Math.max(refreshProgressValue, value);
+      if (Number.isFinite(progress)) {
+        clearRefreshProgressTimer();
+        refreshProgressHasBackend = true;
+        refreshProgressValue = Math.max(0, Math.min(progress, 100));
+      }
       const stage = payload.stage || refreshProgressStage(refreshProgressValue);
       const percent = payload.running === false && payload.ok === false ? "失败" : `${Math.round(refreshProgressValue)}%`;
       setRefreshProgress(refreshProgressValue, stage, percent);
@@ -1471,11 +1475,13 @@
 
     function startRefreshProgress() {
       clearRefreshProgressTimer();
+      refreshProgressHasBackend = false;
       refreshProgressValue = 4;
       setRefreshProgress(4, "提交刷新任务", "4%");
       setRefreshLog("");
       const startedAt = Date.now();
       refreshProgressTimer = window.setInterval(() => {
+        if (refreshProgressHasBackend) return;
         const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0);
         const target = Math.min(92, 8 + Math.log1p(elapsedSeconds) * 20);
         refreshProgressValue = Math.min(92, refreshProgressValue + Math.max(0.6, (target - refreshProgressValue) * 0.18));
