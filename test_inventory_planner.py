@@ -181,6 +181,26 @@ class InventoryPlannerTests(unittest.TestCase):
         self.assertEqual(parsed[0].underlying, "ZC")
         self.assertEqual(parsed[0].strike, 425)
 
+    def test_zc_decimal_strike_is_normalized_to_cents(self) -> None:
+        rows = [
+            {
+                "symbol": "ZC",
+                "secType": "FOP",
+                "position": "-1",
+                "expiry": "20260710",
+                "strike": "4.25",
+                "right": "P",
+                "marketValue": "-31",
+                "delta": "-0.09",
+                "localSymbol": "ZC2N6 P0425",
+            }
+        ]
+
+        parsed = parse_short_positions(rows, PlannerConfig(), as_of="20260708")
+
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0].strike, 425)
+
     def test_dte_bucket_assignment_does_not_make_0dte_special_risk(self) -> None:
         self.assertEqual(dte_bucket(0), "0DTE")
         self.assertEqual(dte_bucket(2), "1-2DTE")

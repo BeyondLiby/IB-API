@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 from ib_async import IB
 
 from target_treasury_account_monitor.option_chain_view import snapshot_to_monitor_frame
@@ -43,7 +44,7 @@ def _cache_prefix(settings: StaticChainSettings, *, today: str | None = None) ->
     root = settings.root.upper()
     months = normalize_months(settings.future_months)
     month_key = "_".join(months)
-    min_key = str(settings.min_expiration or today or today_yyyymmdd())
+    min_key = str(settings.min_expiration or today or "auto")
     max_key = str(settings.max_expiration or "all")
     return Path(settings.output_dir) / f"{root}_FOP_Static_{month_key}_from_{min_key}_to_{max_key}"
 
@@ -54,6 +55,21 @@ def _contract_cache_path(settings: StaticChainSettings) -> Path:
     return prefix.with_name(prefix.name + "_contracts.csv")
 
 
+def _find_existing_contract_cache(settings: StaticChainSettings, preferred: Path) -> Path:
+    """Reuse the newest compatible universe cache, including older date-keyed files."""
+    if preferred.exists():
+        return preferred
+    root = settings.root.upper()
+    month_key = "_".join(normalize_months(settings.future_months))
+    output_dir = Path(settings.output_dir)
+    candidates = sorted(
+        output_dir.glob(f"{root}_FOP_Static_{month_key}_from_*_to_*_contracts.csv"),
+        key=lambda path: (path.stat().st_mtime, path.name),
+        reverse=True,
+    )
+    return candidates[0] if candidates else preferred
+
+
 def _sidecar_path(contract_cache_path: Path, suffix: str) -> Path:
     """Return a sidecar path next to the contract cache."""
     name = contract_cache_path.name
@@ -62,14 +78,22 @@ def _sidecar_path(contract_cache_path: Path, suffix: str) -> Path:
     return contract_cache_path.with_name(name + suffix)
 
 
+def _read_csv_or_empty(path: Path) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path)
+    except (OSError, EmptyDataError):
+        return pd.DataFrame()
+
+
 def _fresh_or_cached_future_prices(
     ib: IB,
     settings: StaticChainSettings,
     months: list[str],
     future_prices_path: Path | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, str, str]:
     """Prefer fresh future prices for filtering, falling back to cached sidecars."""
     root = settings.root.upper()
+    error = ""
     if ib is not None:
         try:
             prices = get_future_prices_for_months(
@@ -77,16 +101,48 @@ def _fresh_or_cached_future_prices(
                 root,
                 months,
                 market_data_type=None,
-                wait_seconds=2.0,
+                wait_seconds=float(settings.future_price_wait_seconds),
                 raise_on_missing=False,
             )
             if not prices.empty:
-                return prices
-        except Exception:
-            pass
+                prices = prices.copy()
+                if root == "ZC" and "price" in prices.columns:
+                    price = pd.to_numeric(prices["price"], errors="coerce")
+                    prices["price"] = price.where(price.abs() >= 20, price * 100)
+                valid = pd.to_numeric(prices.get("price"), errors="coerce").notna().sum() if "price" in prices.columns else 0
+                if valid:
+                    return prices, "fresh", ""
+                error = "fresh future price request returned no valid price"
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
     if future_prices_path is not None and future_prices_path.exists():
-        return pd.read_csv(future_prices_path)
-    return pd.DataFrame()
+        prices = _read_csv_or_empty(future_prices_path)
+        if root == "ZC" and "price" in prices.columns:
+            price = pd.to_numeric(prices["price"], errors="coerce")
+            prices["price"] = price.where(price.abs() >= 20, price * 100)
+        if not prices.empty:
+            return prices, "cache", error
+    return pd.DataFrame(), "missing", error
+
+
+def refresh_future_prices_sidecar(
+    ib: IB,
+    settings: StaticChainSettings,
+) -> tuple[pd.DataFrame, str, str, Path]:
+    """Refresh and save the futures price sidecar independently of option-chain refresh."""
+    preferred_contract_cache_path = _contract_cache_path(settings)
+    contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
+    future_prices_path = _sidecar_path(contract_cache_path, "_future_prices.csv")
+    future_prices, source, error = _fresh_or_cached_future_prices(
+        ib,
+        settings,
+        normalize_months(settings.future_months),
+        future_prices_path,
+    )
+    if source == "fresh" and not future_prices.empty:
+        future_prices_path.parent.mkdir(parents=True, exist_ok=True)
+        future_prices.to_csv(future_prices_path, index=False, encoding="utf-8-sig")
+    return future_prices, source, error, future_prices_path
 
 
 def _dte(expiration: object) -> int | None:
@@ -111,7 +167,12 @@ def _select_market_data_contracts(
     out = metadata.copy()
     out["conId"] = pd.to_numeric(out["conId"], errors="coerce").astype("Int64")
     out["strike"] = pd.to_numeric(out["strike"], errors="coerce")
-    out["expiration"] = out.get("expiration", out["lastTradeDateOrContractMonth"]).astype(str)
+    if settings.root.upper() == "ZC":
+        out["strike"] = out["strike"].where(out["strike"].abs() >= 20, out["strike"] * 100)
+    if "expiration" in out.columns:
+        out["expiration"] = out["expiration"].astype(str)
+    else:
+        out["expiration"] = out["lastTradeDateOrContractMonth"].astype(str)
     out["dteForFilter"] = out["expiration"].map(_dte)
     out["underlyingMonth"] = out.get("underlyingMonth", "").astype(str)
 
@@ -120,7 +181,10 @@ def _select_market_data_contracts(
         for row in future_prices.to_dict("records"):
             price = pd.to_numeric(row.get("price"), errors="coerce")
             if pd.notna(price):
-                price_by_month[str(row.get("month"))] = float(price)
+                price_value = float(price)
+                if settings.root.upper() == "ZC" and abs(price_value) < 20:
+                    price_value *= 100
+                price_by_month[str(row.get("month"))] = price_value
 
     out["underlyingPriceForFilter"] = out["underlyingMonth"].map(price_by_month)
     if "underlyingPrice" in out.columns:
@@ -133,11 +197,19 @@ def _select_market_data_contracts(
     out["filterWidth"] = settings.far_strike_width
     out.loc[dte_numeric <= int(settings.near_dte_days), "filterWidth"] = settings.near_strike_width
 
-    selected = out[
+    base_mask = (
         out["underlyingPriceForFilter"].notna()
         & out["strikeDistanceForFilter"].notna()
         & (out["strikeDistanceForFilter"] <= out["filterWidth"])
-    ].copy()
+        & dte_numeric.notna()
+        & (dte_numeric >= 0)
+    )
+    if settings.market_data_max_dte is not None:
+        base_mask = base_mask & (dte_numeric <= int(settings.market_data_max_dte))
+
+    force_con_ids = {int(value) for value in settings.force_con_ids if int(value) > 0}
+    force_mask = out["conId"].astype("Int64").isin(force_con_ids) if force_con_ids else False
+    selected = out[base_mask | force_mask].copy()
     selected = selected.sort_values(
         ["dteForFilter", "underlyingMonth", "expiration", "right", "strike", "conId"],
         ignore_index=True,
@@ -160,8 +232,8 @@ def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_pat
 
     chain_summary_path = _sidecar_path(contract_cache_path, "_chain_summary.csv")
     future_prices_path = _sidecar_path(contract_cache_path, "_future_prices.csv")
-    chain_summary = pd.read_csv(chain_summary_path) if chain_summary_path.exists() else pd.DataFrame()
-    future_prices = _fresh_or_cached_future_prices(ib, settings, months, future_prices_path)
+    chain_summary = _read_csv_or_empty(chain_summary_path) if chain_summary_path.exists() else pd.DataFrame()
+    future_prices, future_price_source, future_price_error = _fresh_or_cached_future_prices(ib, settings, months, future_prices_path)
     selected_contracts, selected_metadata = _select_market_data_contracts(
         contracts,
         metadata,
@@ -189,9 +261,11 @@ def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_pat
         "root": root,
         "months": months,
         "today": today_yyyymmdd(),
-        "min_expiration": settings.min_expiration or today_yyyymmdd(),
+        "min_expiration": settings.min_expiration or "auto",
         "max_expiration": settings.max_expiration or "",
         "future_prices": future_prices,
+        "future_price_source": future_price_source,
+        "future_price_error": future_price_error,
         "chain_summary": chain_summary,
         "contracts": contracts,
         "metadata": metadata,
@@ -215,7 +289,8 @@ def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_pat
 
 def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainResult:
     """Refresh a static FOP chain, reusing qualified contracts when available."""
-    contract_cache_path = _contract_cache_path(settings)
+    preferred_contract_cache_path = _contract_cache_path(settings)
+    contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
     if (
         settings.use_contract_cache
         and not settings.force_rebuild_contract_cache
@@ -240,6 +315,17 @@ def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainRe
             empty_batch_retry_pause_seconds=settings.empty_batch_retry_pause_seconds,
             request_market_data=False,
         )
+        future_prices_path = _sidecar_path(preferred_contract_cache_path, "_future_prices.csv")
+        future_prices, future_price_source, future_price_error = _fresh_or_cached_future_prices(
+            ib,
+            settings,
+            normalize_months(settings.future_months),
+            future_prices_path,
+        )
+        if not future_prices.empty:
+            result["future_prices"] = future_prices
+        result["future_price_source"] = future_price_source
+        result["future_price_error"] = future_price_error
         selected_contracts, selected_metadata = _select_market_data_contracts(
             result["contracts"],
             result["metadata"],
@@ -274,6 +360,8 @@ def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainRe
         result["monitor_frame"] = monitor_frame
         result["snapshot_count"] = len(snapshot)
         result["universe_source"] = "ib_rebuilt"
-        result["contract_cache_path"] = str(_contract_cache_path(settings))
+        result["contract_cache_path"] = str(preferred_contract_cache_path)
+        if not settings.min_expiration:
+            result["min_expiration"] = "auto"
     paths = save_static_chain_result(result, settings.output_dir)
     return StaticChainResult(raw=result, saved_paths=paths)

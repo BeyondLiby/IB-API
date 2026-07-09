@@ -370,8 +370,22 @@ def get_future_reference(
         qualified = ib.qualifyContracts(contract)
         if qualified:
             contract = qualified[0]
+        else:
+            return {
+                "symbol": root,
+                "month": month,
+                "localSymbol": "",
+                "price": math.nan,
+                "priceSource": "qualification_failed",
+            }
     except Exception:
-        pass
+        return {
+            "symbol": root,
+            "month": month,
+            "localSymbol": "",
+            "price": math.nan,
+            "priceSource": "qualification_error",
+        }
 
     ib.reqMarketDataType(settings.market_data_type)
     ticker = None
@@ -380,6 +394,12 @@ def get_future_reference(
         ib.sleep(min(max(settings.quote_wait_seconds, 1.0), 3.0))
     except Exception:
         ticker = None
+    finally:
+        if ticker is not None:
+            try:
+                ib.cancelMktData(contract)
+            except Exception:
+                pass
 
     return _future_reference_from_ticker_or_snapshot(ib, contract, ticker, settings.market_data_type, root, month)
 

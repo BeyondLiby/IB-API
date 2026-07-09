@@ -748,6 +748,16 @@
       font-weight: 800;
     }
 
+    .chain-map-head small,
+    .chain-spot-line small {
+      display: block;
+      margin-top: 2px;
+      color: #98a2b3;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
     .chain-map-strike {
       display: grid;
       place-items: center;
@@ -766,12 +776,11 @@
     }
 
     .chain-map-cell.call {
-      background: #fff7ed;
       text-align: right;
     }
 
     .chain-map-cell.put {
-      background: #eff6ff;
+      background: #ffffff;
     }
 
     .chain-map-cell.editable {
@@ -803,10 +812,6 @@
     .chain-map-cell.has-position strong::before {
       content: "当前 ";
       color: #c01048;
-    }
-
-    .chain-map-cell.quote-only {
-      background: #f8fafc;
     }
 
     .chain-map-cell.empty {
@@ -841,6 +846,15 @@
       white-space: nowrap;
     }
 
+    .chain-map-cell strong .title-value {
+      display: inline;
+      margin-left: 6px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
     .chain-spot-line {
       background: #f0fdf4;
       color: var(--green);
@@ -859,6 +873,19 @@
 
     .chain-spot-line.center {
       color: var(--green);
+    }
+
+    .chain-spot-line.center.has-future {
+      border-color: #12b76a;
+      background: #ecfdf3;
+      box-shadow: inset 0 0 0 1px rgba(18, 183, 106, 0.18);
+    }
+
+    .chain-spot-line.center strong {
+      display: block;
+      color: #047857;
+      font-size: 12px;
+      line-height: 1.2;
     }
 
     .selected-list {
@@ -1027,7 +1054,8 @@
         </select>
       </label>
       <button id="loadDefault">读取默认CSV</button>
-      <button id="refreshDefault" class="secondary">刷新底层数据</button>
+      <button id="refreshDefault" class="secondary">快速刷新</button>
+      <button id="refreshFull" class="secondary">全量刷新</button>
       <button id="loadSample" class="secondary">加载样例</button>
       <button id="exportJson" class="secondary">导出JSON</button>
       <button id="exportCsv" class="secondary">导出CSV</button>
@@ -1247,7 +1275,8 @@
     });
     $("recompute").addEventListener("click", render);
     $("loadDefault").addEventListener("click", loadDefaultData);
-    $("refreshDefault").addEventListener("click", refreshDefaultData);
+    $("refreshDefault").addEventListener("click", () => refreshDefaultData("fast"));
+    $("refreshFull").addEventListener("click", () => refreshDefaultData("full"));
     $("loadDefaultBars").addEventListener("click", loadDefaultBars);
     $("chartRange").addEventListener("change", () => {
       chartView.range = $("chartRange").value;
@@ -1329,17 +1358,24 @@
       return Array.from(new Set(paths.filter(Boolean)));
     }
 
-    async function refreshDefaultData() {
-      const button = $("refreshDefault");
+    async function refreshDefaultData(mode = "fast") {
+      const button = mode === "full" ? $("refreshFull") : $("refreshDefault");
+      const otherButton = mode === "full" ? $("refreshDefault") : $("refreshFull");
       if (window.location.protocol === "file:") {
         setError("刷新底层数据需要通过本地 HTTP server 打开页面。");
         return;
       }
       button.disabled = true;
-      setRefreshStatus("正在刷新底层数据，这可能需要几分钟...");
+      otherButton.disabled = true;
+      setRefreshStatus(mode === "full" ? "正在全量刷新底层数据，这可能需要几分钟..." : "正在快速刷新底层数据...");
       startRefreshProgress();
       try {
-        const response = await fetch("/api/refresh-inventory-data", { method: "POST", cache: "no-store" });
+        const response = await fetch("/api/refresh-inventory-data", {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode })
+        });
         const payload = await response.json().catch(() => ({}));
         if (response.status === 501) {
           throw new Error("Current HTTP server does not support refresh API. Start this page with: python open_inventory_planner.py --port 8766");
@@ -1351,16 +1387,14 @@
         if (finalPayload.ok === false) {
           throw new Error(finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed");
         }
-        applyRefreshManifest(finalPayload);
-        setRefreshStatus(`刷新完成。${dataRefreshTimeText()}`);
-        finishRefreshProgress(true, "刷新完成，正在读取最新CSV...");
-        await loadDefaultData();
+        await finishRefreshAndLoadCsv(finalPayload);
       } catch (error) {
         setError(`刷新底层数据失败：${friendlyRefreshError(error)}`);
         setRefreshStatus("刷新失败。");
         finishRefreshProgress(false, "刷新失败");
       } finally {
         button.disabled = false;
+        otherButton.disabled = false;
       }
     }
 
@@ -1397,9 +1431,7 @@
         updateRefreshFromPayload(payload);
         const finalPayload = await waitForRefreshJob("latest", payload);
         if (finalPayload.ok) {
-          applyRefreshManifest(finalPayload);
-          finishRefreshProgress(true, "刷新完成，正在读取最新CSV...");
-          await loadDefaultData();
+          await finishRefreshAndLoadCsv(finalPayload);
         } else {
           finishRefreshProgress(false, "刷新失败");
           setError(`刷新底层数据失败：${friendlyRefreshError(finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed")}`);
@@ -1409,18 +1441,36 @@
       }
     }
 
+    async function finishRefreshAndLoadCsv(payload) {
+      applyRefreshManifest(payload);
+      clearRefreshProgressTimer();
+      refreshProgressHasBackend = true;
+      refreshProgressValue = Math.min(Math.max(refreshProgressValue, 96), 96);
+      setRefreshProgress(refreshProgressValue, "刷新完成，正在读取最新CSV...", "96%");
+      setRefreshStatus(`刷新完成，正在读取最新CSV。${dataRefreshTimeText()}`);
+      await loadDefaultData();
+      finishRefreshProgress(true, "最新CSV读取完成");
+      setRefreshStatus(`刷新并读取完成。${dataRefreshTimeText()}`);
+    }
+
     function updateRefreshFromPayload(payload) {
       const progress = Number(payload.progress);
       if (Number.isFinite(progress)) {
         clearRefreshProgressTimer();
         refreshProgressHasBackend = true;
         refreshProgressValue = Math.max(0, Math.min(progress, 100));
+        if (payload.running === false && payload.ok === true) {
+          refreshProgressValue = Math.min(refreshProgressValue, 96);
+        }
       }
-      const stage = payload.stage || refreshProgressStage(refreshProgressValue);
+      let stage = payload.stage || refreshProgressStage(refreshProgressValue);
+      if (payload.running === false && payload.ok === true && refreshProgressValue >= 96) {
+        stage = "刷新完成，等待读取最新CSV";
+      }
       const percent = payload.running === false && payload.ok === false ? "失败" : `${Math.round(refreshProgressValue)}%`;
       setRefreshProgress(refreshProgressValue, stage, percent);
       if (payload.lines && payload.lines.length) {
-        setRefreshLog(payload.lines.slice(-12).join("\n"));
+        setRefreshLog(payload.lines.slice(-24).join("\n"));
       }
       if (payload.started) {
         setRefreshStatus(`${stage}。开始时间：${payload.started}`);
@@ -1654,7 +1704,7 @@
         const inventory = aggregateInventory(shortPositions, cfg);
         const pressure = targetPressure(shortPositions, cfg);
         const scoredCandidates = scanCandidates(chainRows, shortPositions, cfg, pressure, inventory);
-        candidates = candidateRowsWithInventory(buildCandidateDisplayRows(chainRows, scoredCandidates, shortPositions, cfg, pressure, inventory), shortPositions, cfg);
+        candidates = buildCandidateDisplayRows(scoredCandidates, cfg);
         renderTargetSummary(pressure, shortPositions);
         renderInventory(inventory, futurePositions, cfg);
         renderPriceChart(cfg, futurePositions);
@@ -1733,7 +1783,7 @@
 
     function uniqueSortedStrikes(rows) {
       return Array.from(new Set(rows
-        .map(row => toNum(row.strike))
+        .map(row => strikeOf(row))
         .filter(Number.isFinite)
         .map(value => Number(value.toFixed(3)))))
         .sort((a, b) => a - b);
@@ -1798,6 +1848,7 @@
         const right = normRight(row.right || row.direction);
         const underlying = productOf(row);
         const dte = dteFromRow(row);
+        const strike = strikeOf(row, underlying);
         if (!Number.isFinite(position) || position >= 0) return null;
         if (!Number.isFinite(dte) || dte < 0) return null;
         if (right !== "P" && right !== "C") return null;
@@ -1819,7 +1870,7 @@
           bucket: dteLabel(dte),
           dateBand: dateBandFor(row.expiry || row.expiration || row.lastTradeDateOrContractMonth, dte),
           right,
-          strike: toNum(row.strike),
+          strike,
           position,
           contracts: Math.abs(position),
           marketValue,
@@ -1835,7 +1886,7 @@
           vega: firstNum(row.vega, row.modelGreeks_vega, 0),
           multiplier,
           localSymbol: txt(row.localSymbol),
-          node: `${underlying}-${right}-${num(toNum(row.strike), 3)}`
+          node: `${underlying}-${right}-${num(strike, 3)}`
         };
       }).filter(Boolean);
     }
@@ -1930,7 +1981,7 @@
         const underlying = productOf(row);
         const right = normRight(row.right || row.direction);
         const dte = dteFromRow(row);
-        const strike = toNum(row.strike);
+        const strike = strikeOf(row, underlying);
         if (!Number.isFinite(dte) || dte < 0) return null;
         if (allowed.size && !allowed.has(underlying)) return null;
         if (right !== "P" && right !== "C") return null;
@@ -2021,72 +2072,12 @@
       return [row.underlying, row.expiry, row.right, Number(row.strike).toFixed(3), Math.max(0, Math.round(row.dte))].join("|");
     }
 
-    function buildCandidateDisplayRows(rawRows, scoredRows, positions, cfg, pressure, inventory) {
-      const scoredByIdentity = new Map(scoredRows.map(row => [candidateIdentity(row), row]));
-      return rawRows.map((row, index) => {
-        const underlying = productOf(row);
-        const right = normRight(row.right || row.direction);
-        const dte = dteFromRow(row);
-        const strike = toNum(row.strike);
-        if (underlying !== cfg.underlying || (right !== "P" && right !== "C") || !Number.isFinite(dte) || !Number.isFinite(strike)) return null;
-        const bid = firstNum(row.bid);
-        const ask = firstNum(row.ask);
-        let mid = firstNum(row.mid, row.price, row.last, row.modelOptionPrice, row.optPrice);
-        if (!Number.isFinite(mid) && Number.isFinite(bid) && Number.isFinite(ask)) mid = (bid + ask) / 2;
-        const estimatedCredit = cfg.creditSource === "bid" && Number.isFinite(bid) ? bid : mid;
-        if (!Number.isFinite(estimatedCredit) || estimatedCredit <= 0) return null;
-        const multiplier = multiplierFor(row, underlying, cfg);
-        const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
-        const current = currentInventoryFor(positions, { underlying, right, strike, expiry, dte });
-        const bucket = dteLabel(dte);
-        const node = `${underlying}-${right}-${num(strike, 3)}`;
-        const delta = signedDelta(row, right);
-        const gamma = firstNum(row.gamma, row.modelGreeks_gamma, row.bidGreeks_gamma, row.askGreeks_gamma, 0);
-        const theta = firstNum(row.theta, row.modelGreeks_theta, row.bidGreeks_theta, row.askGreeks_theta, 0);
-        const vega = firstNum(row.vega, row.modelGreeks_vega, row.bidGreeks_vega, row.askGreeks_vega, 0);
-        const spread = Math.max((Number.isFinite(ask) ? ask : estimatedCredit) - (Number.isFinite(bid) ? bid : estimatedCredit), 0);
-        const base = {
-          id: txt(row.conId) || `${underlying}-${right}-${strike}-${dte}-${index}`,
-          underlying,
-          expiry,
-          dte,
-          bucket,
-          dateBand: dateBandFor(expiry, dte),
-          right,
-          strike,
-          bid,
-          ask,
-          mid,
-          estimatedCredit,
-          delta,
-          gamma,
-          theta,
-          vega,
-          multiplier,
-          currentContracts: current.contracts,
-          currentPosition: current.position,
-          currentMarketValue: current.marketValue,
-          localSymbol: txt(row.localSymbol),
-          volume: firstNum(row.volume, row.rawVolume, row.callVolume, row.putVolume, 0),
-          openInterest: firstNum(row.openInterest, row.rawOpenInterest, row.callOpenInterest, row.putOpenInterest, 0),
-          marginEstimate: estimatedOptionMargin({ underlying, right, strike, estimatedCredit, delta, multiplier }, cfg),
-          spread,
-          incomeScore: estimatedCredit * captureRate(bucket) * multiplier,
-          distributionScore: distributionScoreFor(inventory, right, bucket, node),
-          riskScore: 0,
-          targetFitScore: Math.min(estimatedCredit * multiplier / Math.max(pressure.dailyTargetReference, EPS), 3),
-          finalScore: -999,
-          node,
-          warnings: []
-        };
-        const scored = scoredByIdentity.get(candidateIdentity(base));
-        if (scored) return { ...base, ...scored };
-        return {
-          ...base,
-          warnings: ["不在当前开仓筛选范围内，仅展示报价"],
-          isQuoteOnly: true
-        };
-      }).filter(Boolean);
+    function buildCandidateDisplayRows(scoredRows, cfg) {
+      return scoredRows
+        .filter(row => row.underlying === cfg.underlying)
+        .filter(row => Number.isFinite(row.bid) && row.bid > 0)
+        .filter(row => Number.isFinite(row.finalScore))
+        .sort((a, b) => Math.max(0, Math.round(a.dte)) - Math.max(0, Math.round(b.dte)) || b.finalScore - a.finalScore);
     }
 
     function candidateRowFromPosition(position, cfg) {
@@ -2584,7 +2575,7 @@
     }
 
     function renderCandidates(rows, cfg) {
-      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；候选按真实 Strike 筛选：Call ≤ ${num(cfg.callStrikeMax, 3)}，Put ≥ ${num(cfg.putStrikeMin, 3)}。当前持仓会额外叠加显示。`;
+      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；只显示满足 Delta、OTM、Strike 和 bid>0 的可交易候选：Call ≤ ${num(cfg.callStrikeMax, 3)}，Put ≥ ${num(cfg.putStrikeMin, 3)}。`;
       $("candidateTable").innerHTML = optionChainHtml(rows, cfg, { editable: true, showGreeks: true, futures: futurePositions });
       $("candidateTable").querySelectorAll("input[data-id]").forEach(input => {
         input.addEventListener("input", () => {
@@ -2617,7 +2608,7 @@
       return chainRows
         .filter(candidate => productOf(candidate) === cfg.underlying)
         .filter(candidate => normRight(candidate.right || candidate.direction) === right)
-        .filter(candidate => Math.abs(toNum(candidate.strike) - strike) < 0.0001)
+        .filter(candidate => Math.abs(strikeOf(candidate, cfg.underlying) - strike) < 0.0001)
         .filter(candidate => {
           const candidateExpiry = txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth);
           return candidateExpiry === expiry || Math.max(0, Math.round(dteFromRow(candidate))) === dte;
@@ -2659,16 +2650,17 @@
       const spot = ref.price;
       const dtes = unifiedDtes(productRows, selectedDtes);
       const leftDtes = dtes.slice().reverse();
+      const dteDates = dteDateLabels(productRows);
       const strikes = Array.from(new Set(productRows.map(row => row.strike).filter(Number.isFinite))).sort((a, b) => b - a);
       const colTemplate = `${leftDtes.map(() => "minmax(150px, 1fr)").join(" ")} 74px ${dtes.map(() => "minmax(150px, 1fr)").join(" ")}`;
       const cells = [];
-      leftDtes.forEach(dte => cells.push(`<div class="chain-map-head call">${dte}DTE Call</div>`));
+      leftDtes.forEach(dte => cells.push(`<div class="chain-map-head call">${chainHeaderLabel(dte, "Call", dteDates)}</div>`));
       cells.push(`<div class="chain-map-head center">Strike</div>`);
-      dtes.forEach(dte => cells.push(`<div class="chain-map-head put">${dte}DTE Put</div>`));
+      dtes.forEach(dte => cells.push(`<div class="chain-map-head put">${chainHeaderLabel(dte, "Put", dteDates)}</div>`));
       let insertedSpot = false;
       strikes.forEach((strike, index) => {
-        if (!insertedSpot && Number.isFinite(spot) && index > 0 && spot <= strikes[index - 1] && spot >= strike) {
-          cells.push(...spotHeaderCells(leftDtes, dtes, spot));
+        if (!insertedSpot && shouldInsertSpotBeforeStrike(strikes, index, spot)) {
+          cells.push(...spotHeaderCells(leftDtes, dtes, spot, dteDates, cfg, options));
           insertedSpot = true;
         }
         leftDtes.forEach(dte => cells.push(chainMapCell(findChainMapRow(productRows, strike, dte, "C"), "call", options, strike, spot)));
@@ -2676,7 +2668,7 @@
         dtes.forEach(dte => cells.push(chainMapCell(findChainMapRow(productRows, strike, dte, "P"), "put", options, strike, spot)));
       });
       if (!insertedSpot && Number.isFinite(spot)) {
-        cells.push(...spotHeaderCells(leftDtes, dtes, spot));
+        cells.push(...spotHeaderCells(leftDtes, dtes, spot, dteDates, cfg, options));
       }
       return `<div class="expiry-sketch"><div class="chain-map" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
     }
@@ -2690,6 +2682,33 @@
       return selected.length ? selected : available;
     }
 
+    function dteDateLabels(rows) {
+      const labels = new Map();
+      rows.forEach(row => {
+        const dte = Math.max(0, Math.round(row.dte));
+        const date = formatExpiryDate(row.expiry);
+        if (!Number.isFinite(dte) || !date) return;
+        if (!labels.has(dte)) labels.set(dte, new Set());
+        labels.get(dte).add(date);
+      });
+      return labels;
+    }
+
+    function chainHeaderLabel(dte, side, dteDates) {
+      const dates = Array.from(dteDates.get(dte) || []).sort();
+      const dateText = dates.length > 2 ? `${dates.slice(0, 2).join(" / ")} +${dates.length - 2}` : dates.join(" / ");
+      return `${dte}DTE ${side}${dateText ? `<small>${esc(dateText)}</small>` : ""}`;
+    }
+
+    function shouldInsertSpotBeforeStrike(strikes, index, spot) {
+      if (!Number.isFinite(spot)) return false;
+      const strike = strikes[index];
+      if (!Number.isFinite(strike)) return false;
+      if (index === 0) return spot >= strike;
+      const previous = strikes[index - 1];
+      return spot < previous && spot >= strike;
+    }
+
     function sideDtes(rows, right) {
       return Array.from(new Set(rows
         .filter(row => row.right === right)
@@ -2698,12 +2717,23 @@
         .sort((a, b) => a - b);
     }
 
-    function spotHeaderCells(leftDtes, rightDtes, spot) {
+    function spotHeaderCells(leftDtes, rightDtes, spot, dteDates, cfg, options) {
+      const futureText = currentFuturePositionText(cfg.underlying, options && options.futures);
+      const centerClass = `chain-spot-line center${futureText ? " has-future" : ""}`;
       return [
-        ...leftDtes.map(dte => `<div class="chain-spot-line call">${dte}DTE Call</div>`),
-        `<div class="chain-spot-line center">当前期货价 ${num(spot, 3)}</div>`,
-        ...rightDtes.map(dte => `<div class="chain-spot-line put">${dte}DTE Put</div>`)
+        ...leftDtes.map(dte => `<div class="chain-spot-line call">${chainHeaderLabel(dte, "Call", dteDates)}</div>`),
+        `<div class="${centerClass}"><strong>当前期货价 ${num(spot, 3)}</strong>${futureText ? `<small>${esc(futureText)}</small>` : ""}</div>`,
+        ...rightDtes.map(dte => `<div class="chain-spot-line put">${chainHeaderLabel(dte, "Put", dteDates)}</div>`)
       ];
+    }
+
+    function currentFuturePositionText(underlying, futures = []) {
+      const rows = (futures || []).filter(row => row.underlying === underlying && Number.isFinite(row.position) && row.position !== 0);
+      if (!rows.length) return "";
+      const total = rows.reduce((acc, row) => acc + row.position, 0);
+      const symbols = rows.map(row => txt(row.localSymbol)).filter(Boolean);
+      const symbolText = symbols.length ? ` ${symbols.slice(0, 2).join(" / ")}` : "";
+      return `期货 ${num(total, 0)}张${symbolText}`;
     }
 
     function findChainMapRow(rows, strike, dte, right) {
@@ -2724,7 +2754,7 @@
     function chainReadonlyMapCell(row, side) {
       const label = esc(compactPositionName(row));
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
-      return `<div class="chain-map-cell ${side}"><strong>${label}</strong><span>Delta ${num(row.delta, 2)} · 市值 ${money(row.marketValue)}</span><span>${esc(formatExpiryDate(row.expiry))} · ${esc(row.bucket || "")}</span><span>Bid/Ask ${quote}</span></div>`;
+      return `<div class="chain-map-cell ${side}"><strong>${label}<span class="title-value">${money(row.marketValue)}</span></strong><span>Delta ${num(row.delta, 2)}</span><span>Bid/Ask ${quote}</span></div>`;
     }
 
     function chainEditableMapCell(row, side) {
@@ -2734,9 +2764,7 @@
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
       const quoteLabel = row.isCurrentOnly && !(Number.isFinite(row.bid) && row.bid > 0) ? "当前报价" : "Bid/Ask";
       const badge = current > 0 ? `<span>当前 ${num(current, 0)}张 · 目标张数</span>` : `<span>目标张数</span>`;
-      const positionClass = current > 0 ? " has-position" : "";
-      const quoteOnlyClass = row.isQuoteOnly ? " quote-only" : "";
-      return `<div class="chain-map-cell ${side} editable${positionClass}${quoteOnlyClass}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>${esc(formatExpiryDate(row.expiry))} · 分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
+      return `<div class="chain-map-cell ${side} editable"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
     }
 
     function creditIncome(row, quantity = 1) {
@@ -3128,6 +3156,17 @@
       return "";
     }
 
+    function strikeOf(row, underlying = productOf(row)) {
+      return normalizeOptionStrike(underlying, toNum(row && row.strike));
+    }
+
+    function normalizeOptionStrike(underlying, value) {
+      const strike = toNum(value);
+      if (!Number.isFinite(strike)) return NaN;
+      if (underlying === "ZC" && Math.abs(strike) > 0 && Math.abs(strike) < 20) return strike * 100;
+      return strike;
+    }
+
     function dteFromRow(row) {
       const explicit = toNum(row.DTE ?? row.dte);
       if (Number.isFinite(explicit)) return Math.round(explicit);
@@ -3193,15 +3232,8 @@
 
     function referencePriceFor(underlying, chain, positions, cfg, futures = []) {
       if (Number.isFinite(cfg.manualFuturePrice) && cfg.manualFuturePrice > 0) return { price: cfg.manualFuturePrice, source: "manual" };
-      const savedFuturePrice = futurePriceRows
-        .filter(row => txt(row.root || row.symbol).toUpperCase() === underlying)
-        .map(row => normalizeFuturePrice(underlying, firstNum(row.price, row.marketPrice, row.mid, row.last, row.close, row.bid, row.ask)))
-        .find(Number.isFinite);
-      if (Number.isFinite(savedFuturePrice)) return { price: savedFuturePrice, source: "future_prices" };
-      const futurePrice = futures.map(row => normalizeFuturePrice(underlying, row.price)).find(Number.isFinite);
-      if (Number.isFinite(futurePrice)) return { price: futurePrice, source: "future-position" };
       const productRows = chain.filter(row => productOf(row) === underlying);
-      const values = productRows.flatMap(row => [
+      const chainValues = productRows.flatMap(row => [
         normalizeFuturePrice(underlying, toNum(row.underlyingPrice)),
         normalizeFuturePrice(underlying, toNum(row.undPrice)),
         normalizeFuturePrice(underlying, toNum(row.futurePrice)),
@@ -3212,7 +3244,14 @@
         normalizeFuturePrice(underlying, toNum(row.askGreeks_undPrice)),
         normalizeFuturePrice(underlying, toNum(row.lastGreeks_undPrice))
       ]).filter(Number.isFinite);
-      if (values.length) return { price: values[values.length - 1], source: "chain" };
+      const savedFuturePrice = futurePriceRows
+        .filter(row => txt(row.root || row.symbol).toUpperCase() === underlying)
+        .map(row => normalizeFuturePrice(underlying, firstNum(row.price, row.marketPrice, row.mid, row.last, row.close, row.bid, row.ask)))
+        .find(Number.isFinite);
+      if (Number.isFinite(savedFuturePrice)) return { price: savedFuturePrice, source: "future_prices" };
+      const futurePrice = futures.map(row => normalizeFuturePrice(underlying, row.price)).find(Number.isFinite);
+      if (Number.isFinite(futurePrice)) return { price: futurePrice, source: "future-position" };
+      if (chainValues.length) return { price: chainValues[chainValues.length - 1], source: "chain" };
       const positionValues = positions.flatMap(row => [
         normalizeFuturePrice(underlying, toNum(row.underlyingPrice)),
         normalizeFuturePrice(underlying, toNum(row.undPrice)),

@@ -130,15 +130,28 @@ cd E:\策略\IB-API
 
 停止时在终端按 `Ctrl+C`。
 
-### 3. 只打开页面，不连接 IB
+### 3. 打开页面，并每 3 分钟自动快速刷新
 
-已有 CSV 数据时，用这个最快：
+macOS，本机推荐。这个脚本会启动 planner server，打开页面，并每 3 分钟自动执行一次快速刷新：
 
-macOS，本机推荐：
 
 ```bash
 ./open_inventory_planner.sh
 ```
+
+可选环境变量：
+
+```bash
+REFRESH_MINUTES=3 IB_CLIENT_ID=7316 ./open_inventory_planner.sh
+```
+
+停止后台 server 和自动刷新循环：
+
+```bash
+./stop_inventory_planner.sh
+```
+
+如果只想打开页面、不连接 IB，用 Python 直接启动 server：
 
 或者直接用 Python：
 
@@ -212,11 +225,12 @@ inventory-planner-defaults.json
 ## 页面按钮说明
 
 - `读取默认CSV`：重新读取 `data/planner/` 下的最新 CSV。
-- `刷新底层数据`：从页面发起 `POST /api/refresh-inventory-data`，后端执行 `refresh_inventory_data.py`。
+- `快速刷新`：从页面发起 `POST /api/refresh-inventory-data`，后端执行 `refresh_inventory_data.py --refresh-mode fast`。只请求近端/现价附近/当前持仓合约的行情，并保留缓存里的远端链和 K 线。
+- `全量刷新`：执行 `refresh_inventory_data.py --refresh-mode full`，用于盘前或需要重建更完整链表时。
 - `加载样例`：加载页面内置样例，不依赖 IB。
 - `导出JSON / CSV / Markdown`：导出当前手动规划结果。
 
-如果点击 `刷新底层数据` 出现 `501 Unsupported method ('POST')`，说明你用普通静态服务器打开了页面。请改用：
+如果点击刷新出现 `501 Unsupported method ('POST')`，说明你用普通静态服务器打开了页面。请改用：
 
 ```powershell
 .\.venv\Scripts\python.exe .\open_inventory_planner.py --port 8766
@@ -417,12 +431,13 @@ U16251798
 - ZC：72 张合约，1 个 batch。
 - 期货 K 线：ZF/ZN/ZC 各 1 个月 30min bars，当前不是最大瓶颈。
 
-后续可迭代方向：
+当前已落地的提速方向：
 
-- 对页面默认视图只刷新近端 DTE 和当前持仓相关 strike，远端链用缓存。
-- ZF/ZN 分品种增量刷新，避免每次全量刷新 1000+ 张合约。
-- 当前持仓合约强制加入刷新 universe，避免深 OTM 当前仓位不在候选链中。
-- 将期权链刷新和 K 线刷新拆成独立按钮，日内频繁刷新时只跑必要部分。
+- 页面默认走 `快速刷新`，只请求近端 DTE、现价附近和当前持仓合约；远端链用缓存保留。
+- 合约 universe cache 默认使用 `from_auto` 稳定 key，并会复用旧日期 cache，避免每天重建。
+- 当前持仓 conId 会强制加入刷新 universe，避免深 OTM 当前仓位没数据。
+- 持仓刷新有 `--positions-timeout`，超时或失败时默认复用旧 positions CSV。
+- 页面保留 `全量刷新`，需要完整重刷时再手动跑。
 
 ## 测试
 

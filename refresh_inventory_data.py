@@ -61,7 +61,15 @@ def build_refresh_command(args: argparse.Namespace) -> list[str]:
         args.duration,
         "--what-to-show",
         args.what_to_show,
+        "--positions-timeout",
+        str(args.positions_timeout),
+        "--future-price-wait-seconds",
+        str(args.future_price_wait_seconds),
     ]
+    if args.refresh_mode == "fast":
+        command.append("--fast-refresh")
+    if args.market_data_max_dte:
+        command.extend(["--market-data-max-dte", str(args.market_data_max_dte)])
     if args.account:
         command.extend(["--account", args.account])
     if args.positions_csv:
@@ -84,6 +92,8 @@ def build_refresh_command(args: argparse.Namespace) -> list[str]:
         command.append("--rebuild-contract-cache")
     if args.strict_chain:
         command.append("--strict-chain")
+    if args.strict_positions:
+        command.append("--strict-positions")
     if args.skip_bars:
         command.append("--skip-bars")
     if args.strict_bars:
@@ -160,7 +170,7 @@ def write_refresh_status(args: argparse.Namespace, payload: dict[str, object]) -
 
 def run_refresh_once(args: argparse.Namespace) -> None:
     command = build_refresh_command(args)
-    print("running:", " ".join(command), flush=True)
+    print_refresh_request_summary(args, command)
     if args.dry_run:
         return
     lines: list[str] = []
@@ -225,6 +235,49 @@ def run_refresh_once(args: argparse.Namespace) -> None:
         raise SystemExit(f"refresh command failed with exit code {returncode}; see output above")
 
 
+def print_refresh_request_summary(args: argparse.Namespace, command: list[str]) -> None:
+    mode_note = (
+        "fast: request near/current-position option quotes, preserve cached far-chain rows and bars"
+        if args.refresh_mode == "fast"
+        else "full: request the broader configured option chain and refresh bars unless skipped"
+    )
+    print("refresh request:", flush=True)
+    print(f"  mode: {args.refresh_mode} ({mode_note})", flush=True)
+    print(
+        f"  ib: {args.ib_host}:{args.ib_port}, client_id={args.client_id}, "
+        f"market_data={args.market_data_type}, account={args.account or '<none>'}",
+        flush=True,
+    )
+    print(f"  chain_specs: {args.chain_specs}", flush=True)
+    print(f"  zc_chain_specs: {args.zc_chain_specs or '<none>'}", flush=True)
+    print(
+        "  quote timing: "
+        f"batch_size={args.batch_size}, wait={args.wait_seconds}s, stable={args.stable_seconds}s, "
+        f"request_interval={args.request_interval}s, inter_batch_pause={args.inter_batch_pause_seconds}s, "
+        f"timeout={args.timeout}s, future_price_wait={args.future_price_wait_seconds}s",
+        flush=True,
+    )
+    print(
+        f"  positions: timeout={args.positions_timeout}s, "
+        f"source={'csv ' + args.positions_csv if args.positions_csv else 'IB account snapshot'}",
+        flush=True,
+    )
+    print(
+        f"  filters/cache: market_data_max_dte={args.market_data_max_dte or 'auto'}, "
+        f"contract_cache={'off' if args.no_contract_cache else 'on'}, "
+        f"rebuild_cache={bool(args.rebuild_contract_cache)}, strict_chain={bool(args.strict_chain)}",
+        flush=True,
+    )
+    print(
+        f"  bars: {'skip' if args.skip_bars else args.duration + ' / ' + args.bar_size + ' / ' + args.what_to_show}",
+        flush=True,
+    )
+    print(f"  working_dir: {args.working_dir}", flush=True)
+    print(f"  html_data_dir: {args.html_data_dir}", flush=True)
+    print("running command:", flush=True)
+    print("  " + " ".join(command), flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Refresh IB positions, option chains, futures bars, and publish CSVs for the inventory planner HTML."
@@ -239,6 +292,11 @@ def main() -> None:
     parser.add_argument("--zc-chain-specs", default="ZC=202609,202612", help="Optional, for example ZC=202609,202612.")
     parser.add_argument("--bars-contracts", default="", help="Optional ROOT:YYYYMM list. Defaults to first month in each chain spec.")
     parser.add_argument("--positions-csv", default="", help="Reuse positions CSV instead of refreshing IB positions.")
+    parser.add_argument("--refresh-mode", choices=("fast", "full"), default="fast", help="fast preserves cached far-chain/bars rows; full refreshes the broader chain.")
+    parser.add_argument("--full-refresh", dest="refresh_mode", action="store_const", const="full", help="Shortcut for --refresh-mode full.")
+    parser.add_argument("--positions-timeout", type=float, default=30.0)
+    parser.add_argument("--strict-positions", action="store_true")
+    parser.add_argument("--future-price-wait-seconds", type=float, default=6.0, help="Seconds to wait when refreshing underlying futures prices for each product.")
     parser.add_argument("--min-expiration", default="")
     parser.add_argument("--max-expiration", default="")
     parser.add_argument("--working-dir", type=Path, default=Path("data/planner/debug"))
@@ -248,6 +306,7 @@ def main() -> None:
     parser.add_argument("--stable-seconds", type=float, default=1.5)
     parser.add_argument("--request-interval", type=float, default=0.025)
     parser.add_argument("--inter-batch-pause-seconds", type=float, default=1.0)
+    parser.add_argument("--market-data-max-dte", type=int, default=0, help="Only request option market data up to this DTE. 0 means auto/default.")
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--bar-size", default="30 mins")
     parser.add_argument("--duration", default="1 M")

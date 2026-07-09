@@ -59,6 +59,9 @@ class StaticChainSettings:
     near_dte_days: int = 7
     near_strike_width: float = 1.0
     far_strike_width: float = 3.0
+    market_data_max_dte: int | None = None
+    force_con_ids: tuple[int, ...] = ()
+    future_price_wait_seconds: float = 6.0
 
 
 @dataclass(frozen=True)

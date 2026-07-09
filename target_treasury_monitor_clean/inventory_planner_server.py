@@ -106,8 +106,11 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
         (30, "持仓已读取", "positions:"),
         (36, "刷新期权链", "refresh option chains"),
         (46, "刷新ZF期权链", "refresh chain: zf"),
+        (50, "刷新ZF期货价格", "zf future prices sidecar:"),
         (58, "刷新ZN期权链", "refresh chain: zn"),
+        (62, "刷新ZN期货价格", "zn future prices sidecar:"),
         (68, "刷新ZC期权链", "refresh chain: zc"),
+        (72, "刷新ZC期货价格", "zc future prices sidecar:"),
         (78, "刷新期货K线", "refresh futures bars"),
         (90, "发布CSV", "published:"),
         (96, "校验输出文件", "ready_for_full"),
@@ -187,8 +190,20 @@ def inventory_planner_handler(directory: Path):
                 self.send_json(500, {"ok": False, "error": f"{script.name} not found"})
                 return
 
+            payload: dict[str, object] = {}
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                if length > 0:
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            except (OSError, json.JSONDecodeError, ValueError):
+                payload = {}
+            mode = str(payload.get("mode") or "fast").strip().lower()
+            if mode not in {"fast", "full"}:
+                self.send_json(400, {"ok": False, "error": f"unknown refresh mode: {mode}"})
+                return
+
             started = time.strftime("%Y-%m-%d %H:%M:%S")
-            command = [sys.executable, str(script)]
+            command = [sys.executable, str(script), "--refresh-mode", mode]
 
             with jobs_lock:
                 running = next((job for job in jobs.values() if job.get("running")), None)
@@ -209,6 +224,7 @@ def inventory_planner_handler(directory: Path):
                     "stdout": "",
                     "stderr": "",
                     "lines": [],
+                    "mode": mode,
                     "manifest": inventory_planner_manifest(directory),
                 }
                 jobs[job_id] = job

@@ -238,6 +238,13 @@ def multiplier_for(row: dict[str, Any], underlying: str, config: PlannerConfig) 
     return config.contract_multiplier.get(underlying, 1000.0)
 
 
+def normalize_option_strike(value: Any, underlying: str) -> float:
+    strike = to_float(value)
+    if underlying == "ZC" and math.isfinite(strike) and 0 < abs(strike) < 20:
+        return strike * 100.0
+    return strike
+
+
 def parse_short_positions(rows: Iterable[dict[str, Any]], config: PlannerConfig, as_of: date | datetime | str | None = None) -> list[ShortPosition]:
     today = resolve_as_of(as_of)
     allowed = set(config.allowed_underlyings)
@@ -270,7 +277,7 @@ def parse_short_positions(rows: Iterable[dict[str, Any]], config: PlannerConfig,
                 expiry=text(row.get("expiry") or row.get("expiration") or row.get("lastTradeDateOrContractMonth")),
                 dte=dte,
                 right=right,
-                strike=to_float(row.get("strike"), 0.0),
+                strike=normalize_option_strike(row.get("strike"), underlying),
                 position=position,
                 abs_contracts=abs(position),
                 remaining_premium=remaining_premium,
@@ -392,7 +399,7 @@ def scan_candidates(rows: Iterable[dict[str, Any]], positions: list[ShortPositio
             continue
         if right == "C" and not (config.new_trade_min_dte <= dte <= config.new_trade_max_dte_call):
             continue
-        strike = to_float(row.get("strike"))
+        strike = normalize_option_strike(row.get("strike"), underlying)
         if not math.isfinite(strike):
             continue
         if right == "P" and not strike_allowed(strike, config.put_strike_zone.get(underlying), "P"):

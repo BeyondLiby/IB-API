@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import contextmanager
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import random
 from pathlib import Path
+import signal
 import webbrowser
 
 import pandas as pd
@@ -21,7 +23,7 @@ from .carry_dashboard_sync import (
     validate_carry_dashboard_files,
     write_carry_dashboard_files,
 )
-from .chain_batch import refresh_static_chain
+from .chain_batch import refresh_future_prices_sidecar, refresh_static_chain
 from .chain_realtime import LiveChainMonitor
 from .future_bars import fetch_future_bars, parse_contract_specs, save_future_bars
 from .ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
@@ -135,6 +137,91 @@ def _format_carry_html_summary(report: dict[str, object]) -> str:
         if missing_bars:
             lines.append(f"missing_bars: {', '.join(str(item) for item in missing_bars)}")
     return "\n".join(lines)
+
+
+def _future_price_summary(frame: pd.DataFrame) -> str:
+    if frame.empty:
+        return "<none>"
+    items: list[str] = []
+    for row in frame.head(6).to_dict("records"):
+        month = str(row.get("month") or row.get("lastTradeDateOrContractMonth") or "").strip()
+        local_symbol = str(row.get("localSymbol") or "").strip()
+        price = pd.to_numeric(row.get("price"), errors="coerce")
+        label = local_symbol or month or "future"
+        if pd.notna(price):
+            items.append(f"{label}={float(price):.3f}")
+        else:
+            items.append(f"{label}=n/a")
+    suffix = "" if len(frame) <= 6 else f", +{len(frame) - 6} more"
+    return ", ".join(items) + suffix
+
+
+@contextmanager
+def _time_limit(seconds: float):
+    if seconds <= 0 or os.name == "nt":
+        yield
+        return
+
+    def _raise_timeout(_signum, _frame):
+        raise TimeoutError(f"operation timed out after {seconds:.1f}s")
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _read_csv_if_exists(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
+def _fallback_positions_path(args: argparse.Namespace) -> Path:
+    html_path = Path(args.html_data_dir) / "carry_dashboard_positions.csv"
+    return html_path if html_path.exists() else Path(args.working_dir) / "dashboard_treasury_positions.csv"
+
+
+def _position_con_ids_by_root(position_frame: pd.DataFrame) -> dict[str, tuple[int, ...]]:
+    if position_frame.empty or "conId" not in position_frame.columns:
+        return {}
+    roots = position_frame.get("symbol", pd.Series("", index=position_frame.index)).astype(str).str.upper()
+    sec_types = position_frame.get("secType", pd.Series("", index=position_frame.index)).astype(str).str.upper()
+    positions = pd.to_numeric(position_frame.get("position", 0), errors="coerce").fillna(0)
+    con_ids = pd.to_numeric(position_frame["conId"], errors="coerce")
+    out: dict[str, tuple[int, ...]] = {}
+    for root in sorted(set(roots)):
+        if not root:
+            continue
+        mask = (roots == root) & (sec_types == "FOP") & (positions != 0) & con_ids.notna()
+        values = sorted({int(value) for value in con_ids[mask].astype(int).tolist() if int(value) > 0})
+        if values:
+            out[root] = tuple(values)
+    return out
+
+
+def _merge_chain_rows(existing: pd.DataFrame, refreshed: pd.DataFrame) -> pd.DataFrame:
+    if existing.empty:
+        return refreshed
+    if refreshed.empty:
+        return existing
+    key_candidates = [
+        ["conId"],
+        ["symbol", "expiration", "strike", "right"],
+        ["symbol", "expiry", "strike", "right"],
+    ]
+    key = next((cols for cols in key_candidates if all(col in existing.columns and col in refreshed.columns for col in cols)), [])
+    if not key:
+        return refreshed
+    existing_copy = existing.copy()
+    refreshed_copy = refreshed.copy()
+    for frame in (existing_copy, refreshed_copy):
+        for col in key:
+            frame[col] = frame[col].astype(str)
+    combined = pd.concat([existing_copy, refreshed_copy], ignore_index=True)
+    return combined.drop_duplicates(subset=key, keep="last", ignore_index=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -262,6 +349,8 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--chain-specs", default=DEFAULT_SHARED_CHAIN_SPECS, help="Shared chain specs for ZF/ZN or other products with the same refresh parameters.")
     refresh.add_argument("--zc-chain-specs", default="", help="Optional separate ZC chain spec, e.g. ZC=202609,202612. Leave empty until ZC parameters are finalized.")
     refresh.add_argument("--positions-csv", default="", help="Reuse an existing treasury positions CSV instead of fetching account data from IB.")
+    refresh.add_argument("--positions-timeout", type=float, default=30.0, help="Seconds to wait for the account snapshot before falling back to cached positions.")
+    refresh.add_argument("--strict-positions", action="store_true", help="Fail instead of reusing cached positions when account refresh times out or errors.")
     refresh.add_argument("--min-expiration", default="")
     refresh.add_argument("--max-expiration", default="")
     refresh.add_argument("--quote-wait-seconds", type=float, default=6.0)
@@ -277,6 +366,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--near-dte-days", type=int, default=7)
     refresh.add_argument("--near-strike-width", type=float, default=1.0)
     refresh.add_argument("--far-strike-width", type=float, default=3.0)
+    refresh.add_argument("--fast-refresh", action="store_true", help="Refresh only near/current-position contracts and preserve cached far-chain rows.")
+    refresh.add_argument("--market-data-max-dte", type=int, default=0, help="Only request market data up to this DTE; 0 disables the cap.")
+    refresh.add_argument("--future-price-wait-seconds", type=float, default=6.0, help="Seconds to wait when refreshing underlying futures prices for each root.")
     refresh.add_argument("--no-contract-cache", action="store_true")
     refresh.add_argument("--rebuild-contract-cache", action="store_true")
     refresh.add_argument("--strict-chain", action="store_true", help="Fail if any root chain cannot be refreshed.")
@@ -578,6 +670,43 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     chain_specs.update(_parse_chain_specs(args.zc_chain_specs))
     working_dir = Path(args.working_dir)
     working_dir.mkdir(parents=True, exist_ok=True)
+    fast_refresh = bool(getattr(args, "fast_refresh", False))
+    effective_quote_wait = min(float(args.quote_wait_seconds), 2.0) if fast_refresh else float(args.quote_wait_seconds)
+    effective_wait_seconds = min(float(args.wait_seconds), 5.0) if fast_refresh else float(args.wait_seconds)
+    effective_stable_seconds = min(float(args.stable_seconds), 0.75) if fast_refresh else float(args.stable_seconds)
+    effective_inter_batch_pause = min(float(args.inter_batch_pause_seconds), 0.25) if fast_refresh else float(args.inter_batch_pause_seconds)
+    effective_near_dte = max(int(args.near_dte_days), 10) if fast_refresh else int(args.near_dte_days)
+    effective_near_width = min(float(args.near_strike_width), 0.75) if fast_refresh else float(args.near_strike_width)
+    effective_far_width = min(float(args.far_strike_width), 1.25) if fast_refresh else float(args.far_strike_width)
+    effective_market_data_max_dte = int(args.market_data_max_dte or 0) or (10 if fast_refresh else 0)
+    if fast_refresh:
+        print(
+            "fast refresh enabled: near/current-position contracts only; cached far-chain rows are preserved",
+            flush=True,
+        )
+    print("refresh plan:", flush=True)
+    print(f"  mode: {'fast' if fast_refresh else 'full'}", flush=True)
+    print(f"  ib: {ib_settings.host}:{ib_settings.port}, client_id={ib_settings.client_id}, account={ib_settings.account or '<none>'}", flush=True)
+    print(f"  chain specs: {chain_specs}", flush=True)
+    print(
+        "  effective timing: "
+        f"quote_wait={effective_quote_wait}s, wait={effective_wait_seconds}s, "
+        f"stable={effective_stable_seconds}s, request_interval={args.request_interval}s, "
+        f"inter_batch_pause={effective_inter_batch_pause}s, timeout={args.timeout}s",
+        flush=True,
+    )
+    print(
+        "  effective filter: "
+        f"near_dte_days={effective_near_dte}, near_width={effective_near_width}, "
+        f"far_width={effective_far_width}, market_data_max_dte={effective_market_data_max_dte or '<none>'}, "
+        f"moneyness_filter={not args.no_market_data_filter}",
+        flush=True,
+    )
+    print(
+        f"  cache/output: contract_cache={'off' if args.no_contract_cache else 'on'}, "
+        f"rebuild_cache={bool(args.rebuild_contract_cache)}, working_dir={working_dir}, html_data_dir={args.html_data_dir}",
+        flush=True,
+    )
 
     if args.positions_csv.strip():
         position_frame = pd.read_csv(args.positions_csv)
@@ -586,55 +715,111 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
         if not ib_settings.account:
             raise SystemExit("--account is required unless --positions-csv is provided")
         dashboard_settings = AccountDashboardSettings(
-            quote_wait_seconds=args.quote_wait_seconds,
+            quote_wait_seconds=effective_quote_wait,
             infer_spreads=args.infer_spreads,
         )
         fetch_fields = StartupFetch.POSITIONS | StartupFetch.ACCOUNT_UPDATES | StartupFetch.SUB_ACCOUNT_UPDATES
         print("refresh positions/account snapshot", flush=True)
-        with ib_connection(ib_settings, fetch_fields=fetch_fields) as ib:
-            snapshot = fetch_account_dashboard(ib, ib_settings, dashboard_settings)
-        position_frame = snapshot.position_frame
-        snapshot.account_summary.to_csv(working_dir / "dashboard_account_summary.csv", index=False, encoding="utf-8-sig")
-        snapshot.greek_summary.to_csv(working_dir / "dashboard_greek_summary.csv", index=False, encoding="utf-8-sig")
-        print(f"positions: {len(position_frame)}", flush=True)
+        try:
+            with _time_limit(float(args.positions_timeout)):
+                with ib_connection(ib_settings, fetch_fields=fetch_fields) as ib:
+                    snapshot = fetch_account_dashboard(ib, ib_settings, dashboard_settings)
+            position_frame = snapshot.position_frame
+            snapshot.account_summary.to_csv(working_dir / "dashboard_account_summary.csv", index=False, encoding="utf-8-sig")
+            snapshot.greek_summary.to_csv(working_dir / "dashboard_greek_summary.csv", index=False, encoding="utf-8-sig")
+            print(f"positions: {len(position_frame)}", flush=True)
+        except Exception as exc:
+            fallback_path = _fallback_positions_path(args)
+            message = f"positions refresh failed ({type(exc).__name__}: {exc})"
+            if args.strict_positions or not fallback_path.exists():
+                raise SystemExit(message) from exc
+            position_frame = pd.read_csv(fallback_path)
+            print(f"{message}; reusing cached positions: {fallback_path} ({len(position_frame)} rows)", flush=True)
     position_frame.to_csv(working_dir / "dashboard_treasury_positions.csv", index=False, encoding="utf-8-sig")
+    position_con_ids = _position_con_ids_by_root(position_frame)
+    force_summary = {root: len(values) for root, values in position_con_ids.items() if values}
+    print(f"current-position conIds forced into refresh: {force_summary or '<none>'}", flush=True)
 
     chain_frames: list[pd.DataFrame] = []
     print("refresh option chains", flush=True)
     existing_chain_path = Path(args.html_data_dir) / "carry_dashboard_chain.csv"
-    existing_chain = pd.read_csv(existing_chain_path) if existing_chain_path.exists() else pd.DataFrame()
+    existing_chain = _read_csv_if_exists(existing_chain_path)
+    if not existing_chain.empty:
+        print(f"existing HTML chain cache: {existing_chain_path} ({len(existing_chain)} rows)", flush=True)
     with ib_connection(ib_settings) as ib:
         previous_timeout = getattr(ib, "RequestTimeout", None)
         if previous_timeout is not None:
             ib.RequestTimeout = args.timeout
         try:
             for root, months in chain_specs.items():
-                print(f"refresh chain: {root} {months}", flush=True)
+                print(f"refresh chain: {root} months={months}", flush=True)
                 settings = StaticChainSettings(
                     root=root,
                     future_months=months,
                     min_expiration=args.min_expiration.strip() or None,
                     max_expiration=args.max_expiration.strip() or None,
                     batch_size=args.batch_size,
-                    wait_max_seconds=args.wait_seconds,
-                    wait_stable_seconds=args.stable_seconds,
+                    wait_max_seconds=effective_wait_seconds,
+                    wait_stable_seconds=effective_stable_seconds,
                     request_interval=args.request_interval,
-                    inter_batch_pause_seconds=args.inter_batch_pause_seconds,
+                    inter_batch_pause_seconds=effective_inter_batch_pause,
                     empty_batch_retries=args.empty_batch_retries,
                     empty_batch_retry_pause_seconds=args.empty_batch_retry_pause_seconds,
                     output_dir=working_dir,
                     use_contract_cache=not args.no_contract_cache,
                     force_rebuild_contract_cache=args.rebuild_contract_cache,
                     filter_market_data_by_moneyness=not args.no_market_data_filter,
-                    near_dte_days=args.near_dte_days,
-                    near_strike_width=args.near_strike_width,
-                    far_strike_width=args.far_strike_width,
+                    near_dte_days=effective_near_dte,
+                    near_strike_width=effective_near_width,
+                    far_strike_width=effective_far_width,
+                    market_data_max_dte=effective_market_data_max_dte or None,
+                    force_con_ids=position_con_ids.get(root, ()),
+                    future_price_wait_seconds=float(args.future_price_wait_seconds),
                 )
+                future_prices, future_price_source, future_price_error, future_prices_path = refresh_future_prices_sidecar(ib, settings)
+                print(
+                    f"{root} future prices sidecar: source={future_price_source}, "
+                    f"path={future_prices_path}, prices={_future_price_summary(future_prices)}",
+                    flush=True,
+                )
+                if future_price_error:
+                    print(f"{root} future price refresh warning: {future_price_error}", flush=True)
                 try:
                     result = refresh_static_chain(ib, settings)
-                    if not result.monitor_frame.empty:
-                        chain_frames.append(result.monitor_frame)
-                    print(f"{root} chain rows: {len(result.monitor_frame)}", flush=True)
+                    refreshed_frame = result.monitor_frame
+                    raw = result.raw
+                    print(
+                        f"{root} universe: source={raw.get('universe_source', '<unknown>')}, "
+                        f"contracts={raw.get('contract_count', len(raw.get('contracts', [])))}, "
+                        f"selected_for_quotes={raw.get('selected_contract_count', 0)}, "
+                        f"snapshot_rows={raw.get('snapshot_count', len(raw.get('snapshot', [])))}",
+                        flush=True,
+                    )
+                    print(
+                        f"{root} future prices used for filtering: "
+                        f"source={raw.get('future_price_source', '<unknown>')}, "
+                        f"prices={_future_price_summary(raw.get('future_prices', pd.DataFrame()))}",
+                        flush=True,
+                    )
+                    if raw.get("future_price_error"):
+                        print(f"{root} future price refresh warning: {raw.get('future_price_error')}", flush=True)
+                    print(f"{root} contract cache: {raw.get('contract_cache_path', '<none>')}", flush=True)
+                    if fast_refresh and not existing_chain.empty and "symbol" in existing_chain.columns:
+                        existing_root = existing_chain[existing_chain["symbol"].astype(str).str.upper() == root].copy()
+                        refreshed_count = len(refreshed_frame)
+                        refreshed_frame = _merge_chain_rows(existing_root, refreshed_frame)
+                        print(
+                            f"{root} fast merge: existing_html_rows={len(existing_root)}, "
+                            f"fresh_rows={refreshed_count}, merged_rows={len(refreshed_frame)}",
+                            flush=True,
+                        )
+                    if not refreshed_frame.empty:
+                        chain_frames.append(refreshed_frame)
+                    print(
+                        f"{root} chain rows: {len(refreshed_frame)} "
+                        f"(refreshed {len(result.monitor_frame)}, selected {result.raw.get('selected_contract_count', 0)})",
+                        flush=True,
+                    )
                 except Exception as exc:
                     message = f"{root} chain refresh failed ({type(exc).__name__}); keeping existing HTML chain rows for this root if present"
                     if args.strict_chain:
@@ -657,11 +842,15 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     else:
         combined_chain = pd.DataFrame()
     existing_bars_path = Path(args.html_data_dir) / "carry_dashboard_bars.csv"
-    existing_bars = pd.read_csv(existing_bars_path) if existing_bars_path.exists() else pd.DataFrame()
+    existing_bars = _read_csv_if_exists(existing_bars_path)
     bars_frame = existing_bars.copy()
-    if not args.skip_bars:
+    skip_bars = bool(args.skip_bars or (fast_refresh and not existing_bars.empty))
+    if skip_bars and fast_refresh and not existing_bars.empty:
+        print(f"fast refresh: preserving existing futures bars ({len(existing_bars)} rows)", flush=True)
+    if not skip_bars:
         print("refresh futures bars", flush=True)
         bar_specs = parse_contract_specs(args.bars_contracts) if args.bars_contracts.strip() else _bar_specs_from_chain_specs(chain_specs)
+        print(f"bar specs: {bar_specs}", flush=True)
         try:
             with ib_connection(ib_settings) as ib:
                 fetched_bars = fetch_future_bars(
@@ -678,6 +867,7 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
             if not fetched_bars.empty:
                 bars_frame = fetched_bars
                 save_future_bars(bars_frame, working_dir / "carry_dashboard_bars.csv")
+                print(f"futures bars fetched: {len(fetched_bars)} rows", flush=True)
             elif not existing_bars.empty:
                 print("future bars returned 0 rows; preserving existing HTML bars file", flush=True)
         except Exception as exc:
