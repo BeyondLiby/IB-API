@@ -99,6 +99,7 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
     joined = "\n".join(lines).lower()
     progress = 4
     stage = "等待刷新开始"
+    lock_busy = "ib client refresh is already running" in joined
     checks = [
         (8, "启动刷新进程", "refresh started"),
         (12, "执行刷新命令", "running:"),
@@ -120,9 +121,21 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
         if needle in joined:
             progress = value
             stage = label
+    if lock_busy:
+        progress = max(progress, 18)
+        stage = "IB client-id 已被其他刷新占用"
     if returncode is not None:
-        return (100, "刷新完成") if returncode == 0 else (max(progress, 18), "刷新失败")
+        return (100, "刷新完成") if returncode == 0 else (progress, stage if lock_busy else "刷新失败")
     return progress, stage
+
+
+def refresh_status_http_code(payload: dict[str, object]) -> int:
+    if payload.get("returncode") in {None, 0}:
+        return 200
+    output = "\n".join(str(payload.get(key) or "") for key in ("stdout", "stderr", "error")).lower()
+    if "ib client refresh is already running" in output:
+        return 409
+    return 500
 
 
 def read_latest_refresh_status(directory: Path) -> dict[str, object]:
@@ -167,16 +180,14 @@ def inventory_planner_handler(directory: Path):
                 job_id = parse_qs(parsed.query).get("job", [""])[0]
                 if job_id in {"", "latest"}:
                     payload = read_latest_refresh_status(directory)
-                    status = 200 if payload.get("returncode") in {None, 0} else 500
-                    self.send_json(status, payload)
+                    self.send_json(refresh_status_http_code(payload), payload)
                     return
                 with jobs_lock:
                     job = dict(jobs.get(job_id, {}))
                 if not job:
                     self.send_json(404, {"ok": False, "error": f"refresh job not found: {job_id}"})
                     return
-                status = 200 if job.get("returncode") in {None, 0} else 500
-                self.send_json(status, job)
+                self.send_json(refresh_status_http_code(job), job)
                 return
             super().do_GET()
 
@@ -200,6 +211,14 @@ def inventory_planner_handler(directory: Path):
             mode = str(payload.get("mode") or "fast").strip().lower()
             if mode not in {"fast", "full"}:
                 self.send_json(400, {"ok": False, "error": f"unknown refresh mode: {mode}"})
+                return
+
+            latest = read_latest_refresh_status(directory)
+            if latest.get("running"):
+                latest = dict(latest)
+                latest.setdefault("jobId", "latest")
+                latest.setdefault("mode", latest.get("mode") or "unknown")
+                self.send_json(202, latest)
                 return
 
             started = time.strftime("%Y-%m-%d %H:%M:%S")

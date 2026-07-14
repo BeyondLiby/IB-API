@@ -746,93 +746,108 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     existing_chain = _read_csv_if_exists(existing_chain_path)
     if not existing_chain.empty:
         print(f"existing HTML chain cache: {existing_chain_path} ({len(existing_chain)} rows)", flush=True)
-    with ib_connection(ib_settings) as ib:
-        previous_timeout = getattr(ib, "RequestTimeout", None)
-        if previous_timeout is not None:
-            ib.RequestTimeout = args.timeout
-        try:
-            for root, months in chain_specs.items():
-                print(f"refresh chain: {root} months={months}", flush=True)
-                settings = StaticChainSettings(
-                    root=root,
-                    future_months=months,
-                    min_expiration=args.min_expiration.strip() or None,
-                    max_expiration=args.max_expiration.strip() or None,
-                    batch_size=args.batch_size,
-                    wait_max_seconds=effective_wait_seconds,
-                    wait_stable_seconds=effective_stable_seconds,
-                    request_interval=args.request_interval,
-                    inter_batch_pause_seconds=effective_inter_batch_pause,
-                    empty_batch_retries=args.empty_batch_retries,
-                    empty_batch_retry_pause_seconds=args.empty_batch_retry_pause_seconds,
-                    output_dir=working_dir,
-                    use_contract_cache=not args.no_contract_cache,
-                    force_rebuild_contract_cache=args.rebuild_contract_cache,
-                    filter_market_data_by_moneyness=not args.no_market_data_filter,
-                    near_dte_days=effective_near_dte,
-                    near_strike_width=effective_near_width,
-                    far_strike_width=effective_far_width,
-                    market_data_max_dte=effective_market_data_max_dte or None,
-                    force_con_ids=position_con_ids.get(root, ()),
-                    future_price_wait_seconds=float(args.future_price_wait_seconds),
-                )
-                future_prices, future_price_source, future_price_error, future_prices_path = refresh_future_prices_sidecar(ib, settings)
-                print(
-                    f"{root} future prices sidecar: source={future_price_source}, "
-                    f"path={future_prices_path}, prices={_future_price_summary(future_prices)}",
-                    flush=True,
-                )
-                if future_price_error:
-                    print(f"{root} future price refresh warning: {future_price_error}", flush=True)
-                try:
-                    result = refresh_static_chain(ib, settings)
-                    refreshed_frame = result.monitor_frame
-                    raw = result.raw
+    try:
+        with ib_connection(ib_settings) as ib:
+            previous_timeout = getattr(ib, "RequestTimeout", None)
+            if previous_timeout is not None:
+                ib.RequestTimeout = args.timeout
+            try:
+                for root, months in chain_specs.items():
+                    print(f"refresh chain: {root} months={months}", flush=True)
+                    settings = StaticChainSettings(
+                        root=root,
+                        future_months=months,
+                        min_expiration=args.min_expiration.strip() or None,
+                        max_expiration=args.max_expiration.strip() or None,
+                        batch_size=args.batch_size,
+                        wait_max_seconds=effective_wait_seconds,
+                        wait_stable_seconds=effective_stable_seconds,
+                        request_interval=args.request_interval,
+                        inter_batch_pause_seconds=effective_inter_batch_pause,
+                        empty_batch_retries=args.empty_batch_retries,
+                        empty_batch_retry_pause_seconds=args.empty_batch_retry_pause_seconds,
+                        output_dir=working_dir,
+                        use_contract_cache=not args.no_contract_cache,
+                        force_rebuild_contract_cache=args.rebuild_contract_cache,
+                        filter_market_data_by_moneyness=not args.no_market_data_filter,
+                        near_dte_days=effective_near_dte,
+                        near_strike_width=effective_near_width,
+                        far_strike_width=effective_far_width,
+                        market_data_max_dte=effective_market_data_max_dte or None,
+                        force_con_ids=position_con_ids.get(root, ()),
+                        future_price_wait_seconds=float(args.future_price_wait_seconds),
+                    )
+                    future_prices, future_price_source, future_price_error, future_prices_path = refresh_future_prices_sidecar(ib, settings)
                     print(
-                        f"{root} universe: source={raw.get('universe_source', '<unknown>')}, "
-                        f"contracts={raw.get('contract_count', len(raw.get('contracts', [])))}, "
-                        f"selected_for_quotes={raw.get('selected_contract_count', 0)}, "
-                        f"snapshot_rows={raw.get('snapshot_count', len(raw.get('snapshot', [])))}",
+                        f"{root} future prices sidecar: source={future_price_source}, "
+                        f"path={future_prices_path}, prices={_future_price_summary(future_prices)}",
                         flush=True,
                     )
-                    print(
-                        f"{root} future prices used for filtering: "
-                        f"source={raw.get('future_price_source', '<unknown>')}, "
-                        f"prices={_future_price_summary(raw.get('future_prices', pd.DataFrame()))}",
-                        flush=True,
-                    )
-                    if raw.get("future_price_error"):
-                        print(f"{root} future price refresh warning: {raw.get('future_price_error')}", flush=True)
-                    print(f"{root} contract cache: {raw.get('contract_cache_path', '<none>')}", flush=True)
-                    if fast_refresh and not existing_chain.empty and "symbol" in existing_chain.columns:
-                        existing_root = existing_chain[existing_chain["symbol"].astype(str).str.upper() == root].copy()
-                        refreshed_count = len(refreshed_frame)
-                        refreshed_frame = _merge_chain_rows(existing_root, refreshed_frame)
+                    if future_price_error:
+                        print(f"{root} future price refresh warning: {future_price_error}", flush=True)
+                    try:
+                        result = refresh_static_chain(ib, settings)
+                        refreshed_frame = result.monitor_frame
+                        raw = result.raw
                         print(
-                            f"{root} fast merge: existing_html_rows={len(existing_root)}, "
-                            f"fresh_rows={refreshed_count}, merged_rows={len(refreshed_frame)}",
+                            f"{root} universe: source={raw.get('universe_source', '<unknown>')}, "
+                            f"contracts={raw.get('contract_count', len(raw.get('contracts', [])))}, "
+                            f"selected_for_quotes={raw.get('selected_contract_count', 0)}, "
+                            f"snapshot_rows={raw.get('snapshot_count', len(raw.get('snapshot', [])))}",
                             flush=True,
                         )
-                    if not refreshed_frame.empty:
-                        chain_frames.append(refreshed_frame)
-                    print(
-                        f"{root} chain rows: {len(refreshed_frame)} "
-                        f"(refreshed {len(result.monitor_frame)}, selected {result.raw.get('selected_contract_count', 0)})",
-                        flush=True,
-                    )
-                except Exception as exc:
-                    message = f"{root} chain refresh failed ({type(exc).__name__}); keeping existing HTML chain rows for this root if present"
-                    if args.strict_chain:
-                        raise SystemExit(message) from exc
-                    print(message, flush=True)
-                    if not existing_chain.empty and "symbol" in existing_chain.columns:
-                        fallback = existing_chain[existing_chain["symbol"].astype(str).str.upper() == root].copy()
-                        if not fallback.empty:
-                            chain_frames.append(fallback)
-                            print(f"{root} fallback chain rows: {len(fallback)}", flush=True)
-        finally:
-            if previous_timeout is not None:
-                ib.RequestTimeout = previous_timeout
+                        print(
+                            f"{root} future prices used for filtering: "
+                            f"source={raw.get('future_price_source', '<unknown>')}, "
+                            f"prices={_future_price_summary(raw.get('future_prices', pd.DataFrame()))}",
+                            flush=True,
+                        )
+                        if raw.get("future_price_error"):
+                            print(f"{root} future price refresh warning: {raw.get('future_price_error')}", flush=True)
+                        print(f"{root} contract cache: {raw.get('contract_cache_path', '<none>')}", flush=True)
+                        if fast_refresh and not existing_chain.empty and "symbol" in existing_chain.columns:
+                            existing_root = existing_chain[existing_chain["symbol"].astype(str).str.upper() == root].copy()
+                            refreshed_count = len(refreshed_frame)
+                            refreshed_frame = _merge_chain_rows(existing_root, refreshed_frame)
+                            print(
+                                f"{root} fast merge: existing_html_rows={len(existing_root)}, "
+                                f"fresh_rows={refreshed_count}, merged_rows={len(refreshed_frame)}",
+                                flush=True,
+                            )
+                        if not refreshed_frame.empty:
+                            chain_frames.append(refreshed_frame)
+                        print(
+                            f"{root} chain rows: {len(refreshed_frame)} "
+                            f"(refreshed {len(result.monitor_frame)}, selected {result.raw.get('selected_contract_count', 0)})",
+                            flush=True,
+                        )
+                    except Exception as exc:
+                        message = f"{root} chain refresh failed ({type(exc).__name__}); keeping existing HTML chain rows for this root if present"
+                        if args.strict_chain:
+                            raise SystemExit(message) from exc
+                        print(message, flush=True)
+                        if not existing_chain.empty and "symbol" in existing_chain.columns:
+                            fallback = existing_chain[existing_chain["symbol"].astype(str).str.upper() == root].copy()
+                            if not fallback.empty:
+                                chain_frames.append(fallback)
+                                print(f"{root} fallback chain rows: {len(fallback)}", flush=True)
+            finally:
+                if previous_timeout is not None:
+                    ib.RequestTimeout = previous_timeout
+    except Exception as exc:
+        message = f"option chain IB connection failed ({type(exc).__name__}: {exc}); preserving existing HTML chain rows if present"
+        if args.strict_chain:
+            raise SystemExit(message) from exc
+        print(message, flush=True)
+        if not existing_chain.empty and "symbol" in existing_chain.columns:
+            for root in chain_specs:
+                fallback = existing_chain[existing_chain["symbol"].astype(str).str.upper() == root].copy()
+                if not fallback.empty:
+                    chain_frames.append(fallback)
+                    print(f"{root} fallback chain rows: {len(fallback)}", flush=True)
+        elif not existing_chain.empty:
+            chain_frames.append(existing_chain)
+            print(f"fallback chain rows: {len(existing_chain)}", flush=True)
 
     if chain_frames:
         combined_chain = pd.concat(chain_frames, ignore_index=True)

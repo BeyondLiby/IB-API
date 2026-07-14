@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ETF Conversion 套利监控</title>
+  <style>
+    :root { --bg:#f4f7fb; --panel:#fff; --line:#d4deea; --text:#142033; --muted:#65758b; --blue:#155eef; --green:#087443; --red:#b42318; --amber:#a15c13; }
+    * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--text); font:13px "Segoe UI","Microsoft YaHei",Arial,sans-serif; }
+    button,input,select { font:inherit; } button,.link { min-height:31px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--text); padding:4px 9px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+    button.primary { background:var(--blue); border-color:var(--blue); color:#fff; } input,select { width:100%; min-height:31px; border:1px solid var(--line); border-radius:6px; padding:4px 8px; background:#fff; }
+    header { position:sticky; top:0; z-index:5; background:rgba(244,247,251,.97); border-bottom:1px solid var(--line); } .top { max-width:1880px; margin:auto; padding:12px 18px; display:flex; justify-content:space-between; gap:16px; align-items:center; }
+    h1 { margin:0; font-size:20px; } .sub,.muted { color:var(--muted); font-size:12px; } main { max-width:1880px; margin:auto; padding:14px 18px 24px; display:grid; gap:14px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; min-width:0; } .panel-head { padding:11px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; align-items:center; } h2 { margin:0; font-size:15px; }
+    .controls { display:grid; grid-template-columns:repeat(12,minmax(92px,1fr)); gap:8px; padding:12px 14px; align-items:end; } label { display:grid; gap:4px; color:var(--muted); font-size:12px; } .toggle { display:flex; align-items:center; gap:6px; min-height:31px; white-space:nowrap; } .toggle input { width:auto; }
+    .notice { margin:0 14px 12px; padding:9px 10px; border-left:3px solid var(--amber); background:#fff8ed; color:#7a4a11; } .notice.live { border-color:var(--green); background:#effaf3; color:#17643d; }
+    .cards { display:grid; grid-template-columns:repeat(5,minmax(150px,1fr)); gap:10px; padding:12px 14px; } .metric { border:1px solid #e1e8f1; border-radius:6px; padding:10px; background:#fbfdff; } .metric span { display:block; color:var(--muted); font-size:12px; } .metric strong { display:block; margin-top:5px; font-size:17px; } .up { color:var(--red); } .down { color:var(--green); }
+    .wrap { overflow:auto; max-height:calc(100vh - 345px); } table { border-collapse:collapse; width:100%; min-width:1280px; font-variant-numeric:tabular-nums; } th,td { padding:8px 7px; border-bottom:1px solid #e7edf4; text-align:right; white-space:nowrap; } th { position:sticky; top:0; background:#f8fbff; color:var(--muted); font-size:11px; } td.left,th.left { text-align:left; } tr.signal { background:#f1fbf5; } .badge { border-radius:99px; padding:2px 6px; font-size:11px; background:#edf2f7; color:var(--muted); } .badge.signal { background:#d9f4e4; color:var(--green); } .empty { padding:28px; text-align:center; color:var(--muted); }
+    @media(max-width:1280px){ .top{display:grid;grid-template-columns:1fr}.controls{grid-template-columns:repeat(4,1fr)}.cards{grid-template-columns:repeat(3,1fr)} } @media(max-width:700px){main{padding:10px}.controls{grid-template-columns:1fr 1fr}.cards{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <header><div class="top"><div><h1>ETF Conversion 套利监控</h1><div class="sub" id="sourceLine">读取中</div></div><a class="link" href="dashboard.html">返回期权链</a></div></header>
+  <main>
+    <section class="panel"><div class="panel-head"><h2>执行参数</h2><span class="muted" id="status">等待数据</span></div>
+      <div class="controls">
+        <label>品种<select id="product"></select></label><label>Excel读取<select id="mode"><option value="auto">自动</option><option value="live">Live Excel</option><option value="saved">已保存文件</option></select></label>
+        <label>ETF Bid<input id="etfBid" type="number" step="0.0001" /></label><label>ETF Ask<input id="etfAsk" type="number" step="0.0001" /></label>
+        <label>合约单位<input id="unit" type="number" value="10000" min="100" step="1" /></label><label>保证金模式<select id="marginMode"><option value="covered">备兑（锁定 ETF）</option><option value="naked">裸卖认购</option></select></label>
+        <label>期权单边/张<input id="optionFee" type="number" value="1.2" min="0" step="0.1" /></label><label>ETF 单边 bps<input id="etfFeeBps" type="number" value="1" min="0" step="0.1" /></label>
+        <label>资金年化 %<input id="fundRate" type="number" value="0" min="0" step="0.1" /></label><label>保证金年化 %<input id="marginRate" type="number" value="0" min="0" step="0.1" /></label><label>门槛年化 %<input id="threshold" type="number" value="0" step="0.1" /></label>
+        <label>刷新秒数<input id="poll" type="number" value="3" min="2" max="60" /></label><label class="toggle"><input id="auto" type="checkbox" checked /> 自动刷新</label><button id="refresh" class="primary">刷新</button>
+      </div><div class="notice" id="quoteNotice"></div>
+    </section>
+    <section class="panel"><div class="panel-head"><h2>Conversion 机会</h2><span class="muted">买 ETF + 买 Put - 卖 Call；全部使用可成交 Bid/Ask</span></div><div class="cards" id="metrics"></div></section>
+    <section class="panel"><div class="panel-head"><h2>同到期 / 同执行价配对</h2><span class="muted">开仓与平仓均按可成交价，期权费 1.2 元/张/单边，ETF 费率单独计算</span></div><div class="wrap"><table><thead><tr><th class="left">品种</th><th>DTE</th><th>Strike</th><th>ETF Bid</th><th>ETF Ask</th><th>Put Ask</th><th>Call Bid</th><th>开仓成本</th><th>开仓费</th><th>到期锁定</th><th>资金成本</th><th>保证金</th><th>期末净收益</th><th>净年化</th><th>立即平仓 PnL</th><th>流动性</th><th>状态</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id); const sheets={"创业":"创业板","科创":"科创板"};
+    const state={chain:[],meta:{},loading:false,timer:null}; const inputIds=["etfBid","etfAsk","unit","marginMode","optionFee","etfFeeBps","fundRate","marginRate","threshold","poll"];
+    document.addEventListener("DOMContentLoaded", init);
+    function init(){
+      if(window.location.protocol==="file:"){
+        window.location.replace("http://127.0.0.1:8777/arbitrage_monitor.html");
+        return;
+      }
+      inputIds.forEach((id)=>{const update=()=>{saveSettings();render()};$(id).addEventListener("input",update);$(id).addEventListener("change",update)}); $("product").addEventListener("change",()=>{restoreSettings();render()}); $("mode").addEventListener("change",loadChains); $("auto").addEventListener("change",resetTimer); $("poll").addEventListener("input",resetTimer); $("refresh").addEventListener("click",loadChains); loadChains(); resetTimer();
+    }
+    function key(){return `conversion-settings-${$("product").value||"创业"}`}; function saveSettings(){localStorage.setItem(key(),JSON.stringify(Object.fromEntries(inputIds.map((id)=>[id,$(id).value]))))} function restoreSettings(){const s=JSON.parse(localStorage.getItem(key())||"{}"); inputIds.forEach((id)=>{if(s[id]!=null)$(id).value=s[id]});}
+    async function loadChains(){
+      if(state.loading)return;state.loading=true;$("status").textContent="读取中";
+      const mode=$("mode").value,loaded=[],errors=[];
+      for(const [product,sheet] of Object.entries(sheets)){
+        try{
+          const payload=await fetchJson(`/api/chain?sheet=${encodeURIComponent(sheet)}&mode=${encodeURIComponent(mode)}&t=${Date.now()}`);
+          const previous=state.meta[product];
+          const keepLastLive=payload.sourceMode==="saved-fallback"&&previous&&previous.sourceMode==="live";
+          if(keepLastLive){loaded.push({...payload,sourceMode:"live-cache",readAt:previous.readAt})}
+          else{state.chain=[...state.chain.filter(r=>r.product!==product),...(payload.rows||[])];state.meta[product]=payload;loaded.push(payload)}
+        }catch(error){errors.push(`${sheet}: ${error.message||error}`)}
+      }
+      state.loading=false;
+      if(!$("product").options.length){$("product").innerHTML=Object.keys(sheets).map(v=>`<option>${v}</option>`).join("");restoreSettings()}
+      const payload=loaded[0];
+      $("sourceLine").textContent=payload?`${payload.sourceMode} | ${payload.source} | ${payload.readAt}${errors.length?` | ${errors.join("；")}`:""}`:errors.join("；");
+      $("status").textContent=errors.length?"部分读取失败":"已更新";render();
+    }
+    async function fetchJson(url){const r=await fetch(url,{cache:"no-store"});const p=await r.json();if(!r.ok)throw new Error(p.error||r.statusText);return p}
+    function resetTimer(){if(state.timer)clearInterval(state.timer);if($("auto").checked)state.timer=setInterval(loadChains,Math.max(2,Number($("poll").value||3))*1000)}
+    function n(v,f=null){const x=Number(v);return Number.isFinite(x)?x:f} function f(v,d=4){return Number.isFinite(Number(v))?Number(v).toLocaleString("zh-CN",{maximumFractionDigits:d,minimumFractionDigits:0}):"-"} function money(v){return f(v,0)} function pct(v){return Number.isFinite(Number(v))?`${Number(v).toFixed(2)}%`:"-"}
+    function productRows(){return state.chain.filter(r=>r.product===$("product").value)}
+    function quotes(rows){
+      const bid=rows.map(r=>n(r.underlyingBid)).find(v=>v!=null&&v>0),ask=rows.map(r=>n(r.underlyingAsk)).find(v=>v!=null&&v>0);
+      if(bid!=null&&ask!=null)return{bid,ask,source:"Excel Bid/Ask",executable:true};
+      const manualBid=n($("etfBid").value),manualAsk=n($("etfAsk").value);
+      if(manualBid!=null&&manualBid>0&&manualAsk!=null&&manualAsk>0)return{bid:manualBid,ask:manualAsk,source:"手工 Bid/Ask",executable:true};
+      const last=rows.map(r=>n(r.underlyingPrice)).find(v=>v!=null&&v>0);
+      if(last!=null)return{bid:last,ask:last,source:"现券最新价估算",executable:false};
+      return{bid:null,ask:null,source:"等待 ETF 报价",executable:false};
+    }
+    function opportunities(){
+      const rows=productRows(),q=quotes(rows),unit=n($("unit").value,10000),optionFee=n($("optionFee").value,0),etfRate=n($("etfFeeBps").value,0)/10000,fundRate=n($("fundRate").value,0)/100,marginRate=n($("marginRate").value,0)/100,covered=$("marginMode").value==="covered",by=new Map();
+      rows.forEach(row=>{if(!row.expiry||row.strike==null)return;const key=`${row.expiry}|${row.strikeLabel}`;const pair=by.get(key)||{};pair[row.optionType==="认购"?"call":"put"]=row;by.set(key,pair)});
+      return [...by.values()].filter(pair=>pair.call&&pair.put&&q.bid>0&&q.ask>0&&n(pair.put.ask,0)>0&&n(pair.call.bid,0)>0).map(pair=>{
+        const dte=n(pair.call.dte,n(pair.put.dte,0)),strike=n(pair.call.strike),entryLegCash=(q.ask+n(pair.put.ask)-n(pair.call.bid))*unit;
+        const optionOpenFee=2*optionFee,etfOpenFee=q.ask*unit*etfRate,entryFee=optionOpenFee+etfOpenFee,entry=entryLegCash+entryFee;
+        const locked=strike*unit,margin=covered?0:Math.max(n(pair.call.margin,0),0),funding=Math.max(entry,0)*fundRate*Math.max(dte,0)/365,marginCost=margin*marginRate*Math.max(dte,0)/365,net=locked-entry-funding-marginCost,capital=Math.max(entry,0)+margin,annual=dte>0&&capital>0?net/capital*365/dte*100:null;
+        const putBid=n(pair.put.bid),callAsk=n(pair.call.ask),canUnwind=putBid!=null&&putBid>0&&callAsk!=null&&callAsk>0;
+        const unwindGross=canUnwind?(q.bid+putBid-callAsk)*unit:null,exitFee=canUnwind?q.bid*unit*etfRate+2*optionFee:null,unwind=canUnwind?unwindGross-exitFee-entry:null;
+        return {...pair,q,unit,dte,strike,entry,entryFee,locked,margin,funding,marginCost,net,annual,unwind,liq:n(pair.call.volume,0)+n(pair.put.volume,0)+n(pair.call.openInterest,0)+n(pair.put.openInterest,0)};
+      }).sort((a,b)=>(b.annual??-Infinity)-(a.annual??-Infinity));
+    }
+    function render(){
+      const rows=productRows(),q=quotes(rows),meta=state.meta[$("product").value],unit=n($("unit").value,10000),mode=$("marginMode").value,ops=opportunities(),best=ops[0],threshold=n($("threshold").value,0);
+      $("quoteNotice").className=`notice ${q.executable?"live":""}`;
+      $("quoteNotice").textContent=!q.bid?"当前缺少 ETF 报价，请填写 ETF Bid/Ask 后再计算。":!q.executable?`Excel 的现券 Bid/Ask 当前为 0，暂用 LastPrice ${f(q.bid)} 作为 Bid/Ask 估算。机会表可用于筛选；填写手工 ETF Bid/Ask 后才会成为可执行信号。`:`已使用 ${q.source}。1 张期权对应 ${f(unit,0)} 份 ETF；期权按每张每边收费，ETF 按成交额收费。${mode==='covered'?'备兑模式不额外计入裸卖认购保证金。':'裸卖模式计入 Excel 的每张认购保证金及其资金成本。'}`;
+      $("metrics").innerHTML=[['可用配对',ops.length],['最佳净年化',best?pct(best.annual):'-'],['最佳期末净收益',best?money(best.net):'-'],['ETF 报价',q.bid!=null?`${f(q.bid)} / ${f(q.ask)}`:'待输入'],['数据来源',meta?meta.sourceMode:'-']].map(([label,value])=>`<div class="metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
+      $("rows").innerHTML=ops.map(opportunity=>{const signal=opportunity.q.executable&&opportunity.annual!=null&&opportunity.annual>=threshold;const costs=opportunity.funding+opportunity.marginCost,status=!opportunity.q.executable?'估算':signal?'关注':'观察';return`<tr class="${signal?'signal':''}"><td class="left">${opportunity.call.product}</td><td>${f(opportunity.dte,0)}</td><td>${f(opportunity.strike)}</td><td>${f(opportunity.q.bid)}</td><td>${f(opportunity.q.ask)}</td><td>${f(opportunity.put.ask)}</td><td>${f(opportunity.call.bid)}</td><td>${money(opportunity.entry)}</td><td>${money(opportunity.entryFee)}</td><td>${money(opportunity.locked)}</td><td>${money(costs)}</td><td>${money(opportunity.margin)}</td><td class="${opportunity.net>=0?'up':'down'}">${money(opportunity.net)}</td><td class="${opportunity.annual>=0?'up':'down'}">${pct(opportunity.annual)}</td><td class="${opportunity.unwind>=0?'up':'down'}">${money(opportunity.unwind)}</td><td>${f(opportunity.liq,0)}</td><td><span class="badge ${signal?'signal':''}">${status}</span></td></tr>`}).join("")||`<tr><td colspan="17" class="empty">等待完整的 ETF 现券价与同到期、同行权价的 Call / Put 报价</td></tr>`;
+    }
+  </script>
+</body>
+</html>

@@ -815,15 +815,38 @@
     }
 
     .chain-map-cell.empty {
-      background: #f8fafc;
-      border-style: dashed;
-      color: var(--muted);
+      background: #ffffff;
+      border-color: #eef3f8;
+      color: transparent;
     }
 
     .chain-map-cell.empty.invalid-zone {
       background: #ffffff;
-      border-color: #e6edf5;
-      color: #cbd5e1;
+      border-color: #eef3f8;
+      color: transparent;
+    }
+
+    .chain-map-cell.itm {
+      background: #fff7ed;
+      border-color: #f97316;
+      box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
+    }
+
+    .chain-map-cell.itm strong,
+    .chain-map-cell.itm .title-value {
+      color: #9a3412;
+    }
+
+    .chain-map-cell .itm-badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: #ea580c;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      vertical-align: 1px;
     }
 
     .chain-map-cell strong {
@@ -1105,27 +1128,6 @@
       <div id="productOverview" class="product-overview"></div>
     </section>
 
-    <h2>当前库存行权节点</h2>
-    <section class="panel option-cross">
-      <div class="note" id="inventoryChainNote"></div>
-      <div id="inventoryChain"></div>
-    </section>
-
-    <h2>当前卖方库存</h2>
-    <section class="grid-2">
-      <div class="panel">
-        <h3>库存分布</h3>
-        <div id="inventoryBars" class="bars"></div>
-      </div>
-      <div class="panel">
-        <h3>Greeks 与方向</h3>
-        <div id="greekSummary" class="grid-5"></div>
-        <div id="futurePricePrompt" class="future-price-prompt"></div>
-        <h3 style="margin-top:12px;">按 DTE 的 Greeks 分布</h3>
-        <div id="greekDteTable" class="table-wrap"></div>
-      </div>
-    </section>
-
     <h2>底层资产走势</h2>
     <section class="panel chart-panel">
       <div class="chart-toolbar">
@@ -1154,6 +1156,27 @@
           <h3>30分钟</h3>
           <canvas id="intradayPriceChart" class="price-chart"></canvas>
         </div>
+      </div>
+    </section>
+
+    <h2>当前库存行权节点</h2>
+    <section class="panel option-cross">
+      <div class="note" id="inventoryChainNote"></div>
+      <div id="inventoryChain"></div>
+    </section>
+
+    <h2>当前卖方库存</h2>
+    <section class="grid-2">
+      <div class="panel">
+        <h3>库存分布</h3>
+        <div id="inventoryBars" class="bars"></div>
+      </div>
+      <div class="panel">
+        <h3>Greeks 与方向</h3>
+        <div id="greekSummary" class="grid-5"></div>
+        <div id="futurePricePrompt" class="future-price-prompt"></div>
+        <h3 style="margin-top:12px;">按 DTE 的 Greeks 分布</h3>
+        <div id="greekDteTable" class="table-wrap"></div>
       </div>
     </section>
 
@@ -1256,6 +1279,9 @@
     let refreshProgressTimer = null;
     let refreshProgressValue = 0;
     let refreshProgressHasBackend = false;
+    let latestRefreshWatchBusy = false;
+    let latestRefreshPollTimer = null;
+    let lastHandledRefreshFinished = "";
     let chartView = { range: "1M", zoom: 1, offset: 0 };
     let chartDrag = null;
 
@@ -1423,14 +1449,23 @@
     }
 
     async function watchLatestRefreshIfRunning() {
+      if (latestRefreshWatchBusy) return;
+      latestRefreshWatchBusy = true;
       try {
         const response = await fetch(`${REFRESH_STATUS_PATH}?job=latest&t=${Date.now()}`, { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
-        if (!payload.running) return;
+        if (!payload.running) {
+          if (payload.ok && payload.finished && payload.finished !== lastHandledRefreshFinished && payload.finished !== dataUpdatedAt) {
+            lastHandledRefreshFinished = payload.finished;
+            await finishRefreshAndLoadCsv(payload);
+          }
+          return;
+        }
         startRefreshProgress();
         updateRefreshFromPayload(payload);
         const finalPayload = await waitForRefreshJob("latest", payload);
         if (finalPayload.ok) {
+          if (finalPayload.finished) lastHandledRefreshFinished = finalPayload.finished;
           await finishRefreshAndLoadCsv(finalPayload);
         } else {
           finishRefreshProgress(false, "刷新失败");
@@ -1438,7 +1473,16 @@
         }
       } catch (_error) {
         // No active external refresh; keep the page quiet.
+      } finally {
+        latestRefreshWatchBusy = false;
       }
+    }
+
+    function startLatestRefreshPolling() {
+      if (latestRefreshPollTimer || typeof window === "undefined" || window.location.protocol === "file:") return;
+      latestRefreshPollTimer = window.setInterval(() => {
+        watchLatestRefreshIfRunning();
+      }, 5000);
     }
 
     async function finishRefreshAndLoadCsv(payload) {
@@ -2743,28 +2787,30 @@
     }
 
     function chainMapCell(row, side, options, strike, spot) {
-      const invalidZone = Number.isFinite(spot) && (
+      const isItm = Number.isFinite(spot) && (
         (side === "call" && Number.isFinite(strike) && strike < spot) ||
         (side === "put" && Number.isFinite(strike) && strike > spot)
       );
-      if (!row) return `<div class="chain-map-cell ${side} empty${invalidZone ? " invalid-zone" : ""}">-</div>`;
-      return options.editable ? chainEditableMapCell(row, side) : chainReadonlyMapCell(row, side);
+      if (!row) return `<div class="chain-map-cell ${side} empty${isItm ? " invalid-zone" : ""}"></div>`;
+      return options.editable ? chainEditableMapCell(row, side, isItm) : chainReadonlyMapCell(row, side, isItm);
     }
 
-    function chainReadonlyMapCell(row, side) {
+    function chainReadonlyMapCell(row, side, isItm = false) {
       const label = esc(compactPositionName(row));
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
-      return `<div class="chain-map-cell ${side}"><strong>${label}<span class="title-value">${money(row.marketValue)}</span></strong><span>Delta ${num(row.delta, 2)}</span><span>Bid/Ask ${quote}</span></div>`;
+      const itmBadge = isItm ? `<span class="itm-badge">ITM 实值</span>` : "";
+      return `<div class="chain-map-cell ${side}${isItm ? " itm" : ""}"><strong>${label}<span class="title-value">${money(row.marketValue)}</span>${itmBadge}</strong><span>Delta ${num(row.delta, 2)}</span><span>Bid/Ask ${quote}</span></div>`;
     }
 
-    function chainEditableMapCell(row, side) {
+    function chainEditableMapCell(row, side, isItm = false) {
       const current = currentContracts(row);
       const qty = targetQuantity(row);
       const qtyInput = `<input class="qty" data-id="${esc(row.id)}" type="number" min="0" step="1" value="${qty}" />`;
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
       const quoteLabel = row.isCurrentOnly && !(Number.isFinite(row.bid) && row.bid > 0) ? "当前报价" : "Bid/Ask";
       const badge = current > 0 ? `<span>当前 ${num(current, 0)}张 · 目标张数</span>` : `<span>目标张数</span>`;
-      return `<div class="chain-map-cell ${side} editable"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
+      const itmBadge = isItm ? `<span class="itm-badge">ITM 实值</span>` : "";
+      return `<div class="chain-map-cell ${side} editable${isItm ? " itm" : ""}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span>${itmBadge}</strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
     }
 
     function creditIncome(row, quantity = 1) {
@@ -3473,6 +3519,7 @@
     async function initialize() {
       render();
       if (typeof window === "undefined" || window.location.protocol === "file:") return;
+      startLatestRefreshPolling();
       watchLatestRefreshIfRunning();
       await loadDefaultData();
     }

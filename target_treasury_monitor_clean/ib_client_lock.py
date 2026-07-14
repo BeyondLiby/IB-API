@@ -42,6 +42,10 @@ def ib_client_lock_path(host: str, port: int, client_id: int) -> Path:
     return lock_dir / f"ib_client_{_safe_component(host)}_{int(port)}_{int(client_id)}.lock"
 
 
+def ib_client_lock_metadata_path(lock_path: Path) -> Path:
+    return lock_path.with_name(f"{lock_path.name}.json")
+
+
 def _try_lock(handle: TextIO) -> bool:
     if os.name == "nt":
         handle.seek(0)
@@ -67,6 +71,12 @@ def _unlock(handle: TextIO) -> None:
 
 
 def _read_metadata(path: Path) -> dict[str, object]:
+    metadata_path = ib_client_lock_metadata_path(path)
+    try:
+        text = metadata_path.read_text(encoding="utf-8").strip()
+        return json.loads(text) if text else {}
+    except (OSError, json.JSONDecodeError):
+        pass
     try:
         text = path.read_text(encoding="utf-8").strip()
         return json.loads(text) if text else {}
@@ -85,13 +95,26 @@ def _write_metadata(handle: TextIO, host: str, port: int, client_id: int, purpos
         "cwd": os.getcwd(),
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
         "argv": sys.argv,
+        "active": True,
     }
-    handle.seek(0)
-    handle.truncate()
-    handle.write(json.dumps(metadata, ensure_ascii=False, indent=2))
-    handle.flush()
-    os.fsync(handle.fileno())
+    metadata_path = ib_client_lock_metadata_path(Path(handle.name))
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     return metadata
+
+
+def _mark_metadata_released(path: Path, metadata: dict[str, object]) -> None:
+    if not metadata:
+        return
+    released = dict(metadata)
+    released["active"] = False
+    released["released_at"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    try:
+        ib_client_lock_metadata_path(path).write_text(
+            json.dumps(released, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        return
 
 
 def format_lock_busy_message(info: IbClientLockInfo) -> str:
@@ -99,10 +122,15 @@ def format_lock_busy_message(info: IbClientLockInfo) -> str:
     pid = metadata.get("pid", "unknown")
     started_at = metadata.get("started_at", "unknown time")
     purpose = metadata.get("purpose", "IB refresh")
+    owner = (
+        f"pid={pid}, purpose={purpose}, started_at={started_at}"
+        if metadata
+        else "metadata unavailable; the lock may be held by an older process or a process that is just exiting"
+    )
     return (
         "IB client refresh is already running for "
         f"{info.host}:{info.port} with client-id {info.client_id}. "
-        f"Current owner: pid={pid}, purpose={purpose}, started_at={started_at}. "
+        f"Current owner: {owner}. "
         "Wait for the current refresh to finish, or retry with a different --client-id. "
         f"Lock file: {info.path}"
     )
@@ -118,8 +146,17 @@ def acquire_ib_client_lock(
 ) -> Iterator[IbClientLockInfo]:
     path = ib_client_lock_path(host, port, client_id)
     with path.open("a+", encoding="utf-8") as handle:
-        if not _try_lock(handle):
+        locked = False
+        metadata: dict[str, object] = {}
+        for attempt in range(4):
+            if _try_lock(handle):
+                locked = True
+                break
             metadata = _read_metadata(path)
+            if metadata or attempt == 3:
+                break
+            time.sleep(0.15)
+        if not locked:
             info = IbClientLockInfo(host=host, port=int(port), client_id=int(client_id), path=path, metadata=metadata)
             raise IbClientLockBusy(format_lock_busy_message(info))
 
@@ -128,7 +165,5 @@ def acquire_ib_client_lock(
         try:
             yield info
         finally:
-            handle.seek(0)
-            handle.truncate()
-            handle.flush()
+            _mark_metadata_released(path, metadata)
             _unlock(handle)

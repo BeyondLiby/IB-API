@@ -10,6 +10,7 @@ from .config import (
     IBConnectionSettings,
     ScanSettings,
 )
+from .fed_ib_discovery import DiscoverySettings, discovery_frames, discovery_summary, run_fed_ib_discovery
 from .ibkr import attach_error_collector, connect_ib, detach_error_collector
 from .quotes import fetch_quote_frame, load_contracts
 from .scanner import read_local_symbols, scan_event_contracts, split_csv, split_float_csv
@@ -42,6 +43,10 @@ def main() -> None:
     quote_parser.add_argument("--generic-ticks", default="100,101,104,106,165,233,293,294,295")
     quote_parser.add_argument("--no-qualify", action="store_true")
     quote_parser.add_argument("--out", default="data/prediction_market_quotes.csv")
+
+    discover_parser = subparsers.add_parser("fed-discover", help="Diagnose IB access to ZQ and Fed/Kalshi event contracts")
+    discover_parser.add_argument("--wait", type=float, default=5.0)
+    discover_parser.add_argument("--out-prefix", default="data/fed_ib_discovery")
 
     args = parser.parse_args()
     settings = IBConnectionSettings(
@@ -82,6 +87,13 @@ def main() -> None:
             )
             _write_frame(frame, args.out)
             print(f"wrote {len(frame)} quote rows to {args.out}")
+        elif args.command == "fed-discover":
+            result = run_fed_ib_discovery(ib, DiscoverySettings(wait_seconds=args.wait))
+            for name, frame in discovery_frames(result).items():
+                path = f"{args.out_prefix}_{name}.csv"
+                _write_frame(frame, path)
+                print(f"wrote {len(frame)} {name} rows to {path}")
+            print(discovery_summary(result))
 
         if errors:
             error_path = Path("data/prediction_market_ib_errors.csv")
