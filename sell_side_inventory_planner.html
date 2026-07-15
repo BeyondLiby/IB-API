@@ -1432,7 +1432,7 @@
         return "已有自动刷新正在使用 client-id 7316。页面会接入该任务并等待完成；请不要重复点击刷新。";
       }
       if (/load failed|failed to fetch|networkerror|cancelled|cancel/i.test(message)) {
-        return "浏览器与本地 planner server 的连接中断。请确认 8766 服务仍在运行；建议使用 ./open_inventory_planner.sh 在后台启动。";
+        return "浏览器与本地 planner server 的连接中断。请确认 8766 服务仍在运行；Windows 请运行 .\\open_inventory_planner.ps1。";
       }
       return message || "未知错误";
     }

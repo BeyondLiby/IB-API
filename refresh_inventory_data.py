@@ -16,6 +16,12 @@ from target_treasury_monitor_clean.ib_client_lock import IbClientLockBusy, acqui
 from target_treasury_monitor_clean.settings import DEFAULT_IB_ACCOUNT
 
 
+STATUS_REPLACE_ATTEMPTS = 20
+STATUS_REPLACE_RETRY_SECONDS = 0.05
+STATUS_LOG_TAIL_LINES = 160
+STATUS_UPDATE_MIN_INTERVAL = 0.5
+
+
 def split_extra_args(values: list[str] | None) -> list[str]:
     if not values:
         return []
@@ -167,7 +173,14 @@ def refresh_status_path(args: argparse.Namespace) -> Path:
     return Path(args.html_data_dir) / "refresh_status.json"
 
 
-def write_refresh_status(args: argparse.Namespace, payload: dict[str, object]) -> None:
+def write_refresh_status(args: argparse.Namespace, payload: dict[str, object]) -> bool:
+    """Publish refresh state without letting a transient Windows file lock kill a refresh.
+
+    The planner page polls this file while the worker updates it.  On Windows a
+    reader can briefly prevent ``os.replace`` from replacing the file, unlike
+    on POSIX.  The status is advisory, so retrying and retaining the last
+    complete payload is safer than terminating a successful data refresh.
+    """
     path = refresh_status_path(args)
     path.parent.mkdir(parents=True, exist_ok=True)
     encoded = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -181,7 +194,47 @@ def write_refresh_status(args: argparse.Namespace, payload: dict[str, object]) -
     ) as handle:
         handle.write(encoded)
         temporary_path = Path(handle.name)
-    os.replace(temporary_path, path)
+    try:
+        for attempt in range(STATUS_REPLACE_ATTEMPTS):
+            try:
+                os.replace(temporary_path, path)
+                return True
+            except PermissionError:
+                if attempt + 1 >= STATUS_REPLACE_ATTEMPTS:
+                    return False
+                time.sleep(STATUS_REPLACE_RETRY_SECONDS)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+    return False
+
+
+def _refresh_status_payload(
+    *,
+    started: str,
+    lines: list[str],
+    progress: int,
+    stage: str,
+    running: bool,
+    finished: str = "",
+    returncode: int | None = None,
+) -> dict[str, object]:
+    output_tail = lines[-STATUS_LOG_TAIL_LINES:]
+    return {
+        "ok": None if running else returncode == 0,
+        "running": running,
+        "started": started,
+        "finished": finished,
+        "returncode": returncode,
+        "progress": progress,
+        "stage": stage,
+        "lines": lines[-80:],
+        # The browser only needs useful recent diagnostics.  Keeping the full
+        # pretty-printed validation report made every progress write larger
+        # and increased the Windows file-lock collision window.
+        "stdout": "\n".join(output_tail),
+        "stderr": "",
+    }
 
 
 def run_refresh_once(args: argparse.Namespace) -> None:
@@ -212,6 +265,14 @@ def run_scheduled_refresh(args: argparse.Namespace) -> None:
             if args.repeat_minutes <= 0:
                 raise
             print("refresh failed; planner server stays online and the next scheduled retry will run normally", flush=True)
+        except Exception as exc:
+            if args.repeat_minutes <= 0:
+                raise
+            print(
+                f"refresh crashed ({type(exc).__name__}: {exc}); "
+                "planner server stays online and the next scheduled retry will run normally",
+                flush=True,
+            )
         finished = time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{finished}] refresh finished", flush=True)
         if args.repeat_minutes <= 0:
@@ -245,41 +306,46 @@ def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> No
         bufsize=1,
     )
     assert process.stdout is not None
+    last_status_write = time.monotonic()
+    last_reported_state = (8, "启动刷新进程")
     try:
         for line in process.stdout:
             text = line.rstrip()
             print(text, flush=True)
             lines.append(text)
             progress, stage = refresh_progress_from_output(lines)
-            write_refresh_status(args, {
-                "ok": None,
-                "running": True,
-                "started": started,
-                "finished": "",
-                "returncode": None,
-                "progress": progress,
-                "stage": stage,
-                "lines": lines[-80:],
-                "stdout": "\n".join(lines),
-                "stderr": "",
-            })
+            state = (progress, stage)
+            now = time.monotonic()
+            if state != last_reported_state or now - last_status_write >= STATUS_UPDATE_MIN_INTERVAL:
+                write_refresh_status(
+                    args,
+                    _refresh_status_payload(
+                        started=started,
+                        lines=lines,
+                        progress=progress,
+                        stage=stage,
+                        running=True,
+                    ),
+                )
+                last_status_write = now
+                last_reported_state = state
     finally:
         process.stdout.close()
     returncode = process.wait()
     progress, stage = refresh_progress_from_output(lines, returncode)
     finished = time.strftime("%Y-%m-%d %H:%M:%S")
-    write_refresh_status(args, {
-        "ok": returncode == 0,
-        "running": False,
-        "started": started,
-        "finished": finished,
-        "returncode": returncode,
-        "progress": progress,
-        "stage": stage,
-        "lines": lines[-80:],
-        "stdout": "\n".join(lines),
-        "stderr": "",
-    })
+    write_refresh_status(
+        args,
+        _refresh_status_payload(
+            started=started,
+            lines=lines,
+            progress=progress,
+            stage=stage,
+            running=False,
+            finished=finished,
+            returncode=returncode,
+        ),
+    )
     if returncode != 0:
         raise SystemExit(f"refresh command failed with exit code {returncode}; see output above")
 

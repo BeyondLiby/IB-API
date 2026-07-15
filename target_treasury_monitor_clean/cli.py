@@ -13,7 +13,7 @@ import signal
 import webbrowser
 
 import pandas as pd
-from ib_async import Future
+from ib_async import Contract, Future
 from ib_async.ib import StartupFetch
 
 from .account_dashboard import fetch_account_dashboard
@@ -29,6 +29,7 @@ from .future_bars import fetch_future_bars, parse_contract_specs, save_future_ba
 from .ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
 from .ib_session import ib_connection
 from .inventory_planner_server import inventory_planner_handler
+from .margin_whatif import MarginWhatIfRequest, run_margin_whatif
 from .quality import evaluate_option_chain_data, print_option_chain_quality_report
 from .settings import (
     AccountDashboardSettings,
@@ -301,6 +302,19 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--contracts", default="ZF:202609,ZN:202609", help="Comma-separated futures specs to qualify.")
     smoke.add_argument("--timeout", type=float, default=10.0, help="Request timeout for time and qualify checks.")
 
+    margin_whatif = sub.add_parser(
+        "margin-whatif",
+        help="Preview one proposed order's portfolio-level IB margin impact without placing an order.",
+    )
+    _add_ib_args(margin_whatif)
+    margin_whatif.add_argument("--con-id", type=int, required=True, help="IB contract conId to preview.")
+    margin_whatif.add_argument("--exchange", default="CBOT", help="Contract exchange used to qualify the conId.")
+    margin_whatif.add_argument("--action", required=True, choices=["BUY", "SELL", "buy", "sell"])
+    margin_whatif.add_argument("--quantity", type=float, required=True)
+    margin_whatif.add_argument("--order-type", default="MKT", choices=["MKT", "LMT", "mkt", "lmt"])
+    margin_whatif.add_argument("--limit-price", type=float, default=None, help="Required when --order-type LMT.")
+    margin_whatif.add_argument("--skip-qualification", action="store_true", help="Use the supplied conId directly; normally leave this off.")
+
     quality = sub.add_parser("quality-report", help="Evaluate a saved option-chain CSV.")
     quality.add_argument("csv_path")
     quality.add_argument("--reference-price", type=float, default=None)
@@ -430,6 +444,40 @@ def command_dashboard(args: argparse.Namespace) -> None:
         print(f"all positions: {len(snapshot.account_positions)}")
         print(f"visible accounts: {', '.join(snapshot.visible_accounts)}")
         print(f"saved: {output_dir}")
+
+
+def command_margin_whatif(args: argparse.Namespace) -> None:
+    """Run one IB credit-check preview. No live order is transmitted."""
+    ib_settings = _ib_settings(args)
+    if not ib_settings.account:
+        raise SystemExit("--account is required for margin-whatif")
+    contract = Contract(conId=int(args.con_id), exchange=args.exchange.strip())
+    request = MarginWhatIfRequest(
+        contract=contract,
+        action=args.action,
+        quantity=float(args.quantity),
+        order_type=args.order_type,
+        limit_price=args.limit_price,
+    )
+    print(
+        "IB margin What-If preview "
+        f"(account={ib_settings.account}, conId={args.con_id}, action={args.action.upper()}, quantity={args.quantity:g})",
+        flush=True,
+    )
+    with acquire_ib_client_lock(
+        ib_settings.host,
+        ib_settings.port,
+        ib_settings.client_id,
+        purpose="IB margin What-If preview",
+    ):
+        with ib_connection(ib_settings, fetch_fields=StartupFetch.ACCOUNT_UPDATES) as ib:
+            result = run_margin_whatif(
+                ib,
+                ib_settings.account,
+                request,
+                qualify_contract=not args.skip_qualification,
+            )
+    print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
 
 
 def command_batch_chain(args: argparse.Namespace) -> None:
@@ -996,6 +1044,8 @@ def main() -> None:
         command_future_bars(args)
     elif args.command == "ib-smoke":
         command_ib_smoke(args)
+    elif args.command == "margin-whatif":
+        command_margin_whatif(args)
     elif args.command == "quality-report":
         command_quality_report(args)
     elif args.command == "sync-carry-html":

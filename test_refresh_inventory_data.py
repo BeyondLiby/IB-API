@@ -178,6 +178,32 @@ class PlannerServerReadinessTests(unittest.TestCase):
         self.assertTrue(payload["running"])
         self.assertEqual(payload["progress"], 12)
 
+    def test_refresh_status_write_retries_a_transient_windows_file_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp) / "planner"
+            args = SimpleNamespace(html_data_dir=planner)
+            original_replace = os.replace
+            attempts = 0
+
+            def replace_with_two_lock_failures(source, target):
+                nonlocal attempts
+                attempts += 1
+                if attempts < 3:
+                    raise PermissionError("status file is temporarily open")
+                original_replace(source, target)
+
+            with (
+                patch("refresh_inventory_data.os.replace", side_effect=replace_with_two_lock_failures),
+                patch("refresh_inventory_data.time.sleep"),
+            ):
+                written = write_refresh_status(args, {"ok": None, "running": True, "progress": 12})
+
+            payload = json.loads((planner / "refresh_status.json").read_text(encoding="utf-8"))
+
+        self.assertTrue(written)
+        self.assertEqual(attempts, 3)
+        self.assertEqual(payload["progress"], 12)
+
     def test_lock_busy_refresh_status_is_not_reported_as_backend_500(self) -> None:
         message = (
             "IB client refresh is already running for 127.0.0.1:4001 "
@@ -245,6 +271,17 @@ class ScheduledRefreshTests(unittest.TestCase):
         args = SimpleNamespace(repeat_minutes=3)
         with (
             patch("refresh_inventory_data.run_refresh_once", side_effect=SystemExit("IB unavailable")) as run_once,
+            patch("refresh_inventory_data.time.sleep", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            run_scheduled_refresh(args)
+
+        self.assertEqual(run_once.call_count, 1)
+
+    def test_repeating_refresh_keeps_server_parent_alive_after_unexpected_exception(self) -> None:
+        args = SimpleNamespace(repeat_minutes=3)
+        with (
+            patch("refresh_inventory_data.run_refresh_once", side_effect=RuntimeError("status file locked")) as run_once,
             patch("refresh_inventory_data.time.sleep", side_effect=KeyboardInterrupt),
             self.assertRaises(KeyboardInterrupt),
         ):

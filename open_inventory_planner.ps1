@@ -9,9 +9,12 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Python = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $RefreshScript = Join-Path $ProjectRoot "refresh_inventory_data.py"
+$ServerScript = Join-Path $ProjectRoot "open_inventory_planner.py"
 $Url = "http://127.0.0.1:$Port/sell_side_inventory_planner.html"
-$Log = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.log"
-$ErrorLog = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.error.log"
+$ServerLog = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.server.log"
+$ServerErrorLog = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.server.error.log"
+$RefreshLog = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.refresh.log"
+$RefreshErrorLog = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.refresh.error.log"
 $PidFile = Join-Path $env:TEMP "ib_api_inventory_planner_$Port.pid"
 
 if (-not (Test-Path $Python)) {
@@ -25,22 +28,29 @@ if ($Existing.Count -gt 0) {
     exit 0
 }
 
-$Arguments = @(
+$ServerArguments = @(
+    ('"{0}"' -f $ServerScript),
+    "--host", "127.0.0.1",
+    "--port", $Port,
+    "--no-open"
+) -join " "
+
+$RefreshArguments = @(
     "-u",
     ('"{0}"' -f $RefreshScript),
     "--refresh-mode", "fast",
     "--repeat-minutes", $RefreshMinutes,
-    "--serve-planner",
-    "--planner-host", "127.0.0.1",
-    "--planner-port", $Port,
     "--client-id", $ClientId
 ) -join " "
 
-Write-Host "Starting background planner with fast refresh every $RefreshMinutes minutes..."
-Write-Host "Log: $Log"
-$PlannerProcess = Start-Process -FilePath $Python -ArgumentList $Arguments -WorkingDirectory $ProjectRoot `
-    -RedirectStandardOutput $Log -RedirectStandardError $ErrorLog -WindowStyle Hidden -PassThru
-$PlannerProcess.Id | Set-Content -Path $PidFile -Encoding ascii
+Write-Host "Starting background planner and fast refresh every $RefreshMinutes minutes..."
+Write-Host "Server log: $ServerLog"
+Write-Host "Refresh log: $RefreshLog"
+$ServerProcess = Start-Process -FilePath $Python -ArgumentList $ServerArguments -WorkingDirectory $ProjectRoot `
+    -RedirectStandardOutput $ServerLog -RedirectStandardError $ServerErrorLog -WindowStyle Hidden -PassThru
+$RefreshProcess = Start-Process -FilePath $Python -ArgumentList $RefreshArguments -WorkingDirectory $ProjectRoot `
+    -RedirectStandardOutput $RefreshLog -RedirectStandardError $RefreshErrorLog -WindowStyle Hidden -PassThru
+@($ServerProcess.Id, $RefreshProcess.Id) | Set-Content -Path $PidFile -Encoding ascii
 
 for ($Attempt = 0; $Attempt -lt 50; $Attempt++) {
     Start-Sleep -Milliseconds 200
@@ -52,7 +62,8 @@ for ($Attempt = 0; $Attempt -lt 50; $Attempt++) {
     }
 }
 
-Write-Host "Planner did not start cleanly. Last log lines:"
-if (Test-Path $Log) { Get-Content $Log -Tail 40 }
-if (Test-Path $ErrorLog) { Get-Content $ErrorLog -Tail 40 }
+Write-Host "Planner server did not start cleanly. Last server log lines:"
+if (Test-Path $ServerLog) { Get-Content $ServerLog -Tail 40 }
+if (Test-Path $ServerErrorLog) { Get-Content $ServerErrorLog -Tail 40 }
+Stop-Process -Id $ServerProcess.Id,$RefreshProcess.Id -Force -ErrorAction SilentlyContinue
 throw "Planner server did not bind to port $Port."
