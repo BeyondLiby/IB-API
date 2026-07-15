@@ -143,8 +143,22 @@ def read_latest_refresh_status(directory: Path) -> dict[str, object]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         modified_at = path.stat().st_mtime
-    except (OSError, json.JSONDecodeError):
+    except OSError:
         return {"ok": None, "running": False, "error": "no refresh status found"}
+    except json.JSONDecodeError:
+        try:
+            modified_at = path.stat().st_mtime
+        except OSError:
+            return {"ok": None, "running": False, "error": "no refresh status found"}
+        if time.time() - modified_at < 5:
+            return {
+                "ok": None,
+                "running": True,
+                "progress": 4,
+                "stage": "刷新状态写入中",
+                "error": "refresh status is being updated",
+            }
+        return {"ok": None, "running": False, "error": "invalid refresh status"}
     if isinstance(payload, dict):
         if payload.get("running") and time.time() - modified_at > 1800:
             payload = dict(payload)

@@ -7,13 +7,13 @@ import pandas as pd
 
 try:
     from .config import DEFAULT_TICK_SIZE
-    from .contracts import contract_label, contract_multiplier, is_treasury_contract, option_full_name
+    from .contracts import contract_cash_multiplier, contract_label, contract_multiplier, is_treasury_contract, option_full_name
     from .greeks import read_ticker_greeks
     from .market_data import ticker_price, ticker_snapshot
     from .utils import clean_number, is_valid_number
 except ImportError:
     from config import DEFAULT_TICK_SIZE
-    from contracts import contract_label, contract_multiplier, is_treasury_contract, option_full_name
+    from contracts import contract_cash_multiplier, contract_label, contract_multiplier, is_treasury_contract, option_full_name
     from greeks import read_ticker_greeks
     from market_data import ticker_price, ticker_snapshot
     from utils import clean_number, is_valid_number
@@ -48,7 +48,8 @@ def positions_to_frame(
         if ticker is not None and not is_valid_number(price):
             price, price_source = ticker_price(ticker)
 
-        multiplier = contract_multiplier(contract)
+        contract_multiplier_value = contract_multiplier(contract)
+        multiplier = contract_cash_multiplier(contract)
         market_value = (
             clean_number(getattr(portfolio_item, "marketValue", math.nan))
             if portfolio_item is not None
@@ -165,6 +166,7 @@ def positions_to_frame(
                 "realizedPnL": realized_pnl,
                 "pnlSource": "portfolio" if has_portfolio_item else "",
                 "multiplier": multiplier,
+                "contractMultiplier": contract_multiplier_value,
                 "hasTicker": has_ticker,
                 "hasPortfolioItem": has_portfolio_item,
                 "quoteReady": quote_ready,

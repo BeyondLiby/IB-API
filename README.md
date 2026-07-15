@@ -9,19 +9,78 @@
 - `open_inventory_planner.py`：只启动 planner 页面，不主动刷新 IB 数据。
 - `target_treasury_monitor_clean/cli.py`：底层 CLI，负责 IB 连接、期权链、K 线、CSV 发布。
 
-## 最常用启动方式
+## 推荐启动与停止脚本
+
+日常使用请只选一种启动方式。两个脚本都会启动 planner、立即执行一次快速刷新、之后每 3 分钟自动快速刷新，并打开同一个页面：
+
+```text
+http://127.0.0.1:8766/sell_side_inventory_planner.html
+```
+
+macOS：
+
+```bash
+cd /Users/antony/Desktop/IB-API
+./open_inventory_planner.sh
+```
+
+停止：
+
+```bash
+./stop_inventory_planner.sh
+```
 
 Windows PowerShell：
 
 ```powershell
 cd E:\策略\IB-API
+.\open_inventory_planner.ps1
+```
+
+停止：
+
+```powershell
+.\stop_inventory_planner.ps1
+```
+
+如果 Windows 因为执行策略拦截 `.ps1`，用下面这条一次性命令运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\open_inventory_planner.ps1
+```
+
+### macOS 与 Windows 的差别
+
+| 项目 | macOS | Windows |
+| --- | --- | --- |
+| 启动脚本 | `open_inventory_planner.sh` | `open_inventory_planner.ps1` |
+| 后台托管 | 当前登录用户的 `launchd` 任务 | 隐藏的后台 Python 进程 |
+| 关闭当前终端后 | 继续运行 | 继续运行 |
+| 注销或重启后 | 需要重新执行启动脚本 | 需要重新执行启动脚本 |
+| 停止脚本 | 会移除 `launchd` 任务并停止 8766 | 会停止记录的 Python 进程和 8766 监听进程 |
+| 日志 | `/tmp/ib_api_inventory_planner_8766.log` | `%TEMP%\ib_api_inventory_planner_8766.log` |
+
+macOS 的脚本默认使用当前激活 Conda 环境中的 Python；若未激活环境，会依次寻找本机常见的 Conda 路径。也可以显式指定：
+
+```bash
+PLANNER_PYTHON=/path/to/python ./open_inventory_planner.sh
+```
+
+Windows 脚本固定使用仓库内的 `.venv\Scripts\python.exe`。
+
+## 手动启动方式
+
+下面的命令适合调试或只跑一次。它们以前台方式运行，关闭终端就会停止；需要常驻自动刷新时请使用上面的启动脚本。
+
+Windows PowerShell：
+
+```powershell
 .\.venv\Scripts\python.exe .\refresh_inventory_data.py --serve-planner --open-browser
 ```
 
-macOS/Linux：
+macOS：
 
 ```bash
-cd /Users/antony/Desktop/IB-API
 conda run -n ib python refresh_inventory_data.py --serve-planner --open-browser
 ```
 
@@ -189,35 +248,29 @@ sleeping 1800s; press Ctrl+C to stop
 
 如果你要定时刷新，需要在启动命令里使用 `--repeat-minutes`。
 
-## macOS 一键脚本
+## 脚本参数
 
-`open_inventory_planner.sh` 会启动 planner server，打开页面，并按间隔自动快速刷新。
-
-默认配置：
+两套启动脚本的默认配置均为：
 
 ```text
 REFRESH_MINUTES=3
-IB_CLIENT_ID=7316
+CLIENT_ID=7316
 PORT=8766
 ```
 
-启动：
-
-```bash
-./open_inventory_planner.sh
-```
-
-自定义每 5 分钟刷新一次：
+macOS 自定义每 5 分钟刷新一次：
 
 ```bash
 REFRESH_MINUTES=5 IB_CLIENT_ID=7316 ./open_inventory_planner.sh
 ```
 
-停止后台 server 和自动刷新循环：
+Windows 自定义每 5 分钟刷新一次：
 
-```bash
-./stop_inventory_planner.sh
+```powershell
+.\open_inventory_planner.ps1 -RefreshMinutes 5 -ClientId 7316
 ```
+
+两边都支持把端口作为第一个参数或 `-Port` 参数传入；端口变更后，停止时也要传同一个端口。
 
 ## 只打开页面，不刷新 IB
 
@@ -490,8 +543,10 @@ Python 编译检查：
 sell_side_inventory_planner.html                 卖方期权库存规划器页面
 refresh_inventory_data.py                        一键刷新数据，可同时启动 planner server
 open_inventory_planner.py                        只启动 planner server
-open_inventory_planner.sh                        macOS/Linux 后台启动和自动 fast refresh 脚本
-stop_inventory_planner.sh                        停止后台 planner 刷新脚本
+open_inventory_planner.sh                        macOS launchd 启动和自动 fast refresh 脚本
+stop_inventory_planner.sh                        停止 macOS planner 刷新脚本
+open_inventory_planner.ps1                       Windows 后台启动和自动 fast refresh 脚本
+stop_inventory_planner.ps1                       停止 Windows planner 刷新脚本
 target_treasury_monitor_clean/cli.py             底层 CLI 入口
 target_treasury_monitor_clean/ib_client_lock.py  IB client-id 本机进程锁
 target_treasury_monitor_clean/inventory_planner_server.py  planner 本地 HTTP/API server

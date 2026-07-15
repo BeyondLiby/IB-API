@@ -1112,10 +1112,9 @@
               <option value="near">0-2DTE</option>
             </select>
           </label>
-          <label>链表DTE<div id="chainDteChoices" class="choice-box"></div></label>
           <button id="recompute">重新计算</button>
         </div>
-        <p class="note">当前只分析选中品种。核心规划只统计卖出期权库存；多头期权视为彩票/凸性仓位，不参与核心库存计算。库存DTE控制统计范围，链表DTE控制下方期权链展示哪些到期列。</p>
+        <p class="note">当前只分析选中品种。核心规划只统计卖出期权库存；多头期权视为彩票/凸性仓位，不参与核心库存计算。库存DTE只控制统计与规划范围；当前持仓行权节点始终展示实际持仓的全部到期日。</p>
       </div>
       <div class="panel">
         <h2>目标压力</h2>
@@ -1202,6 +1201,7 @@
           <div class="candidate-filters">
             <label>Put Delta 上限<div id="putDeltaChoices" class="choice-box limit-choice"></div></label>
             <label>Call Delta 上限<div id="callDeltaChoices" class="choice-box limit-choice"></div></label>
+            <label>候选DTE<div id="candidateDteChoices" class="choice-box"></div></label>
             <label>Put 最低 Strike
               <select id="putStrikeMin"></select>
             </label>
@@ -1291,7 +1291,7 @@
       "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
     ];
     controls.forEach(id => $(id).addEventListener("input", render));
-    ["putDeltaChoices", "callDeltaChoices", "chainDteChoices"].forEach(id => $(id).addEventListener("change", () => {
+    ["putDeltaChoices", "callDeltaChoices", "candidateDteChoices"].forEach(id => $(id).addEventListener("change", () => {
       choiceUserTouched[id] = true;
       render();
     }));
@@ -1410,8 +1410,10 @@
           throw new Error(payload.stderr || payload.error || `refresh failed: ${response.status}`);
         }
         const finalPayload = payload.jobId ? await waitForRefreshJob(payload.jobId, payload) : payload;
-        if (finalPayload.ok === false) {
-          throw new Error(finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed");
+        if (finalPayload.ok !== true) {
+          const detail = finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed";
+          if (isRefreshAlreadyRunning(detail) && await followExistingRefresh()) return;
+          throw new Error(detail);
         }
         await finishRefreshAndLoadCsv(finalPayload);
       } catch (error) {
@@ -1426,10 +1428,36 @@
 
     function friendlyRefreshError(error) {
       const message = String(error && (error.message || error) || "");
+      if (isRefreshAlreadyRunning(message)) {
+        return "已有自动刷新正在使用 client-id 7316。页面会接入该任务并等待完成；请不要重复点击刷新。";
+      }
       if (/load failed|failed to fetch|networkerror|cancelled|cancel/i.test(message)) {
-        return "本地 planner server 没有响应。请确认 8766 服务仍在运行，或重新执行：conda run -n ib python refresh_inventory_data.py --serve-planner --open-browser --client-id 7316";
+        return "浏览器与本地 planner server 的连接中断。请确认 8766 服务仍在运行；建议使用 ./open_inventory_planner.sh 在后台启动。";
       }
       return message || "未知错误";
+    }
+
+    function isRefreshAlreadyRunning(value) {
+      return /(?:ib client refresh|refresh-inventory-data) is already running/i.test(String(value || ""));
+    }
+
+    async function followExistingRefresh() {
+      try {
+        const response = await fetch(`${REFRESH_STATUS_PATH}?job=latest&t=${Date.now()}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.running) return false;
+        setError("");
+        setRefreshStatus("已有自动刷新正在运行，已接入其进度...");
+        updateRefreshFromPayload(payload);
+        const finalPayload = await waitForRefreshJob("latest", payload);
+        if (finalPayload.ok !== true) {
+          throw new Error(finalPayload.stderr || finalPayload.stdout || finalPayload.error || "refresh failed");
+        }
+        await finishRefreshAndLoadCsv(finalPayload);
+        return true;
+      } catch (_error) {
+        return false;
+      }
     }
 
     async function waitForRefreshJob(jobId, initialPayload) {
@@ -1694,7 +1722,7 @@
       const inventoryDte = DTE_PRESETS.inventory[$("inventoryDtePreset").value] || DTE_PRESETS.inventory.short;
       const selectedPutDelta = checkedNumbers("putDeltaChoices");
       const selectedCallDelta = checkedNumbers("callDeltaChoices");
-      const selectedChainDtes = checkedNumbers("chainDteChoices").map(value => Math.max(0, Math.round(value)));
+      const selectedCandidateDtes = checkedNumbers("candidateDteChoices").map(value => Math.max(0, Math.round(value)));
       return {
         underlying,
         capital: numIn("capital", 20000),
@@ -1707,7 +1735,7 @@
         callDeltaMax: selectedCallDelta.length ? Math.max(...selectedCallDelta) : 0.20,
         putInventoryDte: inventoryDte.put,
         callInventoryDte: inventoryDte.call,
-        selectedChainDtes,
+        selectedCandidateDtes,
         putStrikeMin: numIn("putStrikeMin", NaN),
         callStrikeMax: numIn("callStrikeMax", NaN),
         creditSource: $("creditSource").value,
@@ -1743,17 +1771,18 @@
       try {
         syncFilterChoices();
         const cfg = config();
+        const allShortPositions = parseShortPositions(positionRows, cfg, { respectInventoryDte: false });
         shortPositions = parseShortPositions(positionRows, cfg);
         futurePositions = parseFuturePositions(positionRows, cfg);
         const inventory = aggregateInventory(shortPositions, cfg);
         const pressure = targetPressure(shortPositions, cfg);
         const scoredCandidates = scanCandidates(chainRows, shortPositions, cfg, pressure, inventory);
-        candidates = buildCandidateDisplayRows(scoredCandidates, cfg);
+        candidates = buildCandidateDisplayRows(candidateRowsWithInventory(scoredCandidates, allShortPositions, cfg), cfg);
         renderTargetSummary(pressure, shortPositions);
         renderInventory(inventory, futurePositions, cfg);
         renderPriceChart(cfg, futurePositions);
         renderProductOverview(cfg);
-        renderInventoryChain(shortPositions, candidates, cfg);
+        renderInventoryChain(allShortPositions, cfg);
         renderCandidates(candidates, cfg);
         renderBeforeAfter(shortPositions, candidates, cfg);
         renderNodes(shortPositions, candidates, cfg);
@@ -1766,24 +1795,24 @@
     function syncFilterChoices() {
       renderLimitChoiceBox("putDeltaChoices", DELTA_THRESHOLDS, 0.35);
       renderLimitChoiceBox("callDeltaChoices", DELTA_THRESHOLDS, 0.20);
-      renderChainDteChoices();
+      renderCandidateDteChoices();
       renderStrikeSelects();
     }
 
-    function renderChainDteChoices() {
-      const box = $("chainDteChoices");
+    function renderCandidateDteChoices() {
+      const id = "candidateDteChoices";
+      const box = $(id);
       const underlying = $("activeUnderlying").value || "ZF";
-      const values = chainDteValues(underlying);
+      const values = candidateDteValues(underlying);
       const currentValues = Array.from(box.querySelectorAll ? box.querySelectorAll("input[type=checkbox]") : []).map(input => Number(input.value));
-      const currentChecked = checkedNumbers("chainDteChoices").map(value => Math.max(0, Math.round(value)));
-      const defaultSelected = defaultChainDtes(values);
-      const selected = choiceUserTouched.chainDteChoices && currentChecked.some(value => values.includes(value))
+      const currentChecked = checkedNumbers(id).map(value => Math.max(0, Math.round(value)));
+      const selected = choiceUserTouched[id]
         ? currentChecked.filter(value => values.includes(value))
-        : defaultSelected;
+        : values;
       if (currentValues.join(",") === values.join(",") && currentChecked.join(",") === selected.join(",")) return;
       const summary = selected.length
-        ? (selected.length <= 3 ? selected.map(value => `${value}DTE`).join(", ") : `${selected.length} 个DTE`)
-        : "选择DTE";
+        ? (selected.length === values.length ? "全部到期日" : (selected.length <= 3 ? selected.map(value => `${value}DTE`).join(", ") : `${selected.length} 个DTE`))
+        : "不限制DTE";
       box.innerHTML = values.length
         ? `<details class="multi-select"><summary>${esc(summary)}</summary><div class="multi-select-menu">${
           values.map(value => `<label><input type="checkbox" value="${esc(value)}"${selected.includes(value) ? " checked" : ""}>${esc(value)}DTE</label>`).join("")
@@ -1791,18 +1820,14 @@
         : `<span class="note">暂无DTE</span>`;
     }
 
-    function chainDteValues(underlying) {
+    function candidateDteValues(underlying) {
       return Array.from(new Set(
         chainRows
           .filter(row => productOf(row) === underlying)
-          .map(row => Math.max(0, Math.round(dteFromRow(row))))
-          .filter(Number.isFinite)
+          .map(row => dteFromRow(row))
+          .filter(dte => Number.isFinite(dte) && dte >= 0)
+          .map(dte => Math.round(dte))
       )).sort((a, b) => a - b);
-    }
-
-    function defaultChainDtes(values) {
-      const near = values.filter(value => value <= 10);
-      return (near.length ? near : values.slice(0, 8)).slice(0, 10);
     }
 
     function renderStrikeSelects() {
@@ -1885,7 +1910,7 @@
         .filter(Number.isFinite);
     }
 
-    function parseShortPositions(rows, cfg) {
+    function parseShortPositions(rows, cfg, { respectInventoryDte = true } = {}) {
       const allowed = new Set(cfg.allowed);
       return rows.map(row => {
         const position = toNum(row.position);
@@ -1898,15 +1923,27 @@
         if (right !== "P" && right !== "C") return null;
         if (row.secType && !["FOP", "OPT"].includes(String(row.secType).toUpperCase())) return null;
         if (allowed.size && !allowed.has(underlying)) return null;
-        if (right === "P" && !(dte >= cfg.putInventoryDte[0] && dte <= cfg.putInventoryDte[1])) return null;
-        if (right === "C" && !(dte >= cfg.callInventoryDte[0] && dte <= cfg.callInventoryDte[1])) return null;
+        if (respectInventoryDte && right === "P" && !(dte >= cfg.putInventoryDte[0] && dte <= cfg.putInventoryDte[1])) return null;
+        if (respectInventoryDte && right === "C" && !(dte >= cfg.callInventoryDte[0] && dte <= cfg.callInventoryDte[1])) return null;
         const multiplier = multiplierFor(row, underlying, cfg);
-        const marketValue = toNum(row.marketValue);
         const bid = firstNum(row.bid);
         const ask = firstNum(row.ask);
         let mid = firstNum(row.mid, row.price, row.last, row.markPrice, row.modelOptionPrice);
         if (!Number.isFinite(mid) && Number.isFinite(bid) && Number.isFinite(ask)) mid = (bid + ask) / 2;
         const price = firstNum(mid, bid, ask, 0);
+        const sourceMarketValue = toNum(row.marketValue);
+        const contractMultiplier = toNum(row.contractMultiplier);
+        const legacyZcEstimate = underlying === "ZC"
+          && /^estimated_from_/i.test(txt(row.valueSource))
+          && !Number.isFinite(contractMultiplier)
+          && firstNum(row.contractMultiplier, row.multiplier, 0) >= 1000;
+        const marketValue = legacyZcEstimate
+          ? position * price * multiplier
+          : sourceMarketValue;
+        const costBasis = firstNum(row.costBasis, position * toNum(row.avgCost));
+        const unrealizedPnL = legacyZcEstimate && Number.isFinite(costBasis)
+          ? marketValue - costBasis
+          : firstNum(row.unrealizedPnL, 0);
         return {
           underlying,
           expiry: txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth),
@@ -1919,7 +1956,7 @@
           contracts: Math.abs(position),
           marketValue,
           remainingPremium: Number.isFinite(marketValue) && marketValue < 0 ? -marketValue : Math.abs(position * price * multiplier),
-          unrealizedPnL: firstNum(row.unrealizedPnL, 0),
+          unrealizedPnL,
           underlyingPrice: firstNum(row.underlyingPrice, row.undPrice, row.referencePrice),
           bid,
           ask,
@@ -2019,6 +2056,7 @@
 
     function scanCandidates(rows, positions, cfg, pressure, inventory) {
       const allowed = new Set(cfg.allowed);
+      const selectedDteSet = new Set((cfg.selectedCandidateDtes || []).map(value => Math.max(0, Math.round(value))));
       const ref = referencePriceFor(cfg.underlying, rows, positions, cfg, futurePositions);
       const spot = ref.price;
       return rows.map((row, index) => {
@@ -2027,11 +2065,13 @@
         const dte = dteFromRow(row);
         const strike = strikeOf(row, underlying);
         if (!Number.isFinite(dte) || dte < 0) return null;
+        if (selectedDteSet.size && !selectedDteSet.has(Math.max(0, Math.round(dte)))) return null;
         if (allowed.size && !allowed.has(underlying)) return null;
         if (right !== "P" && right !== "C") return null;
         if (!Number.isFinite(strike)) return null;
         if (!strikeWithinOpenWindow(strike, right, spot, cfg)) return null;
-        const delta = signedDelta(row, right);
+        const deltaInfo = candidateDeltaInfo(row, right, rows);
+        const delta = deltaInfo.value;
         const absDelta = Math.abs(delta);
         const maxDelta = right === "P" ? cfg.putDeltaMax : cfg.callDeltaMax;
         if (!(absDelta > 0 && absDelta <= maxDelta)) return null;
@@ -2062,6 +2102,8 @@
         return {
           id, underlying, expiry, dte, bucket, dateBand,
           right, strike, bid, ask, mid, estimatedCredit, delta, gamma, theta, vega,
+          deltaEstimated: deltaInfo.estimated,
+          deltaSource: deltaInfo.source,
           multiplier,
           currentContracts: current.contracts,
           currentPosition: current.position,
@@ -2107,7 +2149,6 @@
             existing.currentMarketValue = current.marketValue;
             return;
           }
-          rows.push(candidateRowFromPosition(position, cfg));
         });
       return rows.sort((a, b) => Math.max(0, Math.round(a.dte)) - Math.max(0, Math.round(b.dte)) || b.strike - a.strike);
     }
@@ -2122,30 +2163,6 @@
         .filter(row => Number.isFinite(row.bid) && row.bid > 0)
         .filter(row => Number.isFinite(row.finalScore))
         .sort((a, b) => Math.max(0, Math.round(a.dte)) - Math.max(0, Math.round(b.dte)) || b.finalScore - a.finalScore);
-    }
-
-    function candidateRowFromPosition(position, cfg) {
-      const enriched = enrichPositionQuote(position, cfg);
-      const estimatedCredit = firstNum(
-        enriched.estimatedCredit,
-        enriched.remainingPremium / Math.max(enriched.contracts * enriched.multiplier, EPS),
-        enriched.mid,
-        enriched.bid,
-        enriched.ask,
-        0
-      );
-      return {
-        ...enriched,
-        id: `current-${enriched.underlying}-${enriched.expiry}-${enriched.right}-${num(enriched.strike, 3)}`,
-        estimatedCredit,
-        currentContracts: enriched.contracts,
-        currentPosition: enriched.position,
-        currentMarketValue: enriched.marketValue,
-        finalScore: 0,
-        marginEstimate: estimatedCredit * enriched.multiplier * 6,
-        spread: Math.max((Number.isFinite(enriched.ask) ? enriched.ask : estimatedCredit) - (Number.isFinite(enriched.bid) ? enriched.bid : estimatedCredit), 0),
-        isCurrentOnly: true
-      };
     }
 
     function optionIdentityMatches(a, b) {
@@ -2326,8 +2343,8 @@
       const dtes = Array.from(new Set(chain
         .filter(row => productOf(row) === cfg.underlying)
         .map(row => dteFromRow(row))
-        .filter(Number.isFinite)
-        .map(dte => Math.max(0, Math.round(dte)))))
+        .filter(dte => Number.isFinite(dte) && dte >= 0)
+        .map(dte => Math.round(dte))))
         .sort((a, b) => a - b);
       if (!dtes.length) {
         const positionDtes = Array.from(new Set(shortPositions.map(row => Math.max(0, Math.round(row.dte))).filter(Number.isFinite))).sort((a, b) => a - b);
@@ -2619,8 +2636,21 @@
     }
 
     function renderCandidates(rows, cfg) {
-      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；只显示满足 Delta、OTM、Strike 和 bid>0 的可交易候选：Call ≤ ${num(cfg.callStrikeMax, 3)}，Put ≥ ${num(cfg.putStrikeMin, 3)}。`;
-      $("candidateTable").innerHTML = optionChainHtml(rows, cfg, { editable: true, showGreeks: true, futures: futurePositions });
+      const dteText = cfg.selectedCandidateDtes && cfg.selectedCandidateDtes.length
+        ? cfg.selectedCandidateDtes.map(value => `${value}DTE`).join(" / ")
+        : "全部到期日";
+      const estimatedDeltaCount = rows.filter(row => row.deltaEstimated).length;
+      const estimatedDeltaNote = estimatedDeltaCount
+        ? `；其中 ${estimatedDeltaCount} 个候选的单边 Delta 缺失，已用同到期日、同 Strike 的另一侧按 Put-Call parity 近似补全，并以 Delta≈ 标记`
+        : "";
+      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；DTE：${dteText}；只显示满足 Delta、OTM、Strike 和 bid>0 的可交易候选：Call Delta ≤ ${num(cfg.callDeltaMax, 2)}、Strike ≤ ${num(cfg.callStrikeMax, 3)}；Put Delta ≤ ${num(cfg.putDeltaMax, 2)}、Strike ≥ ${num(cfg.putStrikeMin, 3)}${estimatedDeltaNote}。空白格表示该 Strike/DTE 没有合约，或报价/筛选条件不满足；当前持仓请在上方“当前库存行权节点”查看。`;
+      $("candidateTable").innerHTML = optionChainHtml(rows, cfg, {
+        editable: true,
+        showGreeks: true,
+        futures: futurePositions,
+        displayDtes: cfg.selectedCandidateDtes,
+        dteRows: chainRows
+      });
       $("candidateTable").querySelectorAll("input[data-id]").forEach(input => {
         input.addEventListener("input", () => {
           proposed[input.dataset.id] = Math.max(toNum(input.value), 0) || 0;
@@ -2669,32 +2699,34 @@
         .find(quote => Number.isFinite(quote.bid) || Number.isFinite(quote.ask) || Number.isFinite(quote.mid)) || {};
     }
 
-    function renderInventoryChain(positions, candidateRows, cfg) {
+    function renderInventoryChain(positions, cfg) {
       const inventoryRows = positions.map(row => enrichPositionQuote({
         ...row,
         id: `inventory-${row.node}-${row.expiry}`,
         estimatedCredit: row.remainingPremium / Math.max(row.contracts * row.multiplier, EPS),
         finalScore: 0
       }, cfg));
-      const ref = referencePriceFor(cfg.underlying, chainRows, shortPositions, cfg, futurePositions);
+      const ref = referencePriceFor(cfg.underlying, chainRows, positions, cfg, futurePositions);
       $("inventoryChainNote").textContent = Number.isFinite(ref.price)
-        ? `当前品种 ${cfg.underlying}；绿色行是当前期货价位置。`
-        : `当前品种 ${cfg.underlying}；未识别到当前期货价，可在上方“当前期货价”手动输入。`;
-      $("inventoryChain").innerHTML = optionChainHtml(inventoryRows, cfg, { editable: false, showGreeks: false, futures: futurePositions });
+        ? `当前品种 ${cfg.underlying}；展示全部实际卖方持仓到期日；绿色行是当前期货价位置。`
+        : `当前品种 ${cfg.underlying}；展示全部实际卖方持仓到期日；未识别到当前期货价，可在上方“当前期货价”手动输入。`;
+      $("inventoryChain").innerHTML = optionChainHtml(inventoryRows, cfg, {
+        editable: false,
+        showGreeks: false,
+        futures: futurePositions,
+        positions
+      });
     }
 
     function optionChainHtml(rows, cfg, options) {
-      const selectedDtes = Array.isArray(cfg.selectedChainDtes) ? cfg.selectedChainDtes : [];
-      const selectedDteSet = new Set(selectedDtes);
       const productRows = rows
-        .filter(row => row.underlying === cfg.underlying)
-        .filter(row => !selectedDteSet.size || selectedDteSet.has(Math.max(0, Math.round(row.dte))));
+        .filter(row => row.underlying === cfg.underlying);
       if (!productRows.length) return `<div class="note">当前品种暂无可展示期权链。</div>`;
-      const ref = referencePriceFor(cfg.underlying, chainRows, shortPositions, cfg, options.futures || []);
+      const ref = referencePriceFor(cfg.underlying, chainRows, options.positions || shortPositions, cfg, options.futures || []);
       const spot = ref.price;
-      const dtes = unifiedDtes(productRows, selectedDtes);
+      const dtes = unifiedDtes(productRows, options.displayDtes);
       const leftDtes = dtes.slice().reverse();
-      const dteDates = dteDateLabels(productRows);
+      const dteDates = dteDateLabels(options.dteRows || productRows);
       const strikes = Array.from(new Set(productRows.map(row => row.strike).filter(Number.isFinite))).sort((a, b) => b - a);
       const colTemplate = `${leftDtes.map(() => "minmax(150px, 1fr)").join(" ")} 74px ${dtes.map(() => "minmax(150px, 1fr)").join(" ")}`;
       const cells = [];
@@ -2717,21 +2749,25 @@
       return `<div class="expiry-sketch"><div class="chain-map" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
     }
 
-    function unifiedDtes(rows, selectedDtes) {
+    function unifiedDtes(rows, requestedDtes = []) {
       const available = Array.from(new Set(rows
         .map(row => Math.max(0, Math.round(row.dte)))
         .filter(Number.isFinite)))
         .sort((a, b) => a - b);
-      const selected = (selectedDtes || []).filter(value => available.includes(value));
-      return selected.length ? selected : available;
+      const requested = Array.from(new Set((requestedDtes || [])
+        .map(value => Math.max(0, Math.round(value)))
+        .filter(Number.isFinite)))
+        .sort((a, b) => a - b);
+      return requested.length ? Array.from(new Set([...requested, ...available])).sort((a, b) => a - b) : available;
     }
 
     function dteDateLabels(rows) {
       const labels = new Map();
       rows.forEach(row => {
-        const dte = Math.max(0, Math.round(row.dte));
-        const date = formatExpiryDate(row.expiry);
-        if (!Number.isFinite(dte) || !date) return;
+        const exactDte = dteFromRow(row);
+        const dte = Math.round(exactDte);
+        const date = formatExpiryDate(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
+        if (!Number.isFinite(exactDte) || exactDte < 0 || !date) return;
         if (!labels.has(dte)) labels.set(dte, new Set());
         labels.get(dte).add(date);
       });
@@ -2804,13 +2840,15 @@
 
     function chainEditableMapCell(row, side, isItm = false) {
       const current = currentContracts(row);
+      const positionClass = current > 0 ? " has-position" : "";
       const qty = targetQuantity(row);
       const qtyInput = `<input class="qty" data-id="${esc(row.id)}" type="number" min="0" step="1" value="${qty}" />`;
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
       const quoteLabel = row.isCurrentOnly && !(Number.isFinite(row.bid) && row.bid > 0) ? "当前报价" : "Bid/Ask";
       const badge = current > 0 ? `<span>当前 ${num(current, 0)}张 · 目标张数</span>` : `<span>目标张数</span>`;
       const itmBadge = isItm ? `<span class="itm-badge">ITM 实值</span>` : "";
-      return `<div class="chain-map-cell ${side} editable${isItm ? " itm" : ""}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span>${itmBadge}</strong><span>${quoteLabel} ${quote}</span><span>Delta ${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
+      const deltaLabel = row.deltaEstimated ? "Delta≈" : "Delta ";
+      return `<div class="chain-map-cell ${side} editable${positionClass}${isItm ? " itm" : ""}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span>${itmBadge}</strong><span>${quoteLabel} ${quote}</span><span>${deltaLabel}${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
     }
 
     function creditIncome(row, quantity = 1) {
@@ -3214,21 +3252,42 @@
     }
 
     function dteFromRow(row) {
-      const explicit = toNum(row.DTE ?? row.dte);
-      if (Number.isFinite(explicit)) return Math.round(explicit);
       const raw = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth).slice(0, 10).replace(/-/g, "");
       const fromExpiry = dteFromExpiry(raw);
       if (Number.isFinite(fromExpiry)) return fromExpiry;
+      const explicit = toNum(row.DTE ?? row.dte);
+      if (Number.isFinite(explicit)) return Math.round(explicit);
       return 999;
     }
 
     function dteFromExpiry(value) {
       const raw = txt(value).slice(0, 10).replace(/-/g, "");
       if (!/^\d{8}$/.test(raw)) return NaN;
-      const expiry = new Date(Number(raw.slice(0, 4)), Number(raw.slice(4, 6)) - 1, Number(raw.slice(6, 8)));
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const expiry = utcDateFromYmd(raw);
+      const todayParts = easternTodayParts();
+      const today = Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day);
       return Math.round((expiry - today) / 86400000);
+    }
+
+    function utcDateFromYmd(raw) {
+      return Date.UTC(Number(raw.slice(0, 4)), Number(raw.slice(4, 6)) - 1, Number(raw.slice(6, 8)));
+    }
+
+    function easternTodayParts(now = new Date()) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(now).reduce((acc, part) => {
+        acc[part.type] = part.value;
+        return acc;
+      }, {});
+      return {
+        year: Number(parts.year),
+        month: Number(parts.month),
+        day: Number(parts.day)
+      };
     }
 
     function dteLabel(dte) {
@@ -3248,16 +3307,16 @@
 
     function dateBandFor(expiry, dte) {
       const raw = txt(expiry).slice(0, 10).replace(/-/g, "");
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       if (/^\d{8}$/.test(raw)) {
-        const expiryDate = new Date(Number(raw.slice(0, 4)), Number(raw.slice(4, 6)) - 1, Number(raw.slice(6, 8)));
-        const day = today.getDay();
+        const expiryDate = new Date(utcDateFromYmd(raw));
+        const todayParts = easternTodayParts();
+        const today = new Date(Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day));
+        const day = today.getUTCDay();
         const daysToSunday = day === 0 ? 0 : 7 - day;
         const thisWeekEnd = new Date(today);
-        thisWeekEnd.setDate(today.getDate() + daysToSunday);
+        thisWeekEnd.setUTCDate(today.getUTCDate() + daysToSunday);
         const nextWeekEnd = new Date(thisWeekEnd);
-        nextWeekEnd.setDate(thisWeekEnd.getDate() + 7);
+        nextWeekEnd.setUTCDate(thisWeekEnd.getUTCDate() + 7);
         if (expiryDate <= thisWeekEnd) return "一周内";
         if (expiryDate <= nextWeekEnd) return "下周";
         return "其他";
@@ -3326,10 +3385,75 @@
       return raw.slice(0, 1);
     }
 
-    function signedDelta(row, right) {
-      let delta = firstNum(row.delta, row.modelGreeks_delta, row.bidGreeks_delta, row.askGreeks_delta, 0);
+    function directSignedDelta(row, right) {
+      let delta = firstNum(row.delta, row.modelGreeks_delta, row.bidGreeks_delta, row.askGreeks_delta, row.lastGreeks_delta);
+      if (!Number.isFinite(delta)) return NaN;
       if (right === "P" && delta > 0) delta *= -1;
       return delta;
+    }
+
+    function signedDelta(row, right) {
+      const delta = directSignedDelta(row, right);
+      return Number.isFinite(delta) ? delta : 0;
+    }
+
+    function candidateDeltaInfo(row, right, peers = chainRows) {
+      const direct = directSignedDelta(row, right);
+      if (Number.isFinite(direct) && Math.abs(direct) > EPS) {
+        return { value: direct, estimated: false, source: "direct" };
+      }
+
+      const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
+      const underlying = productOf(row);
+      const strike = strikeOf(row, underlying);
+      const oppositeRight = right === "P" ? "C" : "P";
+      const opposite = peers.find(candidate => (
+        productOf(candidate) === underlying
+        && txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth) === expiry
+        && normRight(candidate.right || candidate.direction) === oppositeRight
+        && Math.abs(strikeOf(candidate, underlying) - strike) < 0.0001
+      ));
+      const oppositeDelta = opposite ? directSignedDelta(opposite, oppositeRight) : NaN;
+      if (!Number.isFinite(oppositeDelta)) {
+        return { value: NaN, estimated: false, source: "missing" };
+      }
+
+      const parityFactor = putCallDeltaParityFactor(row, peers);
+      const estimated = right === "P"
+        ? oppositeDelta - parityFactor
+        : oppositeDelta + parityFactor;
+      const signIsValid = right === "P" ? estimated < 0 : estimated > 0;
+      if (!Number.isFinite(estimated) || !signIsValid || Math.abs(estimated) > 1.05) {
+        return { value: NaN, estimated: false, source: "missing" };
+      }
+      return { value: estimated, estimated: true, source: "put-call parity" };
+    }
+
+    function putCallDeltaParityFactor(row, peers = chainRows) {
+      const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
+      const underlying = productOf(row);
+      const byStrike = new Map();
+      peers.forEach(candidate => {
+        if (productOf(candidate) !== underlying) return;
+        if (txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth) !== expiry) return;
+        const candidateRight = normRight(candidate.right || candidate.direction);
+        if (candidateRight !== "C" && candidateRight !== "P") return;
+        const strike = strikeOf(candidate, underlying);
+        if (!Number.isFinite(strike)) return;
+        const delta = directSignedDelta(candidate, candidateRight);
+        if (!Number.isFinite(delta)) return;
+        const key = strike.toFixed(4);
+        if (!byStrike.has(key)) byStrike.set(key, {});
+        byStrike.get(key)[candidateRight] = delta;
+      });
+      const factors = Array.from(byStrike.values())
+        .filter(pair => Number.isFinite(pair.C) && Number.isFinite(pair.P))
+        .map(pair => pair.C - pair.P)
+        .filter(value => value >= 0.8 && value <= 1.05)
+        .sort((a, b) => a - b);
+      if (!factors.length) return 1;
+      const middle = Math.floor(factors.length / 2);
+      return factors.length % 2 ? factors[middle] : (factors[middle - 1] + factors[middle]) / 2;
     }
 
     function multiplierFor(row, underlying, cfg) {

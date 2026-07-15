@@ -184,6 +184,21 @@ def _fallback_positions_path(args: argparse.Namespace) -> Path:
     return html_path if html_path.exists() else Path(args.working_dir) / "dashboard_treasury_positions.csv"
 
 
+def _nonempty_cached_positions(args: argparse.Namespace) -> tuple[pd.DataFrame, Path | None]:
+    candidates = [
+        Path(args.html_data_dir) / "carry_dashboard_positions.csv",
+        Path(args.working_dir) / "dashboard_treasury_positions.csv",
+    ]
+    for path in dict.fromkeys(candidates):
+        try:
+            frame = _read_csv_if_exists(path)
+        except (OSError, pd.errors.EmptyDataError):
+            continue
+        if not frame.empty:
+            return frame, path
+    return pd.DataFrame(), None
+
+
 def _position_con_ids_by_root(position_frame: pd.DataFrame) -> dict[str, tuple[int, ...]]:
     if position_frame.empty or "conId" not in position_frame.columns:
         return {}
@@ -351,6 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--positions-csv", default="", help="Reuse an existing treasury positions CSV instead of fetching account data from IB.")
     refresh.add_argument("--positions-timeout", type=float, default=30.0, help="Seconds to wait for the account snapshot before falling back to cached positions.")
     refresh.add_argument("--strict-positions", action="store_true", help="Fail instead of reusing cached positions when account refresh times out or errors.")
+    refresh.add_argument("--allow-empty-positions", action="store_true", help="Publish an empty account snapshot instead of preserving a non-empty local positions cache.")
     refresh.add_argument("--min-expiration", default="")
     refresh.add_argument("--max-expiration", default="")
     refresh.add_argument("--quote-wait-seconds", type=float, default=6.0)
@@ -718,23 +734,41 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
             quote_wait_seconds=effective_quote_wait,
             infer_spreads=args.infer_spreads,
         )
-        fetch_fields = StartupFetch.POSITIONS | StartupFetch.ACCOUNT_UPDATES | StartupFetch.SUB_ACCOUNT_UPDATES
-        print("refresh positions/account snapshot", flush=True)
+        # The planner needs positions before anything else. Waiting for the
+        # account-update streams here can time out and leave an empty position cache.
+        fetch_fields = StartupFetch.POSITIONS
+        print("refresh positions snapshot (startup fetch: POSITIONS only)", flush=True)
         try:
             with _time_limit(float(args.positions_timeout)):
                 with ib_connection(ib_settings, fetch_fields=fetch_fields) as ib:
                     snapshot = fetch_account_dashboard(ib, ib_settings, dashboard_settings)
             position_frame = snapshot.position_frame
+            if position_frame.empty and not getattr(args, "allow_empty_positions", False):
+                cached_positions, cached_path = _nonempty_cached_positions(args)
+                if cached_path is None:
+                    raise SystemExit(
+                        "positions snapshot returned 0 rows and no non-empty cached positions are available; "
+                        "refusing to publish an empty inventory. Restore the IB API connection, or pass "
+                        "--allow-empty-positions only when the account is intentionally flat."
+                    )
+                message = (
+                    "positions snapshot returned 0 rows; "
+                    f"preserving cached positions: {cached_path} ({len(cached_positions)} rows)"
+                )
+                if args.strict_positions:
+                    raise SystemExit(message)
+                position_frame = cached_positions
+                print(message, flush=True)
             snapshot.account_summary.to_csv(working_dir / "dashboard_account_summary.csv", index=False, encoding="utf-8-sig")
             snapshot.greek_summary.to_csv(working_dir / "dashboard_greek_summary.csv", index=False, encoding="utf-8-sig")
             print(f"positions: {len(position_frame)}", flush=True)
         except Exception as exc:
-            fallback_path = _fallback_positions_path(args)
             message = f"positions refresh failed ({type(exc).__name__}: {exc})"
-            if args.strict_positions or not fallback_path.exists():
+            cached_positions, cached_path = _nonempty_cached_positions(args)
+            if args.strict_positions or cached_path is None:
                 raise SystemExit(message) from exc
-            position_frame = pd.read_csv(fallback_path)
-            print(f"{message}; reusing cached positions: {fallback_path} ({len(position_frame)} rows)", flush=True)
+            position_frame = cached_positions
+            print(f"{message}; reusing cached positions: {cached_path} ({len(position_frame)} rows)", flush=True)
     position_frame.to_csv(working_dir / "dashboard_treasury_positions.csv", index=False, encoding="utf-8-sig")
     position_con_ids = _position_con_ids_by_root(position_frame)
     force_summary = {root: len(values) for root, values in position_con_ids.items() if values}

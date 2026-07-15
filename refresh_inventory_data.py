@@ -6,11 +6,13 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
+from target_treasury_monitor_clean.ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
 from target_treasury_monitor_clean.settings import DEFAULT_IB_ACCOUNT
 
 
@@ -65,6 +67,9 @@ def build_refresh_command(args: argparse.Namespace) -> list[str]:
         str(args.positions_timeout),
         "--future-price-wait-seconds",
         str(args.future_price_wait_seconds),
+        # The wrapper holds this client-id lock for the entire refresh, including
+        # its status-file updates. The child CLI must not try to acquire it again.
+        "--no-client-lock",
     ]
     if args.refresh_mode == "fast":
         command.append("--fast-refresh")
@@ -165,7 +170,18 @@ def refresh_status_path(args: argparse.Namespace) -> Path:
 def write_refresh_status(args: argparse.Namespace, payload: dict[str, object]) -> None:
     path = refresh_status_path(args)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(encoded)
+        temporary_path = Path(handle.name)
+    os.replace(temporary_path, path)
 
 
 def run_refresh_once(args: argparse.Namespace) -> None:
@@ -173,6 +189,39 @@ def run_refresh_once(args: argparse.Namespace) -> None:
     print_refresh_request_summary(args, command)
     if args.dry_run:
         return
+    try:
+        with acquire_ib_client_lock(
+            args.ib_host,
+            args.ib_port,
+            args.client_id,
+            purpose="refresh-inventory-data",
+        ):
+            _run_refresh_once_locked(args, command)
+    except IbClientLockBusy as exc:
+        print(str(exc), flush=True)
+        raise SystemExit(str(exc)) from exc
+
+
+def run_scheduled_refresh(args: argparse.Namespace) -> None:
+    while True:
+        started = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n[{started}] refresh started", flush=True)
+        try:
+            run_refresh_once(args)
+        except SystemExit:
+            if args.repeat_minutes <= 0:
+                raise
+            print("refresh failed; planner server stays online and the next scheduled retry will run normally", flush=True)
+        finished = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{finished}] refresh finished", flush=True)
+        if args.repeat_minutes <= 0:
+            return
+        sleep_seconds = max(args.repeat_minutes * 60, 1)
+        print(f"sleeping {sleep_seconds:.0f}s; press Ctrl+C to stop", flush=True)
+        time.sleep(sleep_seconds)
+
+
+def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> None:
     lines: list[str] = []
     started = time.strftime("%Y-%m-%d %H:%M:%S")
     write_refresh_status(args, {
@@ -340,17 +389,7 @@ def main() -> None:
         wait_for_planner_server(args, server)
 
     try:
-        while True:
-            started = time.strftime("%Y-%m-%d %H:%M:%S")
-            print(f"\n[{started}] refresh started", flush=True)
-            run_refresh_once(args)
-            finished = time.strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{finished}] refresh finished", flush=True)
-            if args.repeat_minutes <= 0:
-                break
-            sleep_seconds = max(args.repeat_minutes * 60, 1)
-            print(f"sleeping {sleep_seconds:.0f}s; press Ctrl+C to stop", flush=True)
-            time.sleep(sleep_seconds)
+        run_scheduled_refresh(args)
     finally:
         if server is not None and server.poll() is None:
             server.terminate()

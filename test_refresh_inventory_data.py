@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -16,7 +17,9 @@ from urllib.request import Request, urlopen
 import pandas as pd
 
 from target_treasury_monitor_clean import cli as clean_cli
+from refresh_inventory_data import run_scheduled_refresh
 from refresh_inventory_data import wait_for_planner_server
+from refresh_inventory_data import write_refresh_status
 from target_treasury_monitor_clean.chain_batch import _contract_cache_path
 from target_treasury_monitor_clean.chain_batch import _find_existing_contract_cache
 from target_treasury_monitor_clean.chain_batch import _select_market_data_contracts
@@ -26,6 +29,7 @@ from target_treasury_monitor_clean.ib_client_lock import ib_client_lock_metadata
 from target_treasury_monitor_clean.ib_client_lock import ib_client_lock_path
 from target_treasury_monitor_clean.inventory_planner_server import inventory_planner_handler
 from target_treasury_monitor_clean.inventory_planner_server import inventory_planner_manifest
+from target_treasury_monitor_clean.inventory_planner_server import read_latest_refresh_status
 from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
 from target_treasury_monitor_clean.inventory_planner_server import refresh_status_http_code
 from target_treasury_monitor_clean.settings import IBSettings
@@ -151,6 +155,29 @@ class PlannerServerReadinessTests(unittest.TestCase):
             self.assertEqual(payload["jobId"], "latest")
             self.assertEqual(payload["progress"], 42)
 
+    def test_recent_invalid_refresh_status_is_treated_as_in_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            planner = directory / "data" / "planner"
+            planner.mkdir(parents=True)
+            (planner / "refresh_status.json").write_text('{"running":', encoding="utf-8")
+
+            payload = read_latest_refresh_status(directory)
+
+        self.assertTrue(payload["running"])
+        self.assertEqual(payload["stage"], "刷新状态写入中")
+
+    def test_refresh_status_write_replaces_a_complete_json_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp) / "planner"
+            args = SimpleNamespace(html_data_dir=planner)
+            write_refresh_status(args, {"ok": None, "running": True, "progress": 12})
+
+            payload = json.loads((planner / "refresh_status.json").read_text(encoding="utf-8"))
+
+        self.assertTrue(payload["running"])
+        self.assertEqual(payload["progress"], 12)
+
     def test_lock_busy_refresh_status_is_not_reported_as_backend_500(self) -> None:
         message = (
             "IB client refresh is already running for 127.0.0.1:4001 "
@@ -170,6 +197,60 @@ class PlannerServerReadinessTests(unittest.TestCase):
             wait_for_planner_server(self.args_for(server.server_address[1]), DummyProcess(), timeout=0.4)
 
         self.assertIn("plain static HTTP server", str(raised.exception))
+
+
+class CachedPositionsTests(unittest.TestCase):
+    def test_nonempty_cached_positions_skips_empty_html_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            planner = root / "planner"
+            debug = planner / "debug"
+            debug.mkdir(parents=True)
+            (planner / "carry_dashboard_positions.csv").write_text("symbol,position\n", encoding="utf-8")
+            (debug / "dashboard_treasury_positions.csv").write_text("symbol,position\nZF,-1\n", encoding="utf-8")
+            args = SimpleNamespace(html_data_dir=planner, working_dir=debug)
+
+            frame, path = clean_cli._nonempty_cached_positions(args)
+
+        self.assertEqual(path, debug / "dashboard_treasury_positions.csv")
+        self.assertEqual(frame.to_dict("records"), [{"symbol": "ZF", "position": -1}])
+
+    def test_empty_snapshot_without_cache_is_not_publishable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            args = RefreshCarryHtmlFallbackTests().args_for(directory, Path())
+            args.positions_csv = ""
+            args.allow_empty_positions = False
+            snapshot = SimpleNamespace(
+                position_frame=pd.DataFrame(),
+                account_summary=pd.DataFrame(),
+                greek_summary=pd.DataFrame(),
+            )
+            with (
+                patch.object(clean_cli, "ib_connection", return_value=nullcontext(object())) as connection,
+                patch.object(clean_cli, "fetch_account_dashboard", return_value=snapshot),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                clean_cli._run_refresh_carry_html(
+                    args,
+                    IBSettings(host="127.0.0.1", port=4001, client_id=7316, account="U16251798"),
+                )
+
+        self.assertIn("refusing to publish an empty inventory", str(raised.exception))
+        self.assertEqual(connection.call_args.kwargs["fetch_fields"], clean_cli.StartupFetch.POSITIONS)
+
+
+class ScheduledRefreshTests(unittest.TestCase):
+    def test_repeating_refresh_keeps_running_after_one_failure(self) -> None:
+        args = SimpleNamespace(repeat_minutes=3)
+        with (
+            patch("refresh_inventory_data.run_refresh_once", side_effect=SystemExit("IB unavailable")) as run_once,
+            patch("refresh_inventory_data.time.sleep", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            run_scheduled_refresh(args)
+
+        self.assertEqual(run_once.call_count, 1)
 
 
 class IbClientLockTests(unittest.TestCase):

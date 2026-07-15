@@ -14,14 +14,14 @@ except ImportError:
 
 
 def expiry_days(expiry: Any) -> float:
-    """Return days from today in Asia/Shanghai to an IB YYYYMMDD expiry."""
+    """Return days from today's US/Eastern trade date to an IB YYYYMMDD expiry."""
     text = str(expiry or "")
     if len(text) < 8:
         return math.nan
     expiry_date = pd.to_datetime(text[:8], format="%Y%m%d", errors="coerce")
     if pd.isna(expiry_date):
         return math.nan
-    today = pd.Timestamp.now(tz="Asia/Shanghai").normalize().tz_localize(None)
+    today = pd.Timestamp.now(tz="America/New_York").normalize().tz_localize(None)
     return float((expiry_date - today).days)
 
 

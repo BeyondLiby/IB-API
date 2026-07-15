@@ -146,7 +146,7 @@ def refresh_future_prices_sidecar(
 
 
 def _dte(expiration: object) -> int | None:
-    """Compute DTE using today's Asia/Shanghai date."""
+    """Compute DTE using today's US/Eastern trade date."""
     exp_dt = pd.to_datetime(str(expiration)[:8], format="%Y%m%d", errors="coerce")
     today_dt = pd.to_datetime(today_yyyymmdd(), format="%Y%m%d", errors="coerce")
     if pd.isna(exp_dt) or pd.isna(today_dt):

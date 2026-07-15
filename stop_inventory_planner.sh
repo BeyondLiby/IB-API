@@ -3,6 +3,11 @@ set -euo pipefail
 
 PORT="${1:-8766}"
 PIDFILE="/tmp/ib_api_inventory_planner_${PORT}.pid"
+LABEL="com.antony.ib-api.inventory-planner-${PORT}"
+
+# A planner started through launchd must be removed before killing its child
+# processes, otherwise macOS will immediately start it again.
+launchctl remove "${LABEL}" >/dev/null 2>&1 || true
 
 PIDS="$(
   {

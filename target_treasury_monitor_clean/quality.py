@@ -36,7 +36,7 @@ def _with_quality_columns(frame: pd.DataFrame, *, reference_price: float | None)
         out["expiry"] = out["expiration"].astype(str)
     if "dte" not in out.columns and "expiry" in out.columns:
         exp = pd.to_datetime(out["expiry"].astype(str).str[:8], format="%Y%m%d", errors="coerce")
-        today = pd.Timestamp.now(tz="Asia/Shanghai").normalize().tz_localize(None)
+        today = pd.Timestamp.now(tz="America/New_York").normalize().tz_localize(None)
         out["dte"] = (exp - today).dt.days
     out["dte"] = _numeric(out, "dte")
 

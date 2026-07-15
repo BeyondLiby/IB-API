@@ -34,7 +34,7 @@ def normalize_months(value: str | Sequence[str]) -> list[str]:
     return months
 
 
-def today_yyyymmdd(timezone: str = "Asia/Shanghai") -> str:
+def today_yyyymmdd(timezone: str = "America/New_York") -> str:
     return pd.Timestamp.now(tz=timezone).strftime("%Y%m%d")
 
 

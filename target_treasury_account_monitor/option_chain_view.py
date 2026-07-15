@@ -136,7 +136,11 @@ def snapshot_to_monitor_frame(snapshot: pd.DataFrame, *, root: str) -> pd.DataFr
     out["secType"] = "FOP"
     out["position"] = 0.0
     out["dte"] = out["expiry"].map(expiry_days_from_today)
-    if "multiplier" not in out.columns:
+    # The planning schema expresses ZC prices in cents per bushel, so it needs
+    # the USD value of one displayed cent (USD 50), not IB's 5,000 bushels.
+    if root.upper() == "ZC":
+        out["multiplier"] = 50.0
+    elif "multiplier" not in out.columns:
         out["multiplier"] = 1000.0
     else:
         out["multiplier"] = pd.to_numeric(out["multiplier"], errors="coerce").fillna(1000.0)
@@ -172,7 +176,7 @@ def snapshot_to_monitor_frame(snapshot: pd.DataFrame, *, root: str) -> pd.DataFr
     return out
 
 
-def expiry_days_from_today(expiry: Any, *, timezone: str = "Asia/Shanghai") -> int | None:
+def expiry_days_from_today(expiry: Any, *, timezone: str = "America/New_York") -> int | None:
     """Return calendar DTE for an IB YYYYMMDD expiration."""
     exp_dt = pd.to_datetime(str(expiry)[:8], format="%Y%m%d", errors="coerce")
     if pd.isna(exp_dt):
@@ -288,7 +292,7 @@ def fetch_zf_option_chain_snapshot(
     effective_min_expiration = (
         str(min_expiration)
         if min_expiration
-        else pd.Timestamp.now(tz="Asia/Shanghai").strftime("%Y%m%d")
+        else pd.Timestamp.now(tz="America/New_York").strftime("%Y%m%d")
     )
     if market_data_type is not None:
         ib.reqMarketDataType(int(market_data_type))

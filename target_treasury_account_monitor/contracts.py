@@ -148,3 +148,16 @@ def contract_multiplier(contract: Any) -> float:
     except (TypeError, ValueError):
         return 1.0
     return value if value > 0 else 1.0
+
+
+def contract_cash_multiplier(contract: Any) -> float:
+    """Return the USD multiplier for one displayed unit of an option quote.
+
+    IB reports the full-size Corn (ZC) contract multiplier as 5,000 bushels,
+    while its option quotes are in cents per bushel.  One displayed cent is
+    therefore worth USD 50 per contract, rather than USD 5,000.
+    """
+    symbol = str(getattr(contract, "symbol", "") or "").strip().upper()
+    if symbol == "ZC":
+        return 50.0
+    return contract_multiplier(contract)

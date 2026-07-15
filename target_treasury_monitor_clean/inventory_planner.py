@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 import math
 import re
 from typing import Any, Iterable
+
+import pandas as pd
 
 
 EPSILON = 1e-9
@@ -191,7 +193,7 @@ def parse_expiry(value: Any) -> date | None:
 
 def resolve_as_of(as_of: date | datetime | str | None = None) -> date:
     if as_of is None or text(as_of).lower() == "now":
-        return datetime.now(timezone.utc).date()
+        return pd.Timestamp.now(tz="America/New_York").date()
     if isinstance(as_of, datetime):
         return as_of.date()
     if isinstance(as_of, date):
@@ -220,13 +222,13 @@ def dte_bucket(dte: int | float) -> str:
 
 
 def dte_from_row(row: dict[str, Any], as_of: date) -> int:
+    expiry = parse_expiry(row.get("expiry") or row.get("expiration") or row.get("lastTradeDateOrContractMonth"))
+    if expiry:
+        return (expiry - as_of).days
     explicit = to_float(row.get("DTE", row.get("dte")))
     if math.isfinite(explicit):
         return int(round(explicit))
-    expiry = parse_expiry(row.get("expiry") or row.get("expiration") or row.get("lastTradeDateOrContractMonth"))
-    if not expiry:
-        return 999
-    return (expiry - as_of).days
+    return 999
 
 
 def multiplier_for(row: dict[str, Any], underlying: str, config: PlannerConfig) -> float:
@@ -269,8 +271,21 @@ def parse_short_positions(rows: Iterable[dict[str, Any]], config: PlannerConfig,
             continue
         if right == "C" and not (config.call_dte_min <= dte <= config.call_dte_max):
             continue
-        market_value = to_float(row.get("marketValue"), 0.0)
-        remaining_premium = -market_value if market_value < 0 else abs(position) * abs(first_finite(row, ["mid", "price", "last", "bid", "ask"], 0.0)) * multiplier_for(row, underlying, config)
+        multiplier = multiplier_for(row, underlying, config)
+        price = first_finite(row, ["mid", "price", "last", "bid", "ask"], 0.0)
+        source_market_value = to_float(row.get("marketValue"), 0.0)
+        contract_multiplier_value = to_float(row.get("contractMultiplier"))
+        raw_multiplier = first_finite(row, ["contractMultiplier", "multiplier"], 0.0)
+        legacy_zc_estimate = (
+            underlying == "ZC"
+            and text(row.get("valueSource")).lower().startswith("estimated_from_")
+            and not math.isfinite(contract_multiplier_value)
+            and raw_multiplier >= 1000.0
+        )
+        market_value = position * price * multiplier if legacy_zc_estimate else source_market_value
+        cost_basis = first_finite(row, ["costBasis"], position * to_float(row.get("avgCost"), 0.0))
+        unrealized_pnl = market_value - cost_basis if legacy_zc_estimate else to_float(row.get("unrealizedPnL"), 0.0)
+        remaining_premium = -market_value if market_value < 0 else abs(position) * abs(price) * multiplier
         out.append(
             ShortPosition(
                 underlying=underlying,
@@ -281,12 +296,12 @@ def parse_short_positions(rows: Iterable[dict[str, Any]], config: PlannerConfig,
                 position=position,
                 abs_contracts=abs(position),
                 remaining_premium=remaining_premium,
-                unrealized_pnl=to_float(row.get("unrealizedPnL"), 0.0),
+                unrealized_pnl=unrealized_pnl,
                 delta=to_float(row.get("delta"), 0.0),
                 gamma=to_float(row.get("gamma"), 0.0),
                 theta=to_float(row.get("theta"), 0.0),
                 vega=to_float(row.get("vega"), 0.0),
-                multiplier=multiplier_for(row, underlying, config),
+                multiplier=multiplier,
                 local_symbol=text(row.get("localSymbol")),
                 option_name=text(row.get("optionName")),
                 con_id=text(row.get("conId")),

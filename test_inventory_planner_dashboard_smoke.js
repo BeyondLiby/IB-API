@@ -24,7 +24,8 @@ assert(!html.includes("可覆盖提示"), "node warning side panel should be rem
 assert(html.includes('id="putStrikeMin"'), "put strike selector missing");
 assert(html.includes('id="callStrikeMax"'), "call strike selector missing");
 assert(html.includes('id="putDeltaChoices"'), "put delta choices missing");
-assert(html.includes('id="chainDteChoices"'), "chain DTE selector missing");
+assert(!html.includes('id="chainDteChoices"'), "top-level chain DTE selector should be removed");
+assert(html.includes('id="candidateDteChoices"'), "candidate DTE selector missing");
 assert(!html.includes('id="expirySketch"'), "standalone sketch should be removed");
 assert(html.includes('<option value="all" selected>全部库存</option>'), "inventory DTE should default to all");
 assert(html.includes("data/planner/carry_dashboard_chain.csv"), "planner chain should be default source");
@@ -107,11 +108,21 @@ const document = {
     return { click() {}, set href(value) {}, set download(value) {} };
   }
 };
+const RealDate = Date;
+class FixedDate extends RealDate {
+  constructor(...args) {
+    super(...(args.length ? args : ["2026-07-09T12:00:00.000Z"]));
+  }
+
+  static now() {
+    return new RealDate("2026-07-09T12:00:00.000Z").valueOf();
+  }
+}
 
 const context = vm.createContext({
   console,
   document,
-  Date,
+  Date: FixedDate,
   Math,
   Number,
   String,
@@ -195,17 +206,18 @@ const liveResult = new vm.Script(`
     callStrikeMax: config().callStrikeMax,
     putStrikeOptions: Array.from(document.getElementById("putStrikeMin").options).map(option => Number(option.value)).filter(Number.isFinite),
     callStrikeOptions: Array.from(document.getElementById("callStrikeMax").options).map(option => Number(option.value)).filter(Number.isFinite),
-    selectedChainDtes: config().selectedChainDtes,
-    chainDteHtml: document.getElementById("chainDteChoices").innerHTML,
+    selectedCandidateDtes: config().selectedCandidateDtes,
+    candidateDteHtml: document.getElementById("candidateDteChoices").innerHTML,
     futurePrompt: document.getElementById("futurePricePrompt").innerHTML,
     putDeltaHtml: document.getElementById("putDeltaChoices").innerHTML,
     creditSource: document.getElementById("creditSource").value,
     inventoryHtml: document.getElementById("inventoryChain").innerHTML,
     candidateHtml: document.getElementById("candidateTable").innerHTML,
     nodeHtml: document.getElementById("nodeTable").innerHTML,
-    currentOverlayCount: shortPositions.filter(position => candidates.some(row => optionIdentityMatches(row, position) && currentContracts(row) > 0)).length,
-    shortPositionCount: shortPositions.length,
-    has0DteCallOverlay: candidates.some(row => row.right === "C" && Math.max(0, Math.round(row.dte)) === 0 && currentContracts(row) > 0),
+    candidateDisplayDtes: unifiedDtes(candidates, config().selectedCandidateDtes),
+    candidateCallDeltas: candidates
+      .filter(row => row.right === "C")
+      .map(row => Math.abs(row.delta)),
     candidateStrikeWindowOk: (() => {
       const cfg = config();
       const spot = referencePriceFor("ZF", chainRows, shortPositions, cfg, futurePositions).price;
@@ -218,17 +230,21 @@ const liveResult = new vm.Script(`
   });
 `).runInContext(context);
 const live = JSON.parse(liveResult);
-assert.strictEqual(live.shortByDte["0"], 5, "0DTE live inventory should include five current contracts");
-assert.strictEqual(live.shortByDte["1"], 4, "1DTE live inventory should include four current contracts");
+const liveDtes = Object.keys(live.shortByDte).map(Number).filter(Number.isFinite);
+const farthestLiveDte = Math.max(...liveDtes);
+assert(liveDtes.length > 0, "live inventory should include current short positions");
+assert(farthestLiveDte > 2, "live inventory fixture should include holdings beyond the near planning window");
 assert.strictEqual(live.remainingTarget, Math.max(live.monthlyTarget - live.currentPremium, 0), "target pressure should deduct current remaining premium");
 assert(live.remainingTarget < live.monthlyTarget, "remaining target should be lower than gross monthly target when premium exists");
 assert(live.putStrikeOptions.includes(live.putStrikeMin), "put strike selector should default to a real chain strike");
 assert(live.callStrikeOptions.includes(live.callStrikeMax), "call strike selector should default to a real chain strike");
 assert(live.putStrikeMin < 106.914, "put strike selector should default below the ZF spot");
 assert(live.callStrikeMax > 106.914, "call strike selector should default above the ZF spot");
-assert(live.chainDteHtml.includes('type="checkbox"'), "chain DTE selector should render checkboxes");
-assert(live.selectedChainDtes.length > 0, "chain DTE selector should choose default DTEs");
-assert(live.selectedChainDtes.every(dte => dte <= 10), "chain DTE selector should default to near expiries only");
+assert(live.candidateDteHtml.includes('type="checkbox"'), "candidate DTE selector should render checkboxes");
+assert(live.selectedCandidateDtes.length > 0, "candidate DTE selector should choose default DTEs");
+assert(live.selectedCandidateDtes.some(dte => dte > 10), "candidate DTE selector should include farther chain expiries by default");
+assert.deepStrictEqual(live.candidateDisplayDtes, live.selectedCandidateDtes, "candidate matrix should retain every selected DTE column, including empty ones");
+assert(live.candidateCallDeltas.every(delta => delta > 0 && delta <= 0.20 + 1e-9), "candidate call cells must honor the selected delta ceiling");
 assert.strictEqual(live.creditSource, "bid", "sell-side credit source should default to bid");
 assert(/chain|positions|future-position/.test(live.futurePrompt), "future price should come from planner data");
 assert(/10\d\.\d+/.test(live.futurePrompt), "future price prompt should show a numeric ZF price");
@@ -242,18 +258,75 @@ assert(live.candidateHtml.includes("chain-map"), "candidate chain should render 
 assert(live.nodeHtml.includes("chain-map"), "adjusted node view should render as a horizontal option-chain map");
 assert(live.inventoryHtml.includes("DTE Call") && live.inventoryHtml.includes("DTE Put"), "inventory map should separate call and put sides by DTE");
 assert(/chain-spot-line put/.test(live.candidateHtml) && /chain-spot-line call/.test(live.candidateHtml), "spot row should repeat DTE labels for scrolled columns");
-assert(/Delta [^<]+ · 市值/.test(live.inventoryHtml), "inventory map should place market value beside delta");
+assert(live.inventoryHtml.includes("title-value"), "inventory map should place market value beside the option name");
 assert(live.candidateHtml.includes("title-income"), "candidate map should show actual premium income next to the option name");
 assert(/title-income">\+\$/.test(live.candidateHtml), "candidate map income should be placed immediately after the option name");
 assert(live.inventoryHtml.includes("invalid-zone"), "inventory map should whiten empty cells on the wrong side of spot");
 assert(!live.candidateHtml.includes("Bid/Ask - /"), "candidate map should exclude rows without a sellable bid");
-assert(live.candidateHtml.includes("has-position"), "candidate map should mark cells that already have inventory");
-assert(/当前 \d+张/.test(live.candidateHtml), "candidate map should show current inventory quantity");
-assert(/has-position[\s\S]*value="[1-9]\d*"/.test(live.candidateHtml), "existing inventory candidate input should default to current quantity");
-assert.strictEqual(live.currentOverlayCount, live.shortPositionCount, "candidate rows should include every current inventory position as an overlay");
-assert(live.has0DteCallOverlay, "candidate rows should include current 0DTE call inventory");
 assert(live.candidateStrikeWindowOk, "openable candidate rows should respect the strike-distance window");
 assert(!live.inventoryHtml.includes("strike-meta"), "inventory strike cells should not repeat DTE");
 assert(!live.candidateHtml.includes("strike-meta"), "candidate strike cells should not repeat DTE");
+
+const dteRecalculationResult = new vm.Script(`
+  const savedChainRows = chainRows;
+  chainRows = [
+    { symbol: "ZF", expiry: "20260708", dte: "0" },
+    { symbol: "ZF", expiry: "20260710", dte: "99" }
+  ];
+  const labels = dteDateLabels(chainRows);
+  const result = {
+    choices: candidateDteValues("ZF"),
+    labelKeys: Array.from(labels.keys()),
+    oneDteDates: Array.from(labels.get(1) || [])
+  };
+  chainRows = savedChainRows;
+  JSON.stringify(result);
+`).runInContext(context);
+const recalculatedDtes = JSON.parse(dteRecalculationResult);
+assert.deepStrictEqual(recalculatedDtes.choices, [1], "expired rows must not be clamped into 0DTE choices");
+assert.deepStrictEqual(recalculatedDtes.labelKeys, [1], "DTE headers must ignore stale CSV dte values and expired rows");
+assert.deepStrictEqual(recalculatedDtes.oneDteDates, ["2026-07-10"], "DTE header date must follow the recalculated expiry DTE");
+
+const parityDeltaResult = new vm.Script(`
+  const parityRows = [
+    { symbol: "ZF", expiry: "20260731", strike: "106.25", right: "C", delta: "0.74", bid: "0.70" },
+    { symbol: "ZF", expiry: "20260731", strike: "106.25", right: "P", delta: "", bid: "0.12" }
+  ];
+  const info = candidateDeltaInfo(parityRows[1], "P", parityRows);
+  const cell = chainEditableMapCell({
+    id: "parity-put", underlying: "ZF", expiry: "20260731", right: "P", strike: 106.25,
+    bid: 0.12, ask: 0.13, estimatedCredit: 0.12, multiplier: 1000, delta: info.value,
+    deltaEstimated: info.estimated, marginEstimate: 1200, finalScore: 1, currentContracts: 0
+  }, "put", false);
+  JSON.stringify({ info, cell });
+`).runInContext(context);
+const parityDelta = JSON.parse(parityDeltaResult);
+assert.strictEqual(parityDelta.info.estimated, true, "missing one-sided delta should use an explicitly estimated parity fallback");
+assert(Math.abs(parityDelta.info.value + 0.26) < 1e-9, "put delta parity fallback should use call delta minus the parity factor");
+assert(parityDelta.cell.includes("Delta≈-0.26"), "parity-estimated deltas must be visibly marked in candidate cells");
+
+const narrowedInventoryResult = new vm.Script(`
+  document.getElementById("inventoryDtePreset").value = "near";
+  render();
+  JSON.stringify({
+    planningDtes: Array.from(new Set(shortPositions.map(row => Math.round(row.dte)))),
+    inventoryHtml: document.getElementById("inventoryChain").innerHTML
+  });
+`).runInContext(context);
+const narrowedInventory = JSON.parse(narrowedInventoryResult);
+assert(!narrowedInventory.planningDtes.includes(farthestLiveDte), "0-2DTE planning scope should omit farther inventory");
+assert(narrowedInventory.inventoryHtml.includes(`${farthestLiveDte}DTE`), "inventory chain should retain holdings outside the planning scope");
+
+const legacyZcResult = new vm.Script(`
+  JSON.stringify(parseShortPositions([{
+    symbol: "ZC", secType: "FOP", position: "-1", expiry: "20260717", strike: "4.25", right: "P",
+    bid: "0.5", ask: "0.75", price: "0.625", marketValue: "-3125", valueSource: "estimated_from_market",
+    multiplier: "5000", avgCost: "34.48", costBasis: "-34.48", delta: "-0.12"
+  }], { ...config(), underlying: "ZC", allowed: ["ZC"], putInventoryDte: [0, 999], callInventoryDte: [0, 999] }, { respectInventoryDte: false }));
+`).runInContext(context);
+const legacyZc = JSON.parse(legacyZcResult)[0];
+assert.strictEqual(legacyZc.multiplier, 50, "ZC planner multiplier should be USD 50 per cent");
+assert.strictEqual(legacyZc.marketValue, -31.25, "legacy estimated ZC market value should be rescaled from cents");
+assert(Math.abs(legacyZc.unrealizedPnL - 3.23) < 1e-9, "legacy estimated ZC PnL should be recomputed from the corrected value");
 
 console.log("inventory planner dashboard smoke ok");
