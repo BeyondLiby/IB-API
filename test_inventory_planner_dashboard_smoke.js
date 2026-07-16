@@ -9,15 +9,41 @@ assert(!html.includes('id="stressTable"'), "pressure test table should be remove
 assert(!html.includes("压力场景"), "pressure test section should be removed");
 assert(html.includes('id="activeUnderlying"'), "product selector missing");
 assert(html.includes('id="refreshDefault"'), "refresh data button missing");
+assert(html.includes('id="refreshFull"'), "full refresh button missing");
+assert(html.includes('id="refreshScheduled"'), "US/Eastern date-aware refresh button missing");
 assert(html.includes('id="refreshProgress"'), "refresh progress bar missing");
+assert(html.includes('id="refreshDuration"'), "per-refresh duration display missing");
+assert(html.includes('id="refreshMonthZF"'), "ZF refresh contract selector missing");
+assert(html.includes('id="refreshMonthZN"'), "ZN refresh contract selector missing");
+assert(html.includes('id="refreshMonthZC"'), "ZC refresh contract selector missing");
 assert(!html.includes('id="putZonePreset"'), "old put zone dropdown should be removed");
 assert(html.includes('id="inventoryChain"'), "inventory option-chain view missing");
 assert(html.includes('id="productOverview"'), "product overview missing");
+assert(html.includes("深度ITM"), "deep-ITM future-equivalent identification missing");
+assert(html.includes('id="portfolioPremiumSummary"'), "portfolio premium summary missing");
+assert(html.includes('id="premiumExpiryTable"'), "premium by-expiry table missing");
+assert(html.includes('id="highDeltaPremiumThreshold"'), "configurable delta-weighted premium threshold missing");
+assert(/id="highDeltaPremiumThreshold"[^>]*value="0\.40"/.test(html), "delta-weighted premium threshold should default to 0.40");
+assert(html.includes('<section class="planner-state" hidden aria-hidden="true">'), "planner defaults should remain available as hidden internal state");
+assert(!html.includes("用户假设与交易区域"), "retired user-assumption panel should no longer be visible");
+assert(!html.includes("<h2>目标压力</h2>"), "retired target-pressure panel should no longer be visible");
+assert(/<section class="panel">\s*<div id="productOverview" class="product-overview"><\/div>\s*<\/section>\s*<div class="section-heading">\s*<h2>底层资产走势<\/h2>/.test(html), "product overview should sit immediately above underlying charts");
 assert(html.includes('id="greekDteTable"'), "DTE greek table missing");
 assert(html.includes('id="dailyPriceChart"'), "daily future price chart missing");
 assert(html.includes('id="intradayPriceChart"'), "intraday future price chart missing");
+assert(html.includes('id="togglePriceCharts"'), "underlying chart collapse button missing");
+assert(html.includes('id="priceChartSection"'), "collapsible underlying chart section missing");
+assert(/id="togglePriceCharts"[^>]*aria-expanded="false"[^>]*>展开<\/button>/.test(html), "underlying charts should default to collapsed");
+assert(/id="priceChartSection"[^>]*hidden/.test(html), "underlying chart panel should be hidden by default");
 assert(html.includes('id="chartRange"'), "chart range control missing");
 assert(html.includes('id="chartZoomIn"'), "chart zoom control missing");
+assert(html.includes('id="inventoryViewChain"'), "inventory option-chain view switch missing");
+assert(html.includes('id="inventoryViewMatrix"'), "inventory Strike by DTE view switch missing");
+assert(html.includes('id="candidateViewChain"'), "candidate option-chain view switch missing");
+assert(html.includes('id="candidateViewMatrix"'), "candidate Strike by DTE view switch missing");
+assert(html.includes(".inventory-axis-matrix"), "inventory matrix should provide enough scroll space to center the DTE axis");
+assert(/\.inventory-matrix-center-head strong\s*\{[^}]*font-size:\s*16px/s.test(html), "DTE axis heading should use a larger font");
+assert(/\.inventory-matrix-dte\s*\{[^}]*font-size:\s*14px/s.test(html), "DTE row labels should use a larger font");
 assert(html.includes("candidate-combo-panel"), "candidate and combo area should be one panel");
 assert(html.includes("sticky-side"), "combo side should stay sticky while chain scrolls");
 assert(!html.includes("可覆盖提示"), "node warning side panel should be removed");
@@ -43,6 +69,7 @@ class StubInput {
     this.value = value;
     this.dataset = {};
     this.listeners = {};
+    this.attributes = new Map();
   }
 
   addEventListener(type, callback) {
@@ -51,6 +78,14 @@ class StubInput {
 
   dispatch(type = "input") {
     if (this.listeners[type]) this.listeners[type]();
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
   }
 }
 
@@ -139,7 +174,108 @@ const context = vm.createContext({
 
 new vm.Script(script[1]).runInContext(context);
 
+const refreshContractMonths = JSON.parse(new vm.Script(`JSON.stringify(selectedRefreshContractMonths())`).runInContext(context));
+assert.deepStrictEqual(
+  refreshContractMonths,
+  { ZF: "202609", ZN: "202609", ZC: "202609" },
+  "refresh contract selectors should default every product to the September future"
+);
+assert.strictEqual(new vm.Script(`formatRefreshDuration(4.25)`).runInContext(context), "4.3秒", "short refresh duration formatting is wrong");
+assert.strictEqual(new vm.Script(`formatRefreshDuration(65)`).runInContext(context), "1分05秒", "long refresh duration formatting is wrong");
+
 elements.get("loadSample").click();
+
+assert.strictEqual(elements.get("priceChartSection").hidden, true, "underlying charts should start collapsed");
+assert.strictEqual(elements.get("togglePriceCharts").textContent, "展开", "collapsed chart button should offer to expand");
+assert.strictEqual(elements.get("togglePriceCharts").getAttribute("aria-expanded"), "false", "default chart accessibility state is wrong");
+elements.get("togglePriceCharts").click();
+assert.strictEqual(elements.get("priceChartSection").hidden, false, "chart expand button should restore the underlying chart panel");
+assert.strictEqual(elements.get("togglePriceCharts").textContent, "折叠", "expanded chart button should offer to collapse");
+assert.strictEqual(elements.get("togglePriceCharts").getAttribute("aria-expanded"), "true", "expanded chart button accessibility state is wrong");
+elements.get("togglePriceCharts").click();
+assert.strictEqual(elements.get("priceChartSection").hidden, true, "chart collapse button should hide the underlying chart panel");
+
+assert.strictEqual(elements.get("inventoryViewChain").getAttribute("aria-pressed"), "true", "inventory should default to the option-chain view");
+elements.get("inventoryViewMatrix").click();
+assert(elements.get("inventoryChain").innerHTML.includes("inventory-matrix"), "Strike by DTE inventory view should render a matrix");
+assert(elements.get("inventoryChain").innerHTML.includes("DTE ↓"), "inventory matrix should place DTE on the vertical axis");
+assert(elements.get("inventoryChain").innerHTML.includes("高 Strike ← · → 低 Strike"), "inventory matrix should place strikes around the current-price axis");
+assert(elements.get("inventoryChain").innerHTML.includes("inventory-matrix-center-head"), "inventory matrix should render DTE as the center column");
+assert(elements.get("inventoryChain").innerHTML.includes("inventory-axis-matrix"), "inventory matrix should make the DTE axis centerable in the viewport");
+assert(elements.get("inventoryChain").innerHTML.includes("matrix-side-badge"), "inventory matrix should distinguish Call and Put positions inside cells");
+assert(elements.get("inventoryChain").innerHTML.includes("matrix-position-pnl"), "inventory matrix should include unrealized PnL");
+assert(elements.get("inventoryChain").innerHTML.includes("Bid / Ask"), "inventory matrix should label bid and ask quotes");
+assert(elements.get("inventoryChainNote").textContent.includes("ITM Call/Put 会跨轴归位"), "inventory matrix note should explain ITM cross-axis placement");
+assert.strictEqual(elements.get("inventoryViewMatrix").getAttribute("aria-pressed"), "true", "inventory matrix accessibility state is wrong");
+elements.get("inventoryViewChain").click();
+assert(elements.get("inventoryChain").innerHTML.includes("chain-map"), "inventory option-chain switch should restore the original view");
+
+const centeredMatrixResult = new vm.Script(`
+  (() => {
+    const cfg = { ...config(), underlying: "ZF", allowed: ["ZF"] };
+    const rows = [
+      { underlying: "ZF", expiry: "20260710", dte: 1, strike: 107.25, right: "C", position: -1, contracts: 1, marketValue: -24, unrealizedPnL: 6, delta: 0.18, bid: 0.02, ask: 0.025, underlyingPrice: 106.75 },
+      { underlying: "ZF", expiry: "20260710", dte: 1, strike: 106.50, right: "P", position: -2, contracts: 2, marketValue: -31, unrealizedPnL: -4, delta: -0.22, bid: 0.03, ask: 0.035, underlyingPrice: 106.75 }
+    ];
+    const html = inventoryStrikeDteHtml(rows, cfg, { positions: rows, futures: [], markHighDelta: true, highDeltaThreshold: 0.40 });
+    return JSON.stringify({
+      html,
+      callIndex: html.indexOf('matrix-header-side">Call'),
+      dteIndex: html.indexOf("inventory-matrix-center-head"),
+      putIndex: html.indexOf('matrix-header-side">Put')
+    });
+  })()
+`).runInContext(context);
+const centeredMatrix = JSON.parse(centeredMatrixResult);
+assert(centeredMatrix.callIndex >= 0, "centered inventory matrix should render Call strikes");
+assert(centeredMatrix.putIndex >= 0, "centered inventory matrix should render Put strikes");
+assert(centeredMatrix.callIndex < centeredMatrix.dteIndex && centeredMatrix.dteIndex < centeredMatrix.putIndex, "centered inventory matrix order must be Call, DTE, Put");
+assert(centeredMatrix.html.includes("PnL +$6"), "centered inventory matrix should show positive unrealized PnL");
+assert(centeredMatrix.html.includes("PnL $-4"), "centered inventory matrix should show negative unrealized PnL");
+
+const itmAxisResult = new vm.Script(`
+  (() => {
+    const axis = matrixAxisEntries([
+      { right: "C", strike: 109.50 },
+      { right: "C", strike: 109.25 },
+      { right: "P", strike: 109.50 },
+      { right: "P", strike: 109.00 }
+    ], 109.266);
+    const markedCard = inventoryMatrixPositionHtml({
+      underlying: "ZN", right: "C", strike: 109.25, position: -2, contracts: 2,
+      marketValue: -234, unrealizedPnL: -144, delta: 0.50, bid: 0.10938, ask: 0.125
+    }, 109.25, 109.266, { markHighDelta: true, highDeltaThreshold: 0.40 });
+    return JSON.stringify({ axis, markedCard });
+  })()
+`).runInContext(context);
+const itmAxis = JSON.parse(itmAxisResult);
+assert(itmAxis.axis.right.some(entry => entry.right === "C" && Math.abs(entry.strike - 109.25) < 1e-9 && entry.itm), "ITM Call should move to the low-strike side of the DTE axis");
+assert(itmAxis.axis.left.some(entry => entry.right === "P" && Math.abs(entry.strike - 109.50) < 1e-9 && entry.itm), "ITM Put should move to the high-strike side of the DTE axis");
+assert(itmAxis.markedCard.includes(">ITM<") && itmAxis.markedCard.includes(">高Δ<"), "ITM and high-Delta badges should be shown together");
+
+const deepItmExposureResult = new vm.Script(`
+  (() => {
+    const cfg = { ...config(), underlying: "ZN", allowed: ["ZN"], manualFuturePrice: 109.3125 };
+    const rows = [
+      { symbol: "ZN", secType: "FUT", position: -1, localSymbol: "ZNU6", delta: 1, underlyingPrice: 109.3125 },
+      { symbol: "ZN", secType: "FOP", position: 1, localSymbol: "HY3N6 C1087", expiry: "20260710", strike: 108.75, right: "C", mid: 0.5625, underlyingPrice: 109.3125, delta: 0.9769432151727014 },
+      { symbol: "ZN", secType: "FOP", position: 1, localSymbol: "ZN3N6 C1095", expiry: "20260710", strike: 109.5, right: "C", mid: 0.1, underlyingPrice: 109.3125, delta: 0.30 },
+      { symbol: "ZN", secType: "FOP", position: -1, localSymbol: "HY3N6 P1100", expiry: "20260710", strike: 110, right: "P", mid: 0.8, underlyingPrice: 109.3125, delta: -0.20 }
+    ];
+    const futures = parseFuturePositions(rows, cfg);
+    const exposure = portfolioDeltaExposure(rows, cfg, futures);
+    return JSON.stringify(exposure);
+  })()
+`).runInContext(context);
+const deepItmExposure = JSON.parse(deepItmExposureResult);
+assert.strictEqual(deepItmExposure.deepItmOptions.length, 1, "only the zero-time-value, near-unit-delta call should be a future equivalent");
+assert.strictEqual(deepItmExposure.deepItmOptions[0].localSymbol, "HY3N6 C1087", "the intended deep-ITM call was not identified");
+assert(Math.abs(deepItmExposure.deepItmOptions[0].timeValue) < 1e-9, "deep-ITM call time value should be zero");
+assert(Math.abs(deepItmExposure.deepItmFutureEquivalent - 0.9769432151727014) < 1e-9, "deep-ITM future-equivalent exposure is wrong");
+assert(Math.abs(deepItmExposure.optionDelta - 0.20) < 1e-9, "option delta should include short options only");
+assert.strictEqual(deepItmExposure.futureDelta, -1, "actual futures delta is wrong");
+assert(Math.abs(deepItmExposure.equivalentFutureDelta + 0.0230567848272986) < 1e-9, "equivalent futures should combine actual futures with deep-ITM long options only");
+assert(Math.abs(deepItmExposure.portfolioDelta - 0.1769432151727014) < 1e-9, "portfolio delta must equal short-option delta plus equivalent futures, excluding ordinary long options");
 
 assert(elements.get("targetSummary").innerHTML.includes("本月目标"), "target summary missing");
 assert(elements.get("targetSummary").innerHTML.includes("本月已完成"), "completed PnL summary missing");
@@ -153,8 +289,20 @@ assert(elements.get("greekSummary").innerHTML.includes("期货张数"), "future 
 assert(elements.get("futurePricePrompt").innerHTML.includes("手动期货价"), "manual future price input missing");
 assert(elements.get("productOverview").innerHTML.includes("ZF"), "product overview should include ZF");
 assert(elements.get("productOverview").innerHTML.includes("ZN"), "product overview should include ZN");
-assert(elements.get("productOverview").innerHTML.includes("期货"), "product overview should show futures quantity separately");
+assert(elements.get("productOverview").innerHTML.includes("等效期货"), "product overview should show actual futures plus deep-ITM equivalents");
 assert(elements.get("productOverview").innerHTML.includes("期权Delta"), "product overview delta should be explicitly option-only");
+assert(elements.get("productOverview").innerHTML.includes("组合Delta"), "product overview should include futures-aware portfolio delta");
+assert(!elements.get("productOverview").innerHTML.includes("保证金"), "product overview should no longer show margin");
+assert(elements.get("productOverview").innerHTML.includes("期权金指标"), "product overview should include delta-weighted premium");
+assert(elements.get("productOverview").innerHTML.includes("product-icon"), "product overview should include recognizable product icons");
+assert(elements.get("productOverview").innerHTML.includes("当前查看"), "product overview should mark the active product prominently");
+assert(elements.get("productOverview").innerHTML.includes("product-signal-row"), "product overview should include position and data status signals");
+assert(elements.get("productOverview").innerHTML.includes("product-metric-label"), "product metrics should include visual metric markers");
+assert(elements.get("portfolioPremiumSummary").innerHTML.includes("全部剩余权利金"), "overall premium total missing");
+assert(elements.get("portfolioPremiumSummary").innerHTML.includes("Delta 加权期权金"), "overall delta-weighted premium missing");
+assert(elements.get("premiumExpiryTable").innerHTML.includes("到期日"), "premium expiry overview missing expiry column");
+assert(elements.get("premiumExpiryTable").innerHTML.includes("剩余权利金"), "premium expiry overview missing raw premium");
+assert(elements.get("premiumExpiryTable").innerHTML.includes("Delta 加权期权金"), "premium expiry overview missing weighted premium");
 assert(elements.get("priceChartNote").textContent.includes("ZF"), "price chart should follow the selected product");
 assert(elements.get("priceChartNote").textContent.includes("范围"), "price chart note should include interactive range state");
 assert(elements.get("priceChartNote").textContent.includes("日线"), "price chart note should include daily chart coverage");
@@ -168,6 +316,16 @@ assert(elements.get("candidateTable").innerHTML.includes("Put"), "candidate chai
 assert(elements.get("candidateTable").innerHTML.includes("当前期货价"), "future price marker missing");
 assert(elements.get("candidateTable").innerHTML.includes("Bid/Ask"), "candidate full quote header missing");
 assert(elements.get("candidateTable").innerHTML.includes("2026-07-10"), "candidate chain should show readable expiry date above strikes");
+assert.strictEqual(elements.get("candidateViewMatrix").getAttribute("aria-pressed"), "true", "candidate chain should default to the Strike by DTE view");
+assert(elements.get("candidateTable").innerHTML.includes("candidate-matrix"), "candidate Strike by DTE view should render a centered matrix");
+assert(elements.get("candidateTable").innerHTML.includes("高 Strike ← · → 低 Strike"), "candidate matrix should use the same current-price-centered strike axis");
+assert(elements.get("candidateTable").innerHTML.includes("保证金"), "candidate matrix should retain margin information");
+assert(elements.get("candidateTable").innerHTML.includes("评分"), "candidate matrix should retain score information");
+elements.get("candidateViewChain").click();
+assert(elements.get("candidateTable").innerHTML.includes("chain-map"), "candidate option-chain switch should restore the original view");
+assert.strictEqual(elements.get("candidateViewChain").getAttribute("aria-pressed"), "true", "candidate option-chain accessibility state is wrong");
+elements.get("candidateViewMatrix").click();
+assert(elements.get("candidateTable").innerHTML.includes("candidate-matrix"), "candidate matrix switch should restore the centered view");
 assert(elements.get("beforeAfter").innerHTML.includes("当前"), "before/after table missing current row");
 assert(elements.get("nodeTable").innerHTML.includes("106.500"), "short position strike missing");
 assert(!elements.get("nodeTable").innerHTML.includes("ZF-P-105.500"), "long option leaked into core node table");
@@ -254,10 +412,11 @@ assert(live.putDeltaHtml.includes('value="0.5"'), "delta limit should allow 0.50
 assert(/\d+\.\d+\s\/\s\d+\.\d+/.test(live.inventoryHtml), "inventory chain should show bid/ask quotes from the option chain");
 assert(/-\d+ 张 zf \d/.test(live.inventoryHtml), "inventory chain should use compact signed position names");
 assert(live.inventoryHtml.includes("chain-map"), "inventory chain should render as a horizontal option-chain map");
-assert(live.candidateHtml.includes("chain-map"), "candidate chain should render as a horizontal option-chain map");
+assert(live.candidateHtml.includes("candidate-matrix"), "candidate chain should render as a centered Strike by DTE matrix");
 assert(live.nodeHtml.includes("chain-map"), "adjusted node view should render as a horizontal option-chain map");
 assert(live.inventoryHtml.includes("DTE Call") && live.inventoryHtml.includes("DTE Put"), "inventory map should separate call and put sides by DTE");
-assert(/chain-spot-line put/.test(live.candidateHtml) && /chain-spot-line call/.test(live.candidateHtml), "spot row should repeat DTE labels for scrolled columns");
+assert(live.candidateHtml.includes("高 Strike ← · → 低 Strike"), "candidate matrix should place high and low strikes around the DTE axis");
+assert(live.candidateHtml.includes("当前期货价"), "candidate DTE axis should show the current futures price");
 assert(live.inventoryHtml.includes("title-value"), "inventory map should place market value beside the option name");
 assert(live.candidateHtml.includes("title-income"), "candidate map should show actual premium income next to the option name");
 assert(/title-income">\+\$/.test(live.candidateHtml), "candidate map income should be placed immediately after the option name");
@@ -304,6 +463,83 @@ const parityDelta = JSON.parse(parityDeltaResult);
 assert.strictEqual(parityDelta.info.estimated, true, "missing one-sided delta should use an explicitly estimated parity fallback");
 assert(Math.abs(parityDelta.info.value + 0.26) < 1e-9, "put delta parity fallback should use call delta minus the parity factor");
 assert(parityDelta.cell.includes("Delta≈-0.26"), "parity-estimated deltas must be visibly marked in candidate cells");
+
+const premiumMetricResult = new vm.Script(`
+  JSON.stringify({
+    lowDelta: deltaWeightedPremium(100, -0.30),
+    customThreshold: deltaWeightedPremium(100, -0.30, 0.25),
+    displayedThresholdDelta: deltaWeightedPremium(100, -0.3952),
+    thresholdDelta: deltaWeightedPremium(100, -0.40),
+    highDelta: deltaWeightedPremium(100, 0.80)
+  });
+`).runInContext(context);
+const premiumMetric = JSON.parse(premiumMetricResult);
+assert.strictEqual(premiumMetric.lowDelta, 100, "low-delta premium should remain unadjusted");
+assert(Math.abs(premiumMetric.customThreshold - 70) < 1e-9, "custom premium threshold should be applied immediately");
+assert(Math.abs(premiumMetric.displayedThresholdDelta - 60.48) < 1e-9, "a delta displayed as 0.40 should enter the weighted metric using its actual value");
+assert(Math.abs(premiumMetric.thresholdDelta - 60) < 1e-9, "0.40 delta premium should be weighted by 1-|delta|");
+assert(Math.abs(premiumMetric.highDelta - 20) < 1e-9, "high-delta premium weighting is incorrect");
+
+const highDeltaMarkerResult = new vm.Script(`
+  const marked = chainReadonlyMapCell({
+    underlying: "ZN", position: -1, contracts: 1, strike: 109.25, right: "C",
+    delta: 0.3952, marketValue: -100, bid: 0.09, ask: 0.11
+  }, "call", false, { markHighDelta: true, highDeltaThreshold: 0.40 });
+  const unmarked = chainReadonlyMapCell({
+    underlying: "ZN", position: -1, contracts: 1, strike: 109.25, right: "C",
+    delta: 0.30, marketValue: -100, bid: 0.09, ask: 0.11
+  }, "call", false, { markHighDelta: true, highDeltaThreshold: 0.40 });
+  JSON.stringify({ marked, unmarked });
+`).runInContext(context);
+const highDeltaMarker = JSON.parse(highDeltaMarkerResult);
+assert(highDeltaMarker.marked.includes("high-delta"), "a position displayed at the high-delta threshold should be highlighted");
+assert(highDeltaMarker.marked.includes("高Delta ≥0.40"), "high-delta position should show the configured threshold badge");
+assert(!highDeltaMarker.unmarked.includes("high-delta"), "a position below the configured threshold should not be highlighted");
+
+const latestChainDeltaResult = new vm.Script(`
+  const latestDeltaSavedChainRows = chainRows;
+  chainRows = [
+    { symbol: "ZN", conId: "777", expiry: "20260717", dte: "2", strike: "109.25", right: "C", delta: "0.3952", bid: "0.10" },
+    { symbol: "ZN", conId: "888", expiry: "20260717", dte: "2", strike: "109.25", right: "C", delta: "0.22", bid: "0.09" }
+  ];
+  const cfg = { ...config(), underlying: "ZN", allowed: ["ZN"] };
+  const positionDelta = enrichPositionQuote({
+    conId: 777, underlying: "ZN", expiry: "20260717", dte: 2, strike: 109.25, right: "C",
+    remainingPremium: 100, delta: 0.20, gamma: 0, theta: 0, vega: 0
+  }, cfg);
+  const chainFallback = enrichPositionQuote({
+    conId: 777, underlying: "ZN", expiry: "20260717", dte: 2, strike: 109.25, right: "C",
+    remainingPremium: 100, delta: 0, deltaObserved: false, gamma: 0, theta: 0, vega: 0
+  }, cfg);
+  chainRows = latestDeltaSavedChainRows;
+  JSON.stringify({ positionDelta, chainFallback });
+`).runInContext(context);
+const latestChainDelta = JSON.parse(latestChainDeltaResult);
+assert(Math.abs(latestChainDelta.positionDelta.delta - 0.20) < 1e-9, "an observed position delta must not be overwritten by an older chain snapshot");
+assert.strictEqual(latestChainDelta.positionDelta.weightedPremium, 100, "the observed position delta should drive weighted premium");
+assert(Math.abs(latestChainDelta.chainFallback.delta - 0.3952) < 1e-9, "a missing position delta should use the exact-conId chain delta");
+assert(Math.abs(latestChainDelta.chainFallback.weightedPremium - 60.48) < 1e-9, "exact-conId fallback delta should drive weighted premium");
+
+const snapshotFreshnessResult = new vm.Script(`
+  const quoteRows = [
+    { symbol: "ZN", snapshotTimeUtc: "2026-07-15T10:00:00Z" },
+    { symbol: "ZN", snapshotTimeUtc: "2026-07-07T10:00:00Z" }
+  ];
+  const latest = latestProductSnapshotMs(quoteRows, "ZN");
+  JSON.stringify({ fresh: candidateSnapshotIsCurrent(quoteRows[0], latest), stale: candidateSnapshotIsCurrent(quoteRows[1], latest) });
+`).runInContext(context);
+const snapshotFreshness = JSON.parse(snapshotFreshnessResult);
+assert.strictEqual(snapshotFreshness.fresh, true, "latest candidate snapshot should remain eligible");
+assert.strictEqual(snapshotFreshness.stale, false, "lagging candidate snapshot should be excluded");
+
+const zcUnderlyingResult = new vm.Script(`
+  const zcCfg = { ...config(), underlying: "ZC", allowed: ["ZC"], putStrikeMin: 424, callStrikeMax: 490 };
+  const rowSpot = rowReferencePrice({ symbol: "ZC", undPrice: "4.655" }, "ZC", 443.5);
+  JSON.stringify({ rowSpot, putIsOtm: strikeWithinOpenWindow(450, "P", rowSpot, zcCfg) });
+`).runInContext(context);
+const zcUnderlying = JSON.parse(zcUnderlyingResult);
+assert.strictEqual(zcUnderlying.rowSpot, 465.5, "ZC row-level underlying price should normalize to cents");
+assert.strictEqual(zcUnderlying.putIsOtm, true, "ZC OTM filtering should use the option row's own futures month");
 
 const narrowedInventoryResult = new vm.Script(`
   document.getElementById("inventoryDtePreset").value = "near";

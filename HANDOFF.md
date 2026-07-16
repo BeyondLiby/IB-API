@@ -1,32 +1,43 @@
 # 当前项目状态
 
-> 盘点时间：2026-07-15（Asia/Shanghai）
+> 盘点时间：2026-07-16（Asia/Shanghai）
 > 分支：`main`
-> HEAD：`9c272b1`（`2026-07-14更新`）
+> HEAD：`05f315e`（`Stabilize planner refresh and add margin what-if`）
 
 本仓库当前的主线是 **IBKR 美债/玉米期货期权数据刷新 + 本地卖方库存规划器**。推荐入口是 `open_inventory_planner.sh`（macOS）或 `open_inventory_planner.ps1`（Windows），页面地址默认是 `http://127.0.0.1:8766/sell_side_inventory_planner.html`。
 
-当前工作树不是干净状态：主线刷新、UI、ZC 报价单位、DTE 时区和启动脚本等改动尚未提交；`open_inventory_planner.ps1`、`stop_inventory_planner.ps1`、`security_audit_report.md`、`test_zc_quote_units.py` 和本文件是新增文件。接手前先运行 `git status --short`，不要覆盖或回退这些改动。
+当前工作树包含尚未提交的 planner 修复：完整合约缓存选择、品种感知的 fast refresh 窗口、候选报价快照一致性、ZC 逐合约期货价筛选，以及总体/分日期/分品种权利金统计。接手前先运行 `git status --short`，不要覆盖或回退这些改动。
 
-2026-07-15 的验证结果：
+2026-07-16 的验证结果：
 
-- `conda run -n ib python -m unittest discover -v`：67/67 通过。
+- `conda run -n ib python -m unittest discover -v`：92/92 通过。
 - `test_inventory_planner_dashboard_smoke.js`、`test_carry_dashboard_render_smoke.js`、`A_Share_Option/test_dashboard_smoke.js`、`A_Share_Option/test_arbitrage_monitor.js`：全部通过。
 - 主线 Python 文件 `py_compile` 通过；macOS 启停脚本 `bash -n` 通过。
 - Windows PowerShell 启停脚本只做了静态审阅，尚未在 Windows 实机验证。
 - 盘点时 `127.0.0.1:8766` 正在监听；这是运行态快照，不应假定下次接手时仍然在线。
 - 最近一次 fast refresh 成功完成并发布 36 条持仓、1,150 条期权链和 2,678 条 K 线，但 `require-ready` 仍为 false：ZF、ZN、ZC 的链是新鲜完整的，K 线最新停在 2026-07-09，约 123 小时，超过 72 小时阈值。
+- 2026-07-16 真实页面观察到的新持仓快刷用时为 8.7–10.6 秒；此前包含候选链报价扫描的同类刷新约 43 秒。代码和回归测试确认 fast 不会调用候选链报价扫描。
 
 ## 已完成
 
 - 已形成一键主流程：启动 planner server、刷新 IB 持仓/期权链/K 线、发布稳定 CSV、页面轮询刷新状态。
-- 已区分 fast/full refresh：fast 只刷新近端、现价附近及持仓相关合约，保留缓存的远端链和已有 K 线；full 刷新更广的配置链，并在未指定 `--skip-bars` 时刷新 K 线。
-- 已支持循环 fast refresh；macOS 使用 `launchd` 常驻，Windows 使用隐藏后台 Python 进程，默认每 3 分钟刷新。
+- 已区分 fast/full/scheduled refresh：fast 通过流式订阅更新持仓期权，并刷新底层期货价，完全跳过候选链报价扫描、保留候选链和 K 线；full 刷新既有 filter 选中的全部候选链，并在未指定 `--skip-bars` 时刷新 K 线；scheduled 按美国东部日期在两者间自动选择。
+- 已支持循环 scheduled refresh；macOS 使用 `launchd` 常驻，Windows 使用隐藏后台 Python 进程，默认每 1 分钟启动一轮。循环按“本轮开始时间”计算间隔，不会额外叠加本轮耗时。
+- scheduled 会分别检查 ZF、ZN、ZC 候选链行的 `snapshotTimeUtc`：任一品种不是美国东部当天或缺失就执行 full，全部为当天才 fast；不能用 fast 重新发布后的 CSV 修改时间代替快照日期。
+- 页面已拆分“持仓快刷 / 全量刷新 / 智能刷新”三个按钮，并显示本次刷新实时/最终用时、请求模式、实际模式和智能判定原因。
 - 已增加 `host + port + client-id` 本机进程锁，避免相同 IB client-id 并发刷新；外层持锁时底层 CLI 使用 `--no-client-lock`，避免自锁。
 - `refresh_status.json` 已改为临时文件加 `os.replace` 的原子写入；服务端对短暂的 JSON 写入窗口和过期的 running 状态有容错。
 - 持仓刷新现在只等待 `POSITIONS` 启动数据，减少账户更新流超时；空快照默认不会覆盖非空本地缓存，IB/链/K 线失败时可按 strict 参数决定失败或回退缓存。
 - planner 页面已支持 ZF、ZN、ZC，候选 DTE 独立筛选；库存 DTE 只约束统计/规划范围，实际持仓节点仍展示全部到期日。
 - 候选 DTE 列头和单元格已统一按 `America/New_York` 当日从 expiry 重算；过期行不会再被压入 0DTE。单边 Delta 缺失但同 expiry/strike 对侧 Delta 可用时，页面按 Put-Call parity 近似补全并明确显示 `Delta≈`。
+- 完整合约缓存查找已排除 `*_selected_contracts.csv`，并优先使用带有效 chain summary 的完整宇宙，避免 fast refresh 把过滤子集反复写成主缓存、逐步丢失到期日和 Strike。
+- 页面刷新已增加 ZF/ZN/ZC 合约月份选择，默认都只取 `202609`，可切到 `202612` 或两个月份；单月份刷新可复用并过滤双月份完整缓存。每个品种的期货价现在只获取一次并直接传给期权链筛选，不再在 sidecar 和 chain 阶段重复请求。2026-07-16 实测 fast refresh 从双月份约 62 秒降到单月份约 43 秒。
+- fast refresh 的 Strike 窗口已按品种报价单位设置：ZF/ZN 使用点数，ZC 使用美分；ZC 实际刷新从 0 个报价恢复到 226 个。页面候选还会排除落后该品种最新快照超过 24 小时的报价，避免新旧报价混用造成跨 Strike 权利金倒挂。
+- ZC 候选按每条期权的 `undPrice` 判断 OTM，支持同一品种不同期货月份；默认 Strike 窗口覆盖完整 ZC 链，不再把有效候选全部挡掉。
+- 组合资产总览已增加全部剩余权利金、按精确到期日的权利金总览，以及分品种 `Delta 加权期权金`：阈值位于“用户假设与交易区域”，默认 `0.40`；优先使用持仓快照 Delta，缺失时才按同一 `conId` 从链数据补齐；当 `|Delta|` 四舍五入到两位小数后达到阈值时，按实际 Delta 以 `权利金 × (1 - |Delta|)` 折算。
+- 分品种组合资产卡已移除保证金字段，并把“期货”改为 `等效期货`：实际期货 Delta 加上符合条件的深度实值多头期权 `position × Delta`。`期权Delta` 只统计 short 期权；`组合Delta = short期权Delta + 等效期货`，普通多头期权不进入组合 Delta。深度实值多头要求确实价内、`|Delta| ≥ 0.90` 且时间价值不超过一个期权最小跳动。2026-07-16 的 `HY3N6 C1087` 在用户所示快照中 Delta `0.9769`、时间价值 `0`；最新页面快照为约 `+0.97` 张期货等价、时间价值 `0.01563`（一个最小跳动），两者都符合识别条件。
+- “底层资产走势”模块默认折叠，可通过标题右侧按钮展开或重新折叠；折叠不停止数据计算，展开时会按当前配置重绘日线与 30 分钟图。
+- “当前库存行权节点”会按同一个可调 Delta 阈值，把达到阈值的卖方持仓显示为红色单元格并附加“高Delta”徽标；阈值变化时标记必须同步更新。
 - planner 的候选过滤继续执行 DTE、OTM、Strike、Delta 和 `bid > 0` 约束；候选排序仍是收益、分布、风险、目标贴合的综合分。
 - ZC 单位已统一：页面展示的 1 美分/蒲式耳对应每张 50 美元；同时保留 IB 原始 `contractMultiplier=5000`，避免再把 ZC 市值放大 100 倍。
 - DTE 统一使用 `America/New_York` 交易日，并优先按到期日重算，避免复用 CSV 中已经过期的 DTE 值。
@@ -79,7 +90,7 @@ sell_side_inventory_planner.html        中文卖方库存规划与手动 what-i
 | `open_inventory_planner.sh` / `stop_inventory_planner.sh` | macOS `launchd` 启停 | 停止时必须先移除 job，否则会被自动拉起 |
 | `open_inventory_planner.ps1` / `stop_inventory_planner.ps1` | Windows 后台启停 | 依赖仓库内 `.venv\Scripts\python.exe`，待实机验证 |
 | `sell_side_inventory_planner.html` | 当前主 UI，JavaScript 全内嵌 | UI 行为由 Node smoke test 固化 |
-| `target_treasury_monitor_clean/cli.py` | 所有 clean workflow 的 CLI 和 `refresh-carry-html` 实现 | 负责缓存回退、fast/full、发布与 readiness |
+| `target_treasury_monitor_clean/cli.py` | 所有 clean workflow 的 CLI 和 `refresh-carry-html` 实现 | fast 不得调用候选链报价扫描；full 负责完整 filter、发布与 readiness |
 | `target_treasury_monitor_clean/inventory_planner_server.py` | 8766 HTTP 服务、manifest、刷新 API 和状态 API | 当前不适合公网暴露 |
 | `target_treasury_monitor_clean/inventory_planner.py` | 可测试的库存解析、候选评分、敞口和压力计算 | 与 HTML 中的同类逻辑保持一致 |
 | `target_treasury_monitor_clean/ib_client_lock.py` | 跨进程 IB client-id 锁及 owner 元数据 | 锁粒度是 host/port/client-id |
@@ -99,15 +110,15 @@ sell_side_inventory_planner.html        中文卖方库存规划与手动 what-i
 
 1. **禁止直接公网暴露 8766。** 当前服务把仓库根目录交给 `SimpleHTTPRequestHandler`，没有认证；匿名用户可读取源码、`.git`、数据和日志，并可 POST 触发本地刷新。无认证 Cloudflare Quick Tunnel 的综合风险为 Critical。
 2. `macro_calendar.py` 中存在已进入 Git 历史的硬编码 FMP API Key；必须撤销/轮换并改成只从环境变量或密钥存储读取。README 和配置里也有硬编码账户标识，需要脱敏。
-3. 当前稳定 CSV 未达到完整就绪：ZF/ZN/ZC 的期权链新鲜，但三者 K 线均过期。fast refresh 有意保留已有 K 线，所以需要 full refresh 或单独刷新 bars 才能修复。
-   另外，fast refresh 只主动刷新近端 DTE，远端缓存仍可能缺一侧 Greeks；页面可以用对侧 Delta 做明确标记的 parity 近似，但两侧 Delta 都缺失时仍不会进入候选。
+3. 当前稳定 CSV 未达到完整就绪：ZF/ZN/ZC 的期权链新鲜，但三者 K 线均过期。fast refresh 有意保留已有 K 线和候选链，所以需要 full refresh 或单独刷新 bars 才能修复。
+   fast 不再刷新任何候选期权；候选链只在 full 中更新。落后该品种最新快照 24 小时以上的报价不会作为候选。页面可以用对侧 Delta 做明确标记的 parity 近似，但两侧 Delta 都缺失时仍不会进入候选。
 4. 最近一次刷新日志出现 `ZF 202607` futures contract 的 “No security definition” 错误；流程仍靠后续持仓/缓存完成。需要清理已失效月份的合约引用或提高合约月份选择的稳健性。
 5. 三个稳定 CSV 仍是直接覆盖写入，可能被并发读取到截断文件，或产生 positions/chain/bars 跨版本混合；目前只有 `refresh_status.json` 是原子写入。
 6. HTTP 服务缺少认证、CSRF/Origin 校验、body/频率/任务数量限制、安全响应头和日志轮转；状态 API 还会返回 stdout、账户、路径及错误细节。
 7. `target_treasury_monitor_clean/` 还没有真正消除旧层依赖；直接删除 `target_treasury_account_monitor/` 或 `treasury_fop_chain.py` 会破坏主流程。
 8. 默认账户、月份（当前为 202609/202612）、端口和 client-id 偏运行环境化且会过期；接手时必须先检查，不要长期把当前月份当常量。
 9. 依赖只有未锁版本的 `requirements_dashboard.txt`，没有完整 lockfile、CI、秘密扫描或依赖审计。
-10. full refresh、PowerShell 后台生命周期和安全整改后的公网访问尚无端到端自动化验证；现有测试主要覆盖纯逻辑、本地 HTTP 和缓存降级。
+10. full refresh、PowerShell 后台生命周期和安全整改后的公网访问尚无端到端自动化验证；当前持仓快刷已实测，scheduled 的日期分流由自动化测试和 dry-run 覆盖。
 
 ## 下一步任务
 
@@ -132,15 +143,23 @@ sell_side_inventory_planner.html        中文卖方库存规划与手动 what-i
 
 - **绝不自动下单。** planner 只展示、筛选和做手动 what-if；IB 连接保持 `readonly=True`，不得加入 `placeOrder`/`cancelOrder` 调用。
 - 核心库存只统计 `position < 0` 的期权；多头期权和非期权不进入核心卖方库存计算。
+- `期权Delta` 必须只统计 `position < 0` 的 short 期权；`等效期货 = 实际期货 position × Delta + 深度实值多头期权 position × Delta`；`组合Delta = 期权Delta + 等效期货`。普通多头期权不得进入组合 Delta。
+- 深度实值多头期权的期货等价张数固定为 `position × Delta`，识别条件为确实价内、`|Delta| ≥ 0.90` 且时间价值不超过该品种一个期权最小跳动；short 深度实值期权已经属于期权 Delta，不得再作为等效期货重复计算。
+- 组合资产总览卡不显示保证金；候选期权矩阵中的单笔保证金估算仍保留，除非另有明确需求。
 - 0DTE 只是普通 DTE 桶，不因来源被特殊分类，也不能自动标成高风险。
 - Put 和 Call 必须分开统计与筛选；库存 DTE 只约束统计/规划，不能把范围外的真实当前持仓从“当前库存行权节点”隐藏。
 - 候选 DTE 只控制候选矩阵；用户选中的 DTE 列即使没有合约也应保留。候选必须继续满足所选 DTE、OTM、Strike、Delta 和可卖 `bid > 0` 条件。
 - 过期 expiry 不得折叠成 0DTE；DTE 列头日期和候选单元格必须使用同一套 expiry 重算结果。Parity 补全的 Delta 必须显示 `≈`，不得冒充 IB 直接 Greeks；bid 缺失仍不能成为可卖候选。
+- `*_selected_contracts.csv` 只是报价过滤结果，绝不能作为完整合约缓存复用；候选报价不得混用与该品种最新快照相差超过 24 小时的旧行。
+- ZC 的 OTM 判断必须使用期权行对应的 `undPrice`，不能把 202609 与 202612 的期权都套在同一个期货价上。
+- `Delta 加权期权金` 固定为：阈值由页面参数控制、默认 `0.40`；优先使用持仓快照 Delta，缺失时才按同一 `conId` 从链数据补齐；`|Delta|` 四舍五入到两位小数后达到阈值时乘以 `1 - 实际|Delta|`，显示值低于阈值则不折减；它只是风险观察指标，不能在文案中表述为确定胜率。
 - 候选排序必须保留收益、分布、风险和目标贴合的综合评分，不能退化为只按最高权利金排序。
 - 节点集中度只告警，不禁止用户覆盖；手动数量变化必须即时重算 Before / Added / After、压力场景和节点暴露。
-- fast refresh 必须强制包含当前持仓 conId，只刷新近端/近价合约，并保留缓存中的远端链和已有 K 线；IB 暂时失败时，只能在有有效缓存且未启用 strict 参数时降级。
+- fast refresh 必须用持仓快照中的 conId 更新持仓期权行情，完全跳过候选链报价扫描，并保留已有候选链和 K 线；IB 暂时失败时，只能在有有效缓存且未启用 strict 参数时降级。
+- 合约月份选择约束 full 的普通候选行情订阅和每轮底层期货价；不能排除月份外的当前持仓 conId。full 中已取得的同品种期货价必须复用于当轮期权筛选，不能在 sidecar 和 chain 阶段重复请求。
 - 空持仓快照默认不得覆盖非空缓存；只有账户确认空仓并显式使用 `--allow-empty-positions` 时才允许发布空持仓。
 - full refresh 必须覆盖更广的配置链，并在没有 `--skip-bars` 时尝试更新 K 线。
+- scheduled 必须以 `America/New_York` 日期逐品种检查候选链的实际快照时间；任一配置品种缺失或非当天都要 full，全部为当天才 fast。
 - 相同 `host + port + client-id` 不得并发刷新；状态文件必须保持完整 JSON，重复页面请求应复用正在运行的任务。
 - 稳定数据文件名和 manifest/status API 兼容性不得随意改动：页面默认读取 `data/planner/carry_dashboard_{positions,chain,bars}.csv`。
 - ZC 行权价按美分/蒲式耳展示；估值现金乘数必须是 50 美元/显示单位，同时保留 IB 原始 `contractMultiplier=5000`。ZF/ZN 的现有 1000 乘数语义不能受影响。

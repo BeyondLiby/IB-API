@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+from datetime import date, datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -10,6 +12,7 @@ import tempfile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
+from zoneinfo import ZoneInfo
 
 from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
 from target_treasury_monitor_clean.ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
@@ -20,6 +23,7 @@ STATUS_REPLACE_ATTEMPTS = 20
 STATUS_REPLACE_RETRY_SECONDS = 0.05
 STATUS_LOG_TAIL_LINES = 160
 STATUS_UPDATE_MIN_INTERVAL = 0.5
+US_EASTERN = ZoneInfo("America/New_York")
 
 
 def split_extra_args(values: list[str] | None) -> list[str]:
@@ -31,7 +35,8 @@ def split_extra_args(values: list[str] | None) -> list[str]:
     return out
 
 
-def build_refresh_command(args: argparse.Namespace) -> list[str]:
+def build_refresh_command(args: argparse.Namespace, *, refresh_mode: str | None = None) -> list[str]:
+    refresh_mode = str(refresh_mode or args.refresh_mode)
     command = [
         args.python,
         "-m",
@@ -77,7 +82,7 @@ def build_refresh_command(args: argparse.Namespace) -> list[str]:
         # its status-file updates. The child CLI must not try to acquire it again.
         "--no-client-lock",
     ]
-    if args.refresh_mode == "fast":
+    if refresh_mode == "fast":
         command.append("--fast-refresh")
     if args.market_data_max_dte:
         command.extend(["--market-data-max-dte", str(args.market_data_max_dte)])
@@ -115,6 +120,110 @@ def build_refresh_command(args: argparse.Namespace) -> list[str]:
         command.append("--require-ready")
     command.extend(split_extra_args(args.extra_refresh_arg))
     return command
+
+
+def eastern_trade_date(now: datetime | None = None) -> date:
+    """Return the current calendar date in the US/Eastern market timezone."""
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current.astimezone(US_EASTERN).date()
+
+
+def _timestamp_eastern_date(value: object, *, utc_hint: bool = False) -> date | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc if utc_hint else US_EASTERN)
+    return parsed.astimezone(US_EASTERN).date()
+
+
+def chain_eastern_dates_by_product(html_data_dir: Path | str) -> dict[str, date]:
+    """Read each product's newest option snapshot date without trusting mtime.
+
+    Fast refreshes intentionally republish the cached candidate chain, which
+    changes its mtime.  The per-row snapshot timestamp therefore remains the
+    reliable signal for whether today's broad chain has already been fetched.
+    """
+    path = Path(html_data_dir) / "carry_dashboard_chain.csv"
+    if not path.exists():
+        return {}
+    newest: dict[str, date] = {}
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                product = str(
+                    row.get("symbol") or row.get("underlying") or row.get("root") or ""
+                ).strip().upper()
+                if not product:
+                    continue
+                snapshot_date = (
+                    _timestamp_eastern_date(row.get("snapshotTimeUtc"), utc_hint=True)
+                    or _timestamp_eastern_date(row.get("snapshotTime"))
+                )
+                if snapshot_date is not None and (
+                    product not in newest or snapshot_date > newest[product]
+                ):
+                    newest[product] = snapshot_date
+    except OSError:
+        return {}
+    return newest
+
+
+def latest_chain_eastern_date(html_data_dir: Path | str) -> date | None:
+    """Return the oldest product snapshot date used by the daily freshness gate."""
+    dates = chain_eastern_dates_by_product(html_data_dir)
+    return min(dates.values()) if dates else None
+
+
+def _configured_products(args: argparse.Namespace) -> tuple[str, ...]:
+    roots: list[str] = []
+    for value in (getattr(args, "chain_specs", ""), getattr(args, "zc_chain_specs", "")):
+        for part in str(value or "").split(";"):
+            text = part.strip()
+            if not text:
+                continue
+            root = text.split("=" if "=" in text else ":", 1)[0].strip().upper()
+            if root and root not in roots:
+                roots.append(root)
+    return tuple(roots)
+
+
+def select_effective_refresh_mode(
+    args: argparse.Namespace,
+    *,
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    """Resolve scheduled mode to one daily full refresh plus position fast refreshes."""
+    requested_mode = str(args.refresh_mode)
+    if requested_mode != "scheduled":
+        return requested_mode, f"explicit {requested_mode} refresh"
+    current_date = eastern_trade_date(now)
+    dates = chain_eastern_dates_by_product(args.html_data_dir)
+    products = _configured_products(args)
+    stale = [
+        root for root in products
+        if dates.get(root) != current_date
+    ]
+    if products and not stale:
+        detail = ", ".join(f"{root}={dates[root].isoformat()}" for root in products)
+        return "fast", (
+            f"candidate chains are current for US/Eastern {current_date.isoformat()} "
+            f"({detail})"
+        )
+    stale_detail = ", ".join(
+        f"{root}={dates[root].isoformat() if root in dates else 'missing'}"
+        for root in (stale or products or ("chain",))
+    )
+    return "full", (
+        f"candidate chain date mismatch for US/Eastern {current_date.isoformat()} "
+        f"({stale_detail})"
+    )
 
 
 def build_server_command(args: argparse.Namespace) -> list[str]:
@@ -216,6 +325,10 @@ def _refresh_status_payload(
     progress: int,
     stage: str,
     running: bool,
+    duration_seconds: float = 0.0,
+    requested_mode: str = "",
+    effective_mode: str = "",
+    refresh_decision: str = "",
     finished: str = "",
     returncode: int | None = None,
 ) -> dict[str, object]:
@@ -228,6 +341,10 @@ def _refresh_status_payload(
         "returncode": returncode,
         "progress": progress,
         "stage": stage,
+        "durationSeconds": round(max(float(duration_seconds), 0.0), 3),
+        "requestedMode": requested_mode,
+        "effectiveMode": effective_mode,
+        "refreshDecision": refresh_decision,
         "lines": lines[-80:],
         # The browser only needs useful recent diagnostics.  Keeping the full
         # pretty-printed validation report made every progress write larger
@@ -238,8 +355,14 @@ def _refresh_status_payload(
 
 
 def run_refresh_once(args: argparse.Namespace) -> None:
-    command = build_refresh_command(args)
-    print_refresh_request_summary(args, command)
+    effective_mode, refresh_decision = select_effective_refresh_mode(args)
+    command = build_refresh_command(args, refresh_mode=effective_mode)
+    print_refresh_request_summary(
+        args,
+        command,
+        effective_mode=effective_mode,
+        refresh_decision=refresh_decision,
+    )
     if args.dry_run:
         return
     try:
@@ -249,7 +372,12 @@ def run_refresh_once(args: argparse.Namespace) -> None:
             args.client_id,
             purpose="refresh-inventory-data",
         ):
-            _run_refresh_once_locked(args, command)
+            _run_refresh_once_locked(
+                args,
+                command,
+                effective_mode=effective_mode,
+                refresh_decision=refresh_decision,
+            )
     except IbClientLockBusy as exc:
         print(str(exc), flush=True)
         raise SystemExit(str(exc)) from exc
@@ -257,6 +385,7 @@ def run_refresh_once(args: argparse.Namespace) -> None:
 
 def run_scheduled_refresh(args: argparse.Namespace) -> None:
     while True:
+        cycle_started_at = time.monotonic()
         started = time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n[{started}] refresh started", flush=True)
         try:
@@ -277,14 +406,23 @@ def run_scheduled_refresh(args: argparse.Namespace) -> None:
         print(f"[{finished}] refresh finished", flush=True)
         if args.repeat_minutes <= 0:
             return
-        sleep_seconds = max(args.repeat_minutes * 60, 1)
+        cycle_elapsed = time.monotonic() - cycle_started_at
+        sleep_seconds = max(args.repeat_minutes * 60 - cycle_elapsed, 1)
         print(f"sleeping {sleep_seconds:.0f}s; press Ctrl+C to stop", flush=True)
         time.sleep(sleep_seconds)
 
 
-def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> None:
+def _run_refresh_once_locked(
+    args: argparse.Namespace,
+    command: list[str],
+    *,
+    effective_mode: str,
+    refresh_decision: str,
+) -> None:
     lines: list[str] = []
     started = time.strftime("%Y-%m-%d %H:%M:%S")
+    started_at = time.monotonic()
+    requested_mode = str(args.refresh_mode)
     write_refresh_status(args, {
         "ok": None,
         "running": True,
@@ -293,6 +431,10 @@ def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> No
         "returncode": None,
         "progress": 8,
         "stage": "启动刷新进程",
+        "durationSeconds": 0.0,
+        "requestedMode": requested_mode,
+        "effectiveMode": effective_mode,
+        "refreshDecision": refresh_decision,
         "lines": [],
         "stdout": "",
         "stderr": "",
@@ -325,6 +467,10 @@ def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> No
                         progress=progress,
                         stage=stage,
                         running=True,
+                        duration_seconds=now - started_at,
+                        requested_mode=requested_mode,
+                        effective_mode=effective_mode,
+                        refresh_decision=refresh_decision,
                     ),
                 )
                 last_status_write = now
@@ -342,6 +488,10 @@ def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> No
             progress=progress,
             stage=stage,
             running=False,
+            duration_seconds=time.monotonic() - started_at,
+            requested_mode=requested_mode,
+            effective_mode=effective_mode,
+            refresh_decision=refresh_decision,
             finished=finished,
             returncode=returncode,
         ),
@@ -350,14 +500,22 @@ def _run_refresh_once_locked(args: argparse.Namespace, command: list[str]) -> No
         raise SystemExit(f"refresh command failed with exit code {returncode}; see output above")
 
 
-def print_refresh_request_summary(args: argparse.Namespace, command: list[str]) -> None:
+def print_refresh_request_summary(
+    args: argparse.Namespace,
+    command: list[str],
+    *,
+    effective_mode: str,
+    refresh_decision: str,
+) -> None:
     mode_note = (
-        "fast: request near/current-position option quotes, preserve cached far-chain rows and bars"
-        if args.refresh_mode == "fast"
-        else "full: request the broader configured option chain and refresh bars unless skipped"
+        "fast: refresh positions through streaming subscriptions, futures prices, and preserve candidate chain/bars"
+        if effective_mode == "fast"
+        else "full: refresh every option selected by the configured filter and refresh bars unless skipped"
     )
     print("refresh request:", flush=True)
-    print(f"  mode: {args.refresh_mode} ({mode_note})", flush=True)
+    print(f"  requested_mode: {args.refresh_mode}", flush=True)
+    print(f"  effective_mode: {effective_mode} ({mode_note})", flush=True)
+    print(f"  refresh_decision: {refresh_decision}", flush=True)
     print(
         f"  ib: {args.ib_host}:{args.ib_port}, client_id={args.client_id}, "
         f"market_data={args.market_data_type}, account={args.account or '<none>'}",
@@ -403,11 +561,16 @@ def main() -> None:
     parser.add_argument("--ib-port", type=int, default=4001)
     parser.add_argument("--client-id", type=int, default=7316)
     parser.add_argument("--market-data-type", default="delayed", help="live, frozen, delayed, delayed_frozen, or 1/2/3/4")
-    parser.add_argument("--chain-specs", default="ZF=202609,202612;ZN=202609,202612")
-    parser.add_argument("--zc-chain-specs", default="ZC=202609,202612", help="Optional, for example ZC=202609,202612.")
+    parser.add_argument("--chain-specs", default="ZF=202609;ZN=202609")
+    parser.add_argument("--zc-chain-specs", default="ZC=202609", help="Optional, for example ZC=202609 or ZC=202609,202612.")
     parser.add_argument("--bars-contracts", default="", help="Optional ROOT:YYYYMM list. Defaults to first month in each chain spec.")
     parser.add_argument("--positions-csv", default="", help="Reuse positions CSV instead of refreshing IB positions.")
-    parser.add_argument("--refresh-mode", choices=("fast", "full"), default="fast", help="fast preserves cached far-chain/bars rows; full refreshes the broader chain.")
+    parser.add_argument(
+        "--refresh-mode",
+        choices=("fast", "full", "scheduled"),
+        default="fast",
+        help="fast refreshes held positions only; full refreshes the filtered candidate chain; scheduled runs full once per US/Eastern date, otherwise fast.",
+    )
     parser.add_argument("--full-refresh", dest="refresh_mode", action="store_const", const="full", help="Shortcut for --refresh-mode full.")
     parser.add_argument("--positions-timeout", type=float, default=30.0)
     parser.add_argument("--strict-positions", action="store_true")

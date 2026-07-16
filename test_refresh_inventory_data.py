@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -17,11 +18,15 @@ from urllib.request import Request, urlopen
 import pandas as pd
 
 from target_treasury_monitor_clean import cli as clean_cli
+from target_treasury_monitor_clean.cli import _product_filter_widths
 from refresh_inventory_data import run_scheduled_refresh
+from refresh_inventory_data import chain_eastern_dates_by_product
+from refresh_inventory_data import select_effective_refresh_mode
 from refresh_inventory_data import wait_for_planner_server
 from refresh_inventory_data import write_refresh_status
 from target_treasury_monitor_clean.chain_batch import _contract_cache_path
 from target_treasury_monitor_clean.chain_batch import _find_existing_contract_cache
+from target_treasury_monitor_clean.chain_batch import _load_cached_chain
 from target_treasury_monitor_clean.chain_batch import _select_market_data_contracts
 from target_treasury_monitor_clean.ib_client_lock import IbClientLockBusy
 from target_treasury_monitor_clean.ib_client_lock import acquire_ib_client_lock
@@ -29,6 +34,7 @@ from target_treasury_monitor_clean.ib_client_lock import ib_client_lock_metadata
 from target_treasury_monitor_clean.ib_client_lock import ib_client_lock_path
 from target_treasury_monitor_clean.inventory_planner_server import inventory_planner_handler
 from target_treasury_monitor_clean.inventory_planner_server import inventory_planner_manifest
+from target_treasury_monitor_clean.inventory_planner_server import normalize_refresh_contract_months
 from target_treasury_monitor_clean.inventory_planner_server import read_latest_refresh_status
 from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
 from target_treasury_monitor_clean.inventory_planner_server import refresh_status_http_code
@@ -122,6 +128,9 @@ class PlannerServerReadinessTests(unittest.TestCase):
             self.assertEqual(payload["returncode"], 1)
             self.assertIn("fake refresh", payload["stdout"])
             self.assertIn("--refresh-mode full", payload["stdout"])
+            self.assertGreaterEqual(payload["durationSeconds"], 0)
+            self.assertEqual(payload["requestedMode"], "full")
+            self.assertEqual(payload["effectiveMode"], "full")
 
     def test_inventory_refresh_post_reuses_running_latest_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -154,6 +163,44 @@ class PlannerServerReadinessTests(unittest.TestCase):
             self.assertTrue(payload["running"])
             self.assertEqual(payload["jobId"], "latest")
             self.assertEqual(payload["progress"], 42)
+
+    def test_inventory_refresh_post_forwards_selected_contract_months(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            script = directory / "refresh_inventory_data.py"
+            script.write_text("import sys\nprint('ARGS', ' '.join(sys.argv[1:]))\n", encoding="utf-8")
+            handler = inventory_planner_handler(directory)
+            server = self.start_server(handler)
+            url = f"http://127.0.0.1:{server.server_address[1]}/api/refresh-inventory-data"
+            body = json.dumps({
+                "mode": "fast",
+                "contractMonths": {"ZF": "202609", "ZN": "202609", "ZC": "202609"},
+            }).encode("utf-8")
+
+            response = urlopen(Request(url, data=body, method="POST", headers={"Content-Type": "application/json"}), timeout=5)
+            payload = json.loads(response.read().decode("utf-8"))
+            status_url = f"{url}/status?job={payload['jobId']}"
+            for _ in range(20):
+                status_response = urlopen(status_url, timeout=5)
+                payload = json.loads(status_response.read().decode("utf-8"))
+                if payload["running"] is False:
+                    break
+                time.sleep(0.1)
+
+            self.assertTrue(payload["ok"])
+            self.assertIn("--chain-specs ZF=202609;ZN=202609", payload["stdout"])
+            self.assertIn("--zc-chain-specs ZC=202609", payload["stdout"])
+            self.assertEqual(payload["contractMonths"], {"ZF": "202609", "ZN": "202609", "ZC": "202609"})
+
+    def test_contract_month_payload_rejects_invalid_or_incomplete_values(self) -> None:
+        self.assertEqual(
+            normalize_refresh_contract_months({"ZF": "2026-09", "ZN": "202609", "ZC": "202609"}),
+            {"ZF": "202609", "ZN": "202609", "ZC": "202609"},
+        )
+        with self.assertRaisesRegex(ValueError, "missing ZC"):
+            normalize_refresh_contract_months({"ZF": "202609", "ZN": "202609"})
+        with self.assertRaisesRegex(ValueError, "invalid ZC"):
+            normalize_refresh_contract_months({"ZF": "202609", "ZN": "202609", "ZC": "202613"})
 
     def test_recent_invalid_refresh_status_is_treated_as_in_progress(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,6 +263,15 @@ class PlannerServerReadinessTests(unittest.TestCase):
         self.assertEqual(stage, "IB client-id 已被其他刷新占用")
         self.assertEqual(refresh_status_http_code({"returncode": 1, "stdout": message}), 409)
 
+    def test_refresh_progress_distinguishes_future_price_from_option_quotes(self) -> None:
+        progress, stage = refresh_progress_from_output([
+            "ZC future prices sidecar: source=fresh",
+            "ZC option quotes: selected=120, months=202609",
+        ])
+
+        self.assertEqual(progress, 74)
+        self.assertEqual(stage, "刷新ZC期权行情")
+
     def test_wait_for_planner_server_rejects_plain_static_server(self) -> None:
         server = self.start_server(QuietStaticHandler)
 
@@ -267,6 +323,85 @@ class CachedPositionsTests(unittest.TestCase):
 
 
 class ScheduledRefreshTests(unittest.TestCase):
+    def test_scheduled_mode_uses_fast_only_when_every_product_is_current_in_us_eastern(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp)
+            chain = planner / "carry_dashboard_chain.csv"
+            chain.write_text(
+                "symbol,snapshotTimeUtc\n"
+                "ZF,2026-07-16T16:00:00+00:00\n"
+                "ZN,2026-07-16T16:01:00+00:00\n"
+                "ZC,2026-07-16T16:02:00+00:00\n",
+                encoding="utf-8",
+            )
+            args = SimpleNamespace(
+                refresh_mode="scheduled",
+                html_data_dir=planner,
+                chain_specs="ZF=202609;ZN=202609",
+                zc_chain_specs="ZC=202609",
+            )
+
+            mode, decision = select_effective_refresh_mode(
+                args,
+                now=datetime(2026, 7, 16, 20, 0, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual(mode, "fast")
+            self.assertIn("US/Eastern 2026-07-16", decision)
+            self.assertEqual(
+                chain_eastern_dates_by_product(planner),
+                {"ZF": datetime(2026, 7, 16).date(), "ZN": datetime(2026, 7, 16).date(), "ZC": datetime(2026, 7, 16).date()},
+            )
+
+    def test_scheduled_mode_runs_full_when_one_product_is_stale_in_us_eastern(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp)
+            (planner / "carry_dashboard_chain.csv").write_text(
+                "symbol,snapshotTimeUtc\n"
+                "ZF,2026-07-16T16:00:00+00:00\n"
+                "ZN,2026-07-16T16:01:00+00:00\n"
+                "ZC,2026-07-15T16:02:00+00:00\n",
+                encoding="utf-8",
+            )
+            args = SimpleNamespace(
+                refresh_mode="scheduled",
+                html_data_dir=planner,
+                chain_specs="ZF=202609;ZN=202609",
+                zc_chain_specs="ZC=202609",
+            )
+
+            mode, decision = select_effective_refresh_mode(
+                args,
+                now=datetime(2026, 7, 16, 20, 0, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual(mode, "full")
+            self.assertIn("ZC=2026-07-15", decision)
+
+    def test_us_eastern_date_gate_does_not_use_local_asia_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp)
+            (planner / "carry_dashboard_chain.csv").write_text(
+                "symbol,snapshotTimeUtc\n"
+                "ZF,2026-07-15T20:00:00+00:00\n"
+                "ZN,2026-07-15T20:00:00+00:00\n"
+                "ZC,2026-07-15T20:00:00+00:00\n",
+                encoding="utf-8",
+            )
+            args = SimpleNamespace(
+                refresh_mode="scheduled",
+                html_data_dir=planner,
+                chain_specs="ZF=202609;ZN=202609",
+                zc_chain_specs="ZC=202609",
+            )
+
+            mode, _decision = select_effective_refresh_mode(
+                args,
+                now=datetime(2026, 7, 16, 1, 0, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual(mode, "fast")
+
     def test_repeating_refresh_keeps_running_after_one_failure(self) -> None:
         args = SimpleNamespace(repeat_minutes=3)
         with (
@@ -333,6 +468,11 @@ class IbClientLockTests(unittest.TestCase):
 
 
 class FastRefreshSelectionTests(unittest.TestCase):
+    def test_fast_filter_widths_are_product_aware(self) -> None:
+        self.assertEqual(_product_filter_widths("ZF", 1.0, 3.0, fast_refresh=True), (1.0, 3.0))
+        self.assertEqual(_product_filter_widths("ZN", 1.0, 3.0, fast_refresh=True), (1.5, 3.0))
+        self.assertEqual(_product_filter_widths("ZC", 1.0, 3.0, fast_refresh=True), (20.0, 40.0))
+
     def test_force_con_ids_are_kept_outside_fast_dte_window(self) -> None:
         contracts = [SimpleNamespace(conId=1), SimpleNamespace(conId=2)]
         metadata = pd.DataFrame(
@@ -392,6 +532,69 @@ class FastRefreshSelectionTests(unittest.TestCase):
 
             self.assertEqual(preferred.name, "ZF_FOP_Static_202609_202612_from_auto_to_all_contracts.csv")
             self.assertEqual(_find_existing_contract_cache(settings, preferred), old_cache)
+
+    def test_contract_cache_ignores_filtered_selection_and_poisoned_preferred(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            settings = StaticChainSettings(root="ZN", future_months="202609,202612", output_dir=output_dir)
+            full = output_dir / "ZN_FOP_Static_202609_202612_from_20260707_to_all_contracts.csv"
+            selected = output_dir / "ZN_FOP_Static_202609_202612_from_20260707_to_all_selected_contracts.csv"
+            preferred = _contract_cache_path(settings)
+            full.write_text("conId\n1\n2\n", encoding="utf-8")
+            selected.write_text("conId\n2\n", encoding="utf-8")
+            preferred.write_text("conId\n2\n", encoding="utf-8")
+            full.with_name(full.name.replace("_contracts.csv", "_chain_summary.csv")).write_text(
+                "expiration,count\n20260717,2\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(_find_existing_contract_cache(settings, preferred), full)
+
+    def test_single_month_refresh_reuses_and_filters_two_month_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            settings = StaticChainSettings(
+                root="ZF",
+                future_months="202609",
+                output_dir=output_dir,
+                request_market_data=False,
+            )
+            cache = output_dir / "ZF_FOP_Static_202609_202612_from_20260707_to_all_contracts.csv"
+            metadata = pd.DataFrame([
+                {
+                    "underlyingMonth": "202609", "conId": 1, "secType": "FOP", "symbol": "ZF",
+                    "localSymbol": "A", "tradingClass": "A", "lastTradeDateOrContractMonth": "20260717",
+                    "strike": 107.0, "right": "C", "multiplier": "1000", "exchange": "CBOT", "currency": "USD",
+                },
+                {
+                    "underlyingMonth": "202612", "conId": 2, "secType": "FOP", "symbol": "ZF",
+                    "localSymbol": "B", "tradingClass": "B", "lastTradeDateOrContractMonth": "20261016",
+                    "strike": 107.0, "right": "C", "multiplier": "1000", "exchange": "CBOT", "currency": "USD",
+                },
+            ])
+            metadata.to_csv(cache, index=False)
+            cache.with_name(cache.name.replace("_contracts.csv", "_chain_summary.csv")).write_text(
+                "underlyingMonth,candidateCount\n202609,1\n202612,1\n",
+                encoding="utf-8",
+            )
+            preferred = _contract_cache_path(settings)
+
+            self.assertEqual(_find_existing_contract_cache(settings, preferred), cache)
+            with patch(
+                "target_treasury_monitor_clean.chain_batch._fresh_or_cached_future_prices",
+                side_effect=AssertionError("provided futures prices must be reused"),
+            ):
+                result = _load_cached_chain(
+                    None,
+                    settings,
+                    cache,
+                    future_prices=pd.DataFrame([{"month": "202609", "price": 107.0}]),
+                    future_price_source="fresh",
+                )
+
+            self.assertEqual(result["metadata"]["underlyingMonth"].astype(str).tolist(), ["202609"])
+            self.assertEqual([contract.conId for contract in result["contracts"]], [1])
+            self.assertEqual(result["future_prices"]["month"].astype(str).tolist(), ["202609"])
 
 
 class RefreshCarryHtmlFallbackTests(unittest.TestCase):
@@ -469,6 +672,47 @@ class RefreshCarryHtmlFallbackTests(unittest.TestCase):
             refreshed_chain = pd.read_csv(directory / "carry_dashboard_chain.csv")
             self.assertEqual(len(refreshed_chain), 1)
             self.assertEqual(refreshed_chain.iloc[0]["symbol"], "ZF")
+
+    def test_fast_refresh_never_scans_candidate_option_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            positions = pd.DataFrame(
+                [{"symbol": "ZF", "secType": "FOP", "position": -1, "conId": 101}]
+            )
+            chain = pd.DataFrame(
+                [{"symbol": "ZF", "conId": 101, "expiration": "20260717", "strike": 107.5, "right": "P", "bid": 0.01, "ask": 0.02}]
+            )
+            bars = pd.DataFrame(
+                [{"symbol": "ZF", "date": "2026-07-16 09:30:00", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}]
+            )
+            directory.mkdir(parents=True, exist_ok=True)
+            positions_path = directory / "carry_dashboard_positions.csv"
+            positions.to_csv(positions_path, index=False)
+            chain.to_csv(directory / "carry_dashboard_chain.csv", index=False)
+            bars.to_csv(directory / "carry_dashboard_bars.csv", index=False)
+            args = self.args_for(directory, positions_path)
+
+            with (
+                patch.object(clean_cli, "ib_connection", return_value=nullcontext(object())),
+                patch.object(
+                    clean_cli,
+                    "refresh_future_prices_sidecar",
+                    return_value=(pd.DataFrame(), "missing", "", directory / "future_prices.csv"),
+                ),
+                patch.object(
+                    clean_cli,
+                    "refresh_static_chain",
+                    side_effect=AssertionError("fast refresh must not scan candidate chain"),
+                ) as refresh_chain,
+            ):
+                clean_cli._run_refresh_carry_html(
+                    args,
+                    IBSettings(host="127.0.0.1", port=4001, client_id=7316, account="U16251798"),
+                )
+
+            self.assertEqual(refresh_chain.call_count, 0)
+            refreshed_chain = pd.read_csv(directory / "carry_dashboard_chain.csv")
+            self.assertEqual(refreshed_chain["conId"].astype(int).tolist(), [101])
 
 
 if __name__ == "__main__":

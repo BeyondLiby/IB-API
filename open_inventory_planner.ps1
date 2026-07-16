@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [int]$Port = 8766,
-    [double]$RefreshMinutes = 3,
+    [double]$RefreshMinutes = 1,
     [int]$ClientId = 7316
 )
 
@@ -38,12 +38,12 @@ $ServerArguments = @(
 $RefreshArguments = @(
     "-u",
     ('"{0}"' -f $RefreshScript),
-    "--refresh-mode", "fast",
+    "--refresh-mode", "scheduled",
     "--repeat-minutes", $RefreshMinutes,
     "--client-id", $ClientId
 ) -join " "
 
-Write-Host "Starting background planner and fast refresh every $RefreshMinutes minutes..."
+Write-Host "Starting background planner with US/Eastern date-aware refresh every $RefreshMinutes minute(s)..."
 Write-Host "Server log: $ServerLog"
 Write-Host "Refresh log: $RefreshLog"
 $ServerProcess = Start-Process -FilePath $Python -ArgumentList $ServerArguments -WorkingDirectory $ProjectRoot `

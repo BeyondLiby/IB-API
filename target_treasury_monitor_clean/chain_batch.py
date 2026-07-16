@@ -56,18 +56,45 @@ def _contract_cache_path(settings: StaticChainSettings) -> Path:
 
 
 def _find_existing_contract_cache(settings: StaticChainSettings, preferred: Path) -> Path:
-    """Reuse the newest compatible universe cache, including older date-keyed files."""
-    if preferred.exists():
-        return preferred
+    """Reuse a compatible full universe cache, never a filtered selection cache.
+
+    ``*_selected_contracts.csv`` also matches the old glob.  Treating that
+    filtered file as the qualified universe permanently shrinks later refreshes
+    (and therefore removes expirations and strikes from the planner).  Prefer a
+    cache with a non-empty chain-summary sidecar; a rebuilt full cache always
+    writes that sidecar, while a poisoned/partial cache generally does not.
+    """
     root = settings.root.upper()
-    month_key = "_".join(normalize_months(settings.future_months))
+    requested_months = set(normalize_months(settings.future_months))
     output_dir = Path(settings.output_dir)
-    candidates = sorted(
-        output_dir.glob(f"{root}_FOP_Static_{month_key}_from_*_to_*_contracts.csv"),
-        key=lambda path: (path.stat().st_mtime, path.name),
-        reverse=True,
-    )
-    return candidates[0] if candidates else preferred
+    candidates = {
+        path
+        for path in output_dir.glob(f"{root}_FOP_Static_*_from_*_to_*_contracts.csv")
+        if not path.name.endswith("_selected_contracts.csv")
+        and requested_months.issubset(set(_cache_months(path, root)))
+    }
+    if preferred.exists():
+        candidates.add(preferred)
+    if not candidates:
+        return preferred
+
+    def cache_score(path: Path) -> tuple[int, int, int, float, str]:
+        summary_path = _sidecar_path(path, "_chain_summary.csv")
+        has_summary = int(summary_path.exists() and summary_path.stat().st_size > 4)
+        cached_months = set(_cache_months(path, root))
+        exact_months = int(cached_months == requested_months)
+        return has_summary, exact_months, -len(cached_months - requested_months), path.stat().st_mtime, path.name
+
+    return max(candidates, key=cache_score)
+
+
+def _cache_months(path: Path, root: str) -> tuple[str, ...]:
+    prefix = f"{root.upper()}_FOP_Static_"
+    name = path.name
+    if not name.startswith(prefix) or "_from_" not in name:
+        return ()
+    month_key = name[len(prefix):].split("_from_", 1)[0]
+    return tuple(part for part in month_key.split("_") if len(part) == 6 and part.isdigit())
 
 
 def _sidecar_path(contract_cache_path: Path, suffix: str) -> Path:
@@ -111,7 +138,7 @@ def _fresh_or_cached_future_prices(
                     prices["price"] = price.where(price.abs() >= 20, price * 100)
                 valid = pd.to_numeric(prices.get("price"), errors="coerce").notna().sum() if "price" in prices.columns else 0
                 if valid:
-                    return prices, "fresh", ""
+                    return _limit_future_prices_to_months(prices, months), "fresh", ""
                 error = "fresh future price request returned no valid price"
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
@@ -121,8 +148,15 @@ def _fresh_or_cached_future_prices(
             price = pd.to_numeric(prices["price"], errors="coerce")
             prices["price"] = price.where(price.abs() >= 20, price * 100)
         if not prices.empty:
-            return prices, "cache", error
+            return _limit_future_prices_to_months(prices, months), "cache", error
     return pd.DataFrame(), "missing", error
+
+
+def _limit_future_prices_to_months(prices: pd.DataFrame, months: list[str]) -> pd.DataFrame:
+    if prices.empty or "month" not in prices.columns:
+        return prices.copy()
+    allowed = set(str(month) for month in months)
+    return prices[prices["month"].astype(str).isin(allowed)].copy().reset_index(drop=True)
 
 
 def refresh_future_prices_sidecar(
@@ -131,18 +165,55 @@ def refresh_future_prices_sidecar(
 ) -> tuple[pd.DataFrame, str, str, Path]:
     """Refresh and save the futures price sidecar independently of option-chain refresh."""
     preferred_contract_cache_path = _contract_cache_path(settings)
-    contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
-    future_prices_path = _sidecar_path(contract_cache_path, "_future_prices.csv")
+    compatible_contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
+    future_prices_path = _sidecar_path(preferred_contract_cache_path, "_future_prices.csv")
+    compatible_future_prices_path = _sidecar_path(compatible_contract_cache_path, "_future_prices.csv")
+    cache_path = future_prices_path if future_prices_path.exists() else compatible_future_prices_path
     future_prices, source, error = _fresh_or_cached_future_prices(
         ib,
         settings,
         normalize_months(settings.future_months),
-        future_prices_path,
+        cache_path,
     )
     if source == "fresh" and not future_prices.empty:
         future_prices_path.parent.mkdir(parents=True, exist_ok=True)
         future_prices.to_csv(future_prices_path, index=False, encoding="utf-8-sig")
     return future_prices, source, error, future_prices_path
+
+
+def _filter_cached_universe_to_months(
+    contracts: list[Any],
+    metadata: pd.DataFrame,
+    chain_summary: pd.DataFrame,
+    settings: StaticChainSettings,
+) -> tuple[list[Any], pd.DataFrame, pd.DataFrame]:
+    """Reuse a broader cache while exposing only selected futures months.
+
+    Current-position conIds remain included even if they fall outside the
+    selected months, so a month choice can never hide a live held contract.
+    """
+    if metadata.empty or "underlyingMonth" not in metadata.columns:
+        return contracts, metadata.copy(), chain_summary.copy()
+
+    requested_months = set(normalize_months(settings.future_months))
+    force_con_ids = {int(value) for value in settings.force_con_ids if int(value) > 0}
+    out = metadata.copy()
+    con_ids = pd.to_numeric(out.get("conId"), errors="coerce").astype("Int64")
+    month_mask = out["underlyingMonth"].astype(str).isin(requested_months)
+    force_mask = con_ids.isin(force_con_ids) if force_con_ids else False
+    out = out[month_mask | force_mask].copy().reset_index(drop=True)
+    kept_con_ids = set(pd.to_numeric(out.get("conId"), errors="coerce").dropna().astype(int).tolist())
+    filtered_contracts = [
+        contract for contract in contracts
+        if int(getattr(contract, "conId", 0) or 0) in kept_con_ids
+    ]
+
+    filtered_summary = chain_summary.copy()
+    if not filtered_summary.empty and "underlyingMonth" in filtered_summary.columns:
+        filtered_summary = filtered_summary[
+            filtered_summary["underlyingMonth"].astype(str).isin(requested_months)
+        ].copy().reset_index(drop=True)
+    return filtered_contracts, out, filtered_summary
 
 
 def _dte(expiration: object) -> int | None:
@@ -224,7 +295,15 @@ def _select_market_data_contracts(
     return selected_contracts, selected
 
 
-def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_path: Path) -> dict[str, Any]:
+def _load_cached_chain(
+    ib: IB,
+    settings: StaticChainSettings,
+    contract_cache_path: Path,
+    *,
+    future_prices: pd.DataFrame | None = None,
+    future_price_source: str | None = None,
+    future_price_error: str = "",
+) -> dict[str, Any]:
     """Load valid contracts from cache and optionally refresh only market data."""
     contracts, metadata = load_universe(contract_cache_path)
     months = normalize_months(settings.future_months)
@@ -233,7 +312,22 @@ def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_pat
     chain_summary_path = _sidecar_path(contract_cache_path, "_chain_summary.csv")
     future_prices_path = _sidecar_path(contract_cache_path, "_future_prices.csv")
     chain_summary = _read_csv_or_empty(chain_summary_path) if chain_summary_path.exists() else pd.DataFrame()
-    future_prices, future_price_source, future_price_error = _fresh_or_cached_future_prices(ib, settings, months, future_prices_path)
+    contracts, metadata, chain_summary = _filter_cached_universe_to_months(
+        contracts,
+        metadata,
+        chain_summary,
+        settings,
+    )
+    if future_prices is None:
+        future_prices, future_price_source, future_price_error = _fresh_or_cached_future_prices(
+            ib,
+            settings,
+            months,
+            future_prices_path,
+        )
+    else:
+        future_prices = _limit_future_prices_to_months(future_prices, months)
+        future_price_source = future_price_source or "provided"
     selected_contracts, selected_metadata = _select_market_data_contracts(
         contracts,
         metadata,
@@ -244,6 +338,7 @@ def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_pat
     snapshot = pd.DataFrame()
     monitor_frame = pd.DataFrame()
     if settings.request_market_data and selected_contracts:
+        print(f"{root} option quotes: selected={len(selected_contracts)}, months={','.join(months)}", flush=True)
         snapshot = snapshot_in_batches(
             ib,
             selected_contracts,
@@ -287,7 +382,14 @@ def _load_cached_chain(ib: IB, settings: StaticChainSettings, contract_cache_pat
     }
 
 
-def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainResult:
+def refresh_static_chain(
+    ib: IB,
+    settings: StaticChainSettings,
+    *,
+    future_prices: pd.DataFrame | None = None,
+    future_price_source: str | None = None,
+    future_price_error: str = "",
+) -> StaticChainResult:
     """Refresh a static FOP chain, reusing qualified contracts when available."""
     preferred_contract_cache_path = _contract_cache_path(settings)
     contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
@@ -296,7 +398,14 @@ def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainRe
         and not settings.force_rebuild_contract_cache
         and contract_cache_path.exists()
     ):
-        result = _load_cached_chain(ib, settings, contract_cache_path)
+        result = _load_cached_chain(
+            ib,
+            settings,
+            contract_cache_path,
+            future_prices=future_prices,
+            future_price_source=future_price_source,
+            future_price_error=future_price_error,
+        )
     else:
         result = fetch_static_fop_chain_snapshot(
             ib,
@@ -316,12 +425,19 @@ def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainRe
             request_market_data=False,
         )
         future_prices_path = _sidecar_path(preferred_contract_cache_path, "_future_prices.csv")
-        future_prices, future_price_source, future_price_error = _fresh_or_cached_future_prices(
-            ib,
-            settings,
-            normalize_months(settings.future_months),
-            future_prices_path,
-        )
+        if future_prices is None:
+            future_prices, future_price_source, future_price_error = _fresh_or_cached_future_prices(
+                ib,
+                settings,
+                normalize_months(settings.future_months),
+                future_prices_path,
+            )
+        else:
+            future_prices = _limit_future_prices_to_months(
+                future_prices,
+                normalize_months(settings.future_months),
+            )
+            future_price_source = future_price_source or "provided"
         if not future_prices.empty:
             result["future_prices"] = future_prices
         result["future_price_source"] = future_price_source
@@ -335,6 +451,11 @@ def refresh_static_chain(ib: IB, settings: StaticChainSettings) -> StaticChainRe
         snapshot = pd.DataFrame()
         monitor_frame = pd.DataFrame()
         if settings.request_market_data and selected_contracts:
+            print(
+                f"{settings.root.upper()} option quotes: selected={len(selected_contracts)}, "
+                f"months={','.join(normalize_months(settings.future_months))}",
+                flush=True,
+            )
             snapshot = snapshot_in_batches(
                 ib,
                 selected_contracts,

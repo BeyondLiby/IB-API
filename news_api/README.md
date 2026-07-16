@@ -24,7 +24,9 @@ news_api/
 ├─ article_fetcher.py       # 正文补全接口
 ├─ bark_client.py           # Bark 推送
 ├─ service.py               # 流水线编排
-├─ ib_client.py             # IB API 回调适配
+├─ verified_news_monitor.py # ib_async 实时适配、刷新证明和审计日志
+├─ live_news_monitor.py     # 实盘 CLI 入口
+├─ ib_client.py             # 旧版原生 ibapi 适配（离线兼容）
 ├─ subscription_manager.py  # 统一订阅管理
 └─ news_module_validation.ipynb
 ```
@@ -40,11 +42,17 @@ news_api/
 
 ## 快速离线校验
 
-在项目父目录运行：
+实盘入口使用项目已有的 `conda ib` 环境；新环境可先安装：
 
-```powershell
+```bash
+python -m pip install -r requirements_news.txt
+```
+
+离线规则测试：
+
+```bash
 python -m compileall news_api
-python -m pip install ipykernel
+python -m unittest -v test_verified_news_monitor.py
 ```
 
 如果只想验证最基本的“指定股票监控”和“实时新闻触发推送”，优先打开：
@@ -107,72 +115,57 @@ $env:NEWS_DASHBOARD_URL="http://127.0.0.1:8501"
 
 ## 接入 IBKR 实时新闻
 
-IB API 新闻要分成两类测试，不要混用：
+IB API 新闻分成两类，不能混用：
 
-- 股票合约新闻：`reqMktData(stock_contract, "mdoff,292:BRFG+BRFUPDN+DJNL", ...)`，适合持仓新闻监控。
-- BroadTape 全量新闻：`reqMktData(news_contract, "mdoff,292", ...)`，常见合约是 `BRF:BRF_ALL`、`BZ:BZ_ALL`、`FLY:FLY_ALL`，需要额外 API BroadTape 权限。
+- 股票合约新闻：`reqMktData(stock_contract, "mdoff,292:...", ...)`，适合持仓或自选股。
+- BroadTape：订阅 `NEWS` 合约，例如 `BRFG:BRFG_ALL`、`DJNL:DJNL_ALL`、`BZ:BZ_ALL`。这里的“全量”只表示该 provider 的整条新闻流，不等于所有媒体的全球新闻。
 
-最小化排查建议先打开：
+`live_news_monitor.py` 默认先调用 `reqNewsProviders()`，股票源使用账户实际返回的 provider；BroadTape 则逐个验证对应的 `*_ALL` 合约。不要把“请求已经发出”当成“订阅已经生效”。
 
-```text
-news_api/realtime_news_probe.ipynb
-```
+### 防止“假刷新”
 
-里面有两个独立测试：
+每次运行先保存历史基线，再把 IB 回调分为：
 
 ```text
-Test A: contract-specific stock news
-Test B: BroadTape all-news contracts
+SNAPSHOT  = article_id 已在订阅前的历史基线中
+WARMUP    = 刚订阅时补发的旧标题
+BACKFILL  = 发布时间早于订阅开始
+LIVE      = 新 article_id，且发布时间达到订阅开始时间
+DUPLICATE = 同一订阅重复收到相同 provider + article_id
 ```
 
-如果你要跑完整 CLI，并同时尝试持仓新闻和 BroadTape，可以执行：
+只有 `LIVE` 会进入 SQLite/评分/推送流水线。每个心跳还会请求 IB 服务器时间；心跳时间变化只证明连接活着，绝不计为新闻刷新。所有回调及判断都写入 append-only JSONL 审计日志。
 
-```powershell
-python live_news_monitor.py --mode both --list-providers --seconds 300 --print-every 10
+指定股票验收（历史接口每 60 秒交叉检查一次）：
+
+```bash
+conda run --no-capture-output -n ib python news_api/live_news_monitor.py \
+  --mode portfolio --symbols NVDA,AAPL,TSLA --seconds 600 \
+  --history-audit-symbol NVDA --history-poll-seconds 60
 ```
 
-确认能收到新闻后，再开启正文和 Bark：
+当前账户内所有可识别 BroadTape：
 
-```powershell
-$env:BARK_KEY="你的 Bark key"
-python live_news_monitor.py --mode both --list-providers --fetch-article --push --seconds 300
+```bash
+conda run --no-capture-output -n ib python news_api/live_news_monitor.py \
+  --mode all --broadtape-providers auto --seconds 600
 ```
 
-只测 BroadTape 全量新闻：
+持续等到第一条真实新增并以退出码验收：
 
-```powershell
-python live_news_monitor.py --mode all --broadtape-providers BRF+BZ+FLY --list-providers --seconds 300
+```bash
+conda run --no-capture-output -n ib python news_api/live_news_monitor.py \
+  --mode all --broadtape-providers BRFG+DJNL --seconds 1200 \
+  --stop-on-live --require-live
 ```
 
-只测持仓列表：
+### 判读结果
 
-```powershell
-python live_news_monitor.py --mode portfolio --provider-codes BRFG+BRFUPDN+DJNL --fetch-article --seconds 300
-```
-
-示例入口：
-
-```python
-from news_api.config import SETTINGS
-from news_api.ib_client import IBNewsClient
-from news_api.service import NewsService
-from news_api.subscription_manager import SubscriptionManager
-from news_api.watchlist import normalize_watchlist
-
-service = NewsService(settings=SETTINGS)
-client = IBNewsClient(service)
-client.start_api(SETTINGS.host, SETTINGS.port, SETTINGS.client_id)
-
-watchlist = normalize_watchlist()
-manager = SubscriptionManager(client)
-manager.subscribe_watchlist(watchlist, SETTINGS.provider_codes)
-```
-
-常见判断：
-
-- `reqNewsProviders()` 能看到 `BRFG/DJNL`，只代表文章 provider 可见，不代表存在 `BRFG:BRFG_ALL` 或 `DJNL:DJNL_ALL` 这种 BroadTape 合约。
-- BroadTape 订阅返回 `code=200 No security definition`，通常表示该 NEWS 合约不可用或账户没有对应 API BroadTape 权限。
-- notebook 输出里的 `SNAPSHOT` 是订阅时 IB 补发的旧新闻；`NEW` 才是订阅开始后的新增 headline。
+- `VERIFIED_LIVE`：本次运行至少收到一条可验证的新标题。
+- `CONNECTED_BUT_NO_LIVE_REFRESH_PROVEN`：连接/心跳可能正常，但窗口内没有新标题；不能声称数据已刷新。
+- `REJECTED`：合约、provider 或订阅权限被服务器拒绝。
+- `DEGRADED_HISTORY_GAP`：历史接口已经出现新 article_id，但实时流在宽限期内没有收到，属于漏流告警。
+- `code=200` 在合约发现阶段通常表示该 `NEWS` 合约不存在；订阅权限错误通常会以 `321/354/10089` 等错误落入对应订阅状态。
 
 IBKR/TWS 侧需要确保：
 
@@ -184,6 +177,6 @@ IBKR/TWS 侧需要确保：
 ## 后续扩展
 
 - 增加 `IBArticleFetcher`，把 `reqNewsArticle()` 接到 `ArticleFetcher` 协议；
-- 增加 `reqHistoricalNews()` 启动补拉，使用 `news_state` 中的 `last_seen:{symbol}`；
+- 将历史交叉检查扩展到多只 canary 股票，并增加自动重连后的缺口补拉；
 - 接入大模型结构化 JSON 输出，覆盖或增强 `NewsAnalysis`；
 - 增加网页看板和每小时摘要。

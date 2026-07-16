@@ -60,6 +60,50 @@
       font-size: 14px;
     }
 
+    .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 20px 0 10px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+    }
+
+    .section-heading button {
+      height: 30px;
+    }
+
+    .view-switch {
+      display: inline-flex;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .view-switch button {
+      min-width: 90px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+    }
+
+    .view-switch button.active {
+      border-color: #b2ccff;
+      background: #ffffff;
+      color: var(--blue);
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    .chart-panel[hidden] {
+      display: none;
+    }
+
     main {
       max-width: 100%;
       margin: 0 auto;
@@ -113,6 +157,28 @@
       grid-template-columns: repeat(4, minmax(150px, 1fr)) repeat(4, minmax(92px, auto));
       gap: 8px;
       align-items: end;
+    }
+
+    .refresh-contracts {
+      display: grid;
+      grid-template-columns: auto repeat(3, minmax(150px, 190px)) minmax(220px, 1fr);
+      gap: 8px;
+      align-items: end;
+      margin-top: 8px;
+    }
+
+    .refresh-contracts > strong {
+      align-self: center;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .refresh-duration {
+      display: inline-block;
+      margin-top: 6px;
+      color: #344054;
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .config-grid {
@@ -284,6 +350,18 @@
 
     .candidate-combo-panel {
       padding: 12px;
+    }
+
+    .candidate-chain-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .candidate-chain-heading h3 {
+      margin: 0;
     }
 
     .chain-scroll {
@@ -557,6 +635,10 @@
       gap: 10px;
     }
 
+    .planner-state[hidden] {
+      display: none;
+    }
+
     .product-overview {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -565,28 +647,57 @@
     }
 
     .product-card {
+      --product-accent: var(--blue);
+      --product-accent-soft: #eff4ff;
+      position: relative;
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto auto 1fr;
       gap: 10px;
       height: auto;
-      min-height: 128px;
+      min-height: 180px;
       width: 100%;
+      overflow: hidden;
       border: 1px solid var(--line);
-      border-left: 3px solid transparent;
-      border-radius: 8px;
-      background: #ffffff;
-      padding: 12px 14px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--product-accent-soft) 0, #ffffff 54px);
+      padding: 14px;
       color: var(--ink);
       text-align: left;
       cursor: pointer;
       white-space: normal;
+      box-shadow: 0 2px 5px rgba(16, 24, 40, 0.06);
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    }
+
+    .product-card::before {
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: 0;
+      height: 3px;
+      background: var(--product-accent);
+      content: "";
+    }
+
+    .product-card.tone-violet {
+      --product-accent: var(--violet);
+      --product-accent-soft: #f4f3ff;
+    }
+
+    .product-card.tone-amber {
+      --product-accent: #dc6803;
+      --product-accent-soft: #fff8eb;
+    }
+
+    .product-card:hover {
+      border-color: var(--product-accent);
+      box-shadow: 0 7px 16px rgba(16, 24, 40, 0.12);
+      transform: translateY(-1px);
     }
 
     .product-card.active {
-      border-color: var(--blue);
-      border-left-color: var(--blue);
-      background: #f8fbff;
-      box-shadow: inset 0 0 0 1px rgba(21, 94, 239, 0.12);
+      border-color: var(--product-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--product-accent) 18%, transparent), 0 6px 14px rgba(16, 24, 40, 0.1);
     }
 
     .product-card.missing {
@@ -598,24 +709,103 @@
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 14px;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .product-identity {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .product-icon {
+      display: grid;
+      flex: 0 0 42px;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--product-accent) 24%, transparent);
+      border-radius: 11px;
+      background: var(--product-accent);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      box-shadow: 0 3px 7px color-mix(in srgb, var(--product-accent) 22%, transparent);
+    }
+
+    .product-title {
+      display: grid;
+      gap: 2px;
       min-width: 0;
     }
 
     .product-symbol {
       display: block;
-      font-size: 20px;
       color: var(--ink);
-      line-height: 1.1;
-      font-weight: 800;
+      font-size: 20px;
+      font-weight: 850;
+      line-height: 1;
+    }
+
+    .product-name {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .product-card-meta {
+      display: grid;
+      gap: 6px;
+      justify-items: end;
+    }
+
+    .product-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 21px;
+      border: 1px solid #e4e7ec;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.76);
+      padding: 2px 7px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .product-badge i,
+    .product-signal.data i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #98a2b3;
+    }
+
+    .product-badge.current {
+      border-color: color-mix(in srgb, var(--product-accent) 30%, transparent);
+      background: #ffffff;
+      color: var(--product-accent);
+    }
+
+    .product-badge.current i {
+      background: var(--product-accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--product-accent) 12%, transparent);
     }
 
     .product-price {
-      display: grid;
-      gap: 2px;
-      justify-items: end;
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 10px;
       line-height: 1.2;
       white-space: nowrap;
     }
@@ -626,26 +816,113 @@
       line-height: 1.1;
     }
 
+    .product-signal-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .product-signal {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 22px;
+      border: 1px solid #e4e7ec;
+      border-radius: 6px;
+      background: #f8fafc;
+      padding: 3px 7px;
+      color: #475467;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .product-signal i {
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .product-signal.positive {
+      border-color: #abefc6;
+      background: #ecfdf3;
+      color: var(--green);
+    }
+
+    .product-signal.negative {
+      border-color: #fecdca;
+      background: #fef3f2;
+      color: var(--red);
+    }
+
+    .product-signal.synthetic {
+      border-color: #d9d6fe;
+      background: #f4f3ff;
+      color: #5925dc;
+    }
+
+    .product-signal.data {
+      border-color: #b2ddff;
+      background: #eff8ff;
+      color: #175cd3;
+    }
+
+    .product-signal.data i {
+      background: #2e90fa;
+    }
+
+    .product-signal.data.missing {
+      border-color: #e4e7ec;
+      background: #f8fafc;
+      color: var(--muted);
+    }
+
+    .product-signal.data.missing i {
+      background: #98a2b3;
+    }
+
     .product-metrics {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 10px;
       line-height: 1.2;
     }
 
-    .product-metrics span {
+    .product-metric {
       display: grid;
-      gap: 3px;
+      gap: 4px;
       min-width: 0;
-      border: 1px solid #eef2f7;
-      border-radius: 6px;
-      background: #f8fafc;
-      padding: 7px 8px;
+      border: 1px solid #e9edf3;
+      border-radius: 7px;
+      background: rgba(248, 250, 252, 0.9);
+      padding: 7px;
     }
 
-    .product-metrics em {
+    .product-metric-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .product-metric-label i {
+      display: grid;
+      flex: 0 0 17px;
+      width: 17px;
+      height: 17px;
+      place-items: center;
+      border-radius: 5px;
+      background: #eef2f6;
+      color: #475467;
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .product-metric-label em {
       overflow: hidden;
       color: var(--muted);
       font-style: normal;
@@ -653,21 +930,22 @@
       white-space: nowrap;
     }
 
-    .product-metrics b {
+    .product-metric b {
       display: block;
       overflow: hidden;
       color: var(--ink);
-      font-weight: 800;
       font-size: 13px;
+      font-weight: 850;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .product-status {
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.2;
-    }
+    .product-metric.blue .product-metric-label i { background: #eff4ff; color: var(--blue); }
+    .product-metric.cyan .product-metric-label i { background: #ecfdff; color: var(--cyan); }
+    .product-metric.green .product-metric-label i { background: #ecfdf3; color: var(--green); }
+    .product-metric.amber .product-metric-label i { background: #fff6ed; color: var(--amber); }
+    .product-metric.violet .product-metric-label i { background: #f4f3ff; color: var(--violet); }
+    .product-metric.red .product-metric-label i { background: #fef3f2; color: var(--red); }
 
     .chart-box {
       min-width: 0;
@@ -837,12 +1115,35 @@
       color: #9a3412;
     }
 
+    .chain-map-cell.high-delta {
+      background: #fff1f3;
+      border-color: #d92d20;
+      box-shadow: inset 0 0 0 1px rgba(217, 45, 32, 0.18);
+    }
+
+    .chain-map-cell.high-delta strong,
+    .chain-map-cell.high-delta .title-value {
+      color: #b42318;
+    }
+
     .chain-map-cell .itm-badge {
       display: inline-block;
       margin-left: 6px;
       padding: 1px 5px;
       border-radius: 999px;
       background: #ea580c;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      vertical-align: 1px;
+    }
+
+    .chain-map-cell .high-delta-badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: #d92d20;
       color: #ffffff;
       font-size: 10px;
       font-weight: 800;
@@ -909,6 +1210,338 @@
       color: #047857;
       font-size: 12px;
       line-height: 1.2;
+    }
+
+    .inventory-matrix-wrap {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    .inventory-matrix {
+      display: grid;
+      gap: 4px;
+      min-width: max-content;
+      align-items: stretch;
+    }
+
+    .inventory-axis-matrix {
+      padding-inline: calc(50% - 58px);
+    }
+
+    .inventory-matrix-center-head,
+    .inventory-matrix-strike,
+    .inventory-matrix-dte,
+    .inventory-matrix-cell {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+    }
+
+    .inventory-matrix-center-head,
+    .inventory-matrix-strike,
+    .inventory-matrix-dte {
+      display: grid;
+      place-items: center;
+      min-height: 54px;
+      padding: 5px 7px;
+      background: #f8fafc;
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .inventory-matrix-dte {
+      border-color: #c7d7fe;
+      background: #f5f8ff;
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.15;
+    }
+
+    .inventory-matrix-center-head {
+      border-color: #12b76a;
+      background: #ecfdf3;
+      color: var(--muted);
+      line-height: 1.2;
+    }
+
+    .inventory-matrix-center-head strong {
+      color: var(--ink);
+      font-size: 16px;
+      letter-spacing: 0.2px;
+    }
+
+    .inventory-matrix-center-head small {
+      display: block;
+      color: #047857;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .inventory-matrix-strike {
+      color: #155eef;
+      font-size: 12px;
+    }
+
+    .inventory-matrix-strike strong {
+      color: inherit;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .inventory-matrix-strike.call {
+      border-color: #fedf89;
+      background: #fffcf5;
+      color: #b54708;
+    }
+
+    .inventory-matrix-strike.put {
+      border-color: #b2ddff;
+      background: #f5faff;
+      color: #175cd3;
+    }
+
+    .inventory-matrix-strike.near-spot {
+      border-color: #12b76a;
+      background: #ecfdf3;
+      color: #047857;
+    }
+
+    .inventory-matrix-strike.itm-axis {
+      box-shadow: inset 0 -2px 0 rgba(234, 88, 12, 0.72);
+    }
+
+    .inventory-matrix-strike.itm-axis .matrix-header-side {
+      color: #c2410c;
+    }
+
+    .matrix-header-side {
+      display: inline-block;
+      margin-right: 4px;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .inventory-matrix-strike small,
+    .inventory-matrix-dte small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .inventory-matrix-dte small {
+      margin-top: 5px;
+      font-size: 10px;
+    }
+
+    .inventory-matrix-cell {
+      display: grid;
+      gap: 4px;
+      min-width: 124px;
+      min-height: 72px;
+      padding: 4px;
+      background: #ffffff;
+    }
+
+    .inventory-matrix-cell.empty {
+      border-color: #eef3f8;
+    }
+
+    .inventory-matrix-cell.call-side.empty {
+      background: #fffdfa;
+    }
+
+    .inventory-matrix-cell.put-side.empty {
+      background: #fbfdff;
+    }
+
+    .inventory-matrix-cell.near-spot {
+      box-shadow: inset 0 2px 0 rgba(18, 183, 106, 0.48);
+    }
+
+    .inventory-matrix-position {
+      min-width: 0;
+      border: 1px solid #d0d5dd;
+      border-left-width: 3px;
+      border-radius: 6px;
+      padding: 5px 6px;
+      background: #ffffff;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    .inventory-matrix-position.call {
+      border-left-color: #f79009;
+      background: #fffcf5;
+    }
+
+    .inventory-matrix-position.put {
+      border-left-color: #2e90fa;
+      background: #f5faff;
+    }
+
+    .inventory-matrix-position.itm {
+      border-color: #f97316;
+      background: #fff7ed;
+    }
+
+    .inventory-matrix-position.high-delta {
+      border-color: #d92d20;
+      border-left-width: 3px;
+      background: #fff1f3;
+    }
+
+    .inventory-matrix-position strong {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      margin-bottom: 2px;
+      color: var(--ink);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .inventory-matrix-position.high-delta strong {
+      color: #b42318;
+    }
+
+    .inventory-matrix-position strong .matrix-value {
+      overflow: hidden;
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+    }
+
+    .matrix-side-badge {
+      display: inline-grid;
+      place-items: center;
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+      border-radius: 4px;
+      background: #fef0c7;
+      color: #b54708;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .inventory-matrix-position.put .matrix-side-badge {
+      background: #dbeafe;
+      color: #175cd3;
+    }
+
+    .matrix-high-delta {
+      color: #b42318;
+      font-weight: 800;
+    }
+
+    .matrix-position-meta,
+    .matrix-position-quote {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      min-width: 0;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .matrix-position-quote {
+      margin-top: 2px;
+      padding-top: 2px;
+      border-top: 1px solid rgba(152, 162, 179, 0.22);
+      font-size: 9px;
+    }
+
+    .matrix-position-pnl.positive {
+      color: #067647;
+    }
+
+    .matrix-position-pnl.negative {
+      color: #b42318;
+    }
+
+    .matrix-risk-badge {
+      display: inline-block;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #d92d20;
+      color: #ffffff;
+      font-size: 8px;
+      font-weight: 900;
+      line-height: 14px;
+    }
+
+    .matrix-risk-badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: auto;
+    }
+
+    .matrix-risk-badge.itm {
+      background: #ea580c;
+    }
+
+    .matrix-risk-badge.high-delta {
+      background: #d92d20;
+    }
+
+    .candidate-matrix .inventory-matrix-cell {
+      min-height: 118px;
+    }
+
+    .candidate-matrix-position {
+      display: grid;
+      align-content: start;
+      min-height: 108px;
+    }
+
+    .candidate-matrix-position.has-position {
+      border-color: #f63d68;
+      background: #fff1f3;
+      box-shadow: inset 0 0 0 1px rgba(246, 61, 104, 0.12);
+    }
+
+    .candidate-matrix-position .title-income {
+      overflow: hidden;
+      margin-left: auto;
+      color: #047857;
+      font-size: 11px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .candidate-matrix-position .matrix-position-meta + .matrix-position-meta {
+      margin-top: 2px;
+    }
+
+    .candidate-matrix-qty {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 5px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(152, 162, 179, 0.22);
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .candidate-matrix-qty .qty {
+      width: 50px;
+      height: 24px;
+      padding: 2px 5px;
+      text-align: center;
     }
 
     .selected-list {
@@ -1037,7 +1670,7 @@
     }
 
     @media (max-width: 1100px) {
-      .toolbar, .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid {
+      .toolbar, .refresh-contracts, .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid {
         grid-template-columns: 1fr;
       }
       table { min-width: 0; }
@@ -1077,14 +1710,41 @@
         </select>
       </label>
       <button id="loadDefault">读取默认CSV</button>
-      <button id="refreshDefault" class="secondary">快速刷新</button>
+      <button id="refreshDefault" class="secondary">持仓快刷</button>
       <button id="refreshFull" class="secondary">全量刷新</button>
+      <button id="refreshScheduled" class="secondary">智能刷新</button>
       <button id="loadSample" class="secondary">加载样例</button>
       <button id="exportJson" class="secondary">导出JSON</button>
       <button id="exportCsv" class="secondary">导出CSV</button>
       <button id="exportMarkdown" class="secondary">导出Markdown</button>
     </div>
+    <div class="refresh-contracts">
+      <strong>刷新合约月份</strong>
+      <label>ZF
+        <select id="refreshMonthZF">
+          <option value="202609" selected>2026-09（当前）</option>
+          <option value="202612">2026-12</option>
+          <option value="202609,202612">2026-09 + 2026-12</option>
+        </select>
+      </label>
+      <label>ZN
+        <select id="refreshMonthZN">
+          <option value="202609" selected>2026-09（当前）</option>
+          <option value="202612">2026-12</option>
+          <option value="202609,202612">2026-09 + 2026-12</option>
+        </select>
+      </label>
+      <label>ZC
+        <select id="refreshMonthZC">
+          <option value="202609" selected>2026-09（当前）</option>
+          <option value="202612">2026-12</option>
+          <option value="202609,202612">2026-09 + 2026-12</option>
+        </select>
+      </label>
+      <span class="note">持仓快刷只更新持仓与期货价；全量刷新按既有筛选条件更新候选链；智能刷新按美国东部日期决定本次执行全量或持仓快刷。</span>
+    </div>
     <div id="refreshStatus" class="note"></div>
+    <div id="refreshDuration" class="refresh-duration">本次刷新用时：--</div>
     <div id="refreshProgress" class="refresh-progress" aria-hidden="true">
       <div class="refresh-progress-track">
         <span id="refreshProgressBar" class="refresh-progress-bar"></span>
@@ -1096,30 +1756,28 @@
   </header>
 
   <main>
-    <section class="top-layout">
-      <div class="panel">
-        <h2>用户假设与交易区域</h2>
-        <div class="config-grid">
-          <label>本金<input id="capital" type="number" value="20000" step="100" /></label>
-          <label>月目标收益率<input id="targetReturn" type="number" value="10" step="0.1" /></label>
-          <label>本月已完成PnL<input id="realizedPnl" type="number" value="0" step="10" /></label>
-          <label>剩余交易日<input id="remainingDays" type="number" value="20" step="1" /></label>
-          <label>当前期货价<input id="manualFuturePrice" type="number" value="" step="0.001" placeholder="可手填" /></label>
-          <label>库存DTE
-            <select id="inventoryDtePreset">
-              <option value="all" selected>全部库存</option>
-              <option value="short">0DTE-一周内</option>
-              <option value="near">0-2DTE</option>
-            </select>
-          </label>
-          <button id="recompute">重新计算</button>
-        </div>
-        <p class="note">当前只分析选中品种。核心规划只统计卖出期权库存；多头期权视为彩票/凸性仓位，不参与核心库存计算。库存DTE只控制统计与规划范围；当前持仓行权节点始终展示实际持仓的全部到期日。</p>
-      </div>
-      <div class="panel">
-        <h2>目标压力</h2>
-        <section id="targetSummary" class="target-grid"></section>
-      </div>
+    <section class="planner-state" hidden aria-hidden="true">
+      <input id="capital" type="number" value="20000" />
+      <input id="targetReturn" type="number" value="10" />
+      <input id="realizedPnl" type="number" value="0" />
+      <input id="remainingDays" type="number" value="20" />
+      <input id="manualFuturePrice" type="number" value="" />
+      <input id="highDeltaPremiumThreshold" type="number" value="0.40" />
+      <select id="inventoryDtePreset">
+        <option value="all" selected>全部库存</option>
+        <option value="short">0DTE-一周内</option>
+        <option value="near">0-2DTE</option>
+      </select>
+      <button id="recompute" type="button">重新计算</button>
+      <section id="targetSummary"></section>
+    </section>
+
+    <h2>总体权利金统计</h2>
+    <section class="panel">
+      <div id="portfolioPremiumSummary" class="target-grid"></div>
+      <p class="note">“Delta 加权期权金”默认对 |Delta| 按两位小数显示后达到 0.40 的卖方期权，按 <code>权利金 × (1 - 实际 |Delta|)</code> 折算；其余仓位按原权利金计入。该指标是风险调整后的观察值，不代表真实胜率或最终收益。</p>
+      <h3 style="margin-top:14px;">按到期日的权利金总览</h3>
+      <div id="premiumExpiryTable" class="table-wrap"></div>
     </section>
 
     <h2>组合资产总览</h2>
@@ -1127,8 +1785,11 @@
       <div id="productOverview" class="product-overview"></div>
     </section>
 
-    <h2>底层资产走势</h2>
-    <section class="panel chart-panel">
+    <div class="section-heading">
+      <h2>底层资产走势</h2>
+      <button id="togglePriceCharts" class="secondary" type="button" aria-expanded="false" aria-controls="priceChartSection">展开</button>
+    </div>
+    <section id="priceChartSection" class="panel chart-panel" hidden>
       <div class="chart-toolbar">
         <div id="priceChartNote" class="note"></div>
         <div class="chart-controls">
@@ -1158,7 +1819,13 @@
       </div>
     </section>
 
-    <h2>当前库存行权节点</h2>
+    <div class="section-heading">
+      <h2>当前库存行权节点</h2>
+      <div class="view-switch" role="group" aria-label="库存行权节点视角">
+        <button id="inventoryViewChain" class="active" type="button" aria-pressed="true">期权链</button>
+        <button id="inventoryViewMatrix" type="button" aria-pressed="false">Strike × DTE</button>
+      </div>
+    </div>
     <section class="panel option-cross">
       <div class="note" id="inventoryChainNote"></div>
       <div id="inventoryChain"></div>
@@ -1197,7 +1864,13 @@
           </div>
         </aside>
         <div class="option-cross chain-scroll">
-          <h3>按 Strike 距离排列的候选期权链</h3>
+          <div class="candidate-chain-heading">
+            <h3>按 Strike 距离排列的候选期权链</h3>
+            <div class="view-switch" role="group" aria-label="候选期权链视角">
+              <button id="candidateViewChain" type="button" aria-pressed="false">期权链</button>
+              <button id="candidateViewMatrix" class="active" type="button" aria-pressed="true">Strike × DTE</button>
+            </div>
+          </div>
           <div class="candidate-filters">
             <label>Put Delta 上限<div id="putDeltaChoices" class="choice-box limit-choice"></div></label>
             <label>Call Delta 上限<div id="callDeltaChoices" class="choice-box limit-choice"></div></label>
@@ -1238,22 +1911,28 @@
     const DEFAULT_MANIFEST_PATH = "inventory-planner-defaults.json";
     const REFRESH_STATUS_PATH = "/api/refresh-inventory-data/status";
     const EPS = 1e-9;
+    const MAX_CANDIDATE_SNAPSHOT_LAG_HOURS = 24;
+    const HIGH_DELTA_PREMIUM_THRESHOLD = 0.40;
+    const DEEP_ITM_DELTA_THRESHOLD = 0.90;
     const PRODUCT_PRESETS = {
       ZF: {
         multiplier: 1000,
         spotFallback: 107,
+        optionTick: 0.015625,
         futureMargin: 1300,
         optionMarginRate: 0.018
       },
       ZN: {
         multiplier: 1000,
         spotFallback: 111,
+        optionTick: 0.015625,
         futureMargin: 2400,
         optionMarginRate: 0.020
       },
       ZC: {
         multiplier: 50,
         spotFallback: 420,
+        optionTick: 0.25,
         futureMargin: 2100,
         optionMarginRate: 0.080
       }
@@ -1279,16 +1958,20 @@
     let refreshProgressTimer = null;
     let refreshProgressValue = 0;
     let refreshProgressHasBackend = false;
+    let refreshStartedAtMs = 0;
+    let lastRefreshDurationSeconds = 0;
     let latestRefreshWatchBusy = false;
     let latestRefreshPollTimer = null;
     let lastHandledRefreshFinished = "";
     let chartView = { range: "1M", zoom: 1, offset: 0 };
     let chartDrag = null;
+    let inventoryChainView = "chain";
+    let candidateChainView = "matrix";
 
     const $ = id => document.getElementById(id);
     const controls = [
       "activeUnderlying", "capital", "targetReturn", "realizedPnl", "remainingDays", "manualFuturePrice",
-      "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
+      "highDeltaPremiumThreshold", "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
     ];
     controls.forEach(id => $(id).addEventListener("input", render));
     ["putDeltaChoices", "callDeltaChoices", "candidateDteChoices"].forEach(id => $(id).addEventListener("change", () => {
@@ -1303,7 +1986,31 @@
     $("loadDefault").addEventListener("click", loadDefaultData);
     $("refreshDefault").addEventListener("click", () => refreshDefaultData("fast"));
     $("refreshFull").addEventListener("click", () => refreshDefaultData("full"));
+    $("refreshScheduled").addEventListener("click", () => refreshDefaultData("scheduled"));
     $("loadDefaultBars").addEventListener("click", loadDefaultBars);
+    setPriceChartsCollapsed(true);
+    $("togglePriceCharts").addEventListener("click", () => {
+      const section = $("priceChartSection");
+      const collapsed = !section.hidden;
+      setPriceChartsCollapsed(collapsed);
+      if (!collapsed) renderPriceChart(config(), futurePositions);
+    });
+    $("inventoryViewChain").addEventListener("click", () => {
+      inventoryChainView = "chain";
+      render();
+    });
+    $("inventoryViewMatrix").addEventListener("click", () => {
+      inventoryChainView = "matrix";
+      render();
+    });
+    $("candidateViewChain").addEventListener("click", () => {
+      candidateChainView = "chain";
+      render();
+    });
+    $("candidateViewMatrix").addEventListener("click", () => {
+      candidateChainView = "matrix";
+      render();
+    });
     $("chartRange").addEventListener("change", () => {
       chartView.range = $("chartRange").value;
       chartView.offset = 0;
@@ -1385,22 +2092,27 @@
     }
 
     async function refreshDefaultData(mode = "fast") {
-      const button = mode === "full" ? $("refreshFull") : $("refreshDefault");
-      const otherButton = mode === "full" ? $("refreshDefault") : $("refreshFull");
+      const refreshButtons = [$("refreshDefault"), $("refreshFull"), $("refreshScheduled")];
+      const contractMonths = selectedRefreshContractMonths();
+      const monthControls = ["refreshMonthZF", "refreshMonthZN", "refreshMonthZC"].map($);
       if (window.location.protocol === "file:") {
         setError("刷新底层数据需要通过本地 HTTP server 打开页面。");
         return;
       }
-      button.disabled = true;
-      otherButton.disabled = true;
-      setRefreshStatus(mode === "full" ? "正在全量刷新底层数据，这可能需要几分钟..." : "正在快速刷新底层数据...");
+      refreshButtons.forEach(control => { control.disabled = true; });
+      monthControls.forEach(control => { control.disabled = true; });
+      const monthText = Object.entries(contractMonths).map(([root, months]) => `${root} ${months.replaceAll(",", "/")}`).join("；");
+      const modeText = mode === "full"
+        ? "正在按筛选条件全量刷新候选期权链"
+        : (mode === "scheduled" ? "正在检查美东数据日期并选择刷新方式" : "正在刷新持仓行情与期货价格");
+      setRefreshStatus(`${modeText}；${monthText}...`);
       startRefreshProgress();
       try {
         const response = await fetch("/api/refresh-inventory-data", {
           method: "POST",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode })
+          body: JSON.stringify({ mode, contractMonths })
         });
         const payload = await response.json().catch(() => ({}));
         if (response.status === 501) {
@@ -1421,9 +2133,17 @@
         setRefreshStatus("刷新失败。");
         finishRefreshProgress(false, "刷新失败");
       } finally {
-        button.disabled = false;
-        otherButton.disabled = false;
+        refreshButtons.forEach(control => { control.disabled = false; });
+        monthControls.forEach(control => { control.disabled = false; });
       }
+    }
+
+    function selectedRefreshContractMonths() {
+      return {
+        ZF: $("refreshMonthZF").value || "202609",
+        ZN: $("refreshMonthZN").value || "202609",
+        ZC: $("refreshMonthZC").value || "202609"
+      };
     }
 
     function friendlyRefreshError(error) {
@@ -1522,7 +2242,11 @@
       setRefreshStatus(`刷新完成，正在读取最新CSV。${dataRefreshTimeText()}`);
       await loadDefaultData();
       finishRefreshProgress(true, "最新CSV读取完成");
-      setRefreshStatus(`刷新并读取完成。${dataRefreshTimeText()}`);
+      const mode = payload.effectiveMode || payload.mode || "";
+      const modeText = mode === "full" ? "全量刷新" : (mode === "fast" ? "持仓快刷" : "刷新");
+      const duration = refreshDurationSeconds(payload);
+      setRefreshDuration(duration);
+      setRefreshStatus(`${modeText}并读取完成。${dataRefreshTimeText()}`);
     }
 
     function updateRefreshFromPayload(payload) {
@@ -1541,6 +2265,7 @@
       }
       const percent = payload.running === false && payload.ok === false ? "失败" : `${Math.round(refreshProgressValue)}%`;
       setRefreshProgress(refreshProgressValue, stage, percent);
+      setRefreshDuration(refreshDurationSeconds(payload));
       if (payload.lines && payload.lines.length) {
         setRefreshLog(payload.lines.slice(-24).join("\n"));
       }
@@ -1599,12 +2324,15 @@
       clearRefreshProgressTimer();
       refreshProgressHasBackend = false;
       refreshProgressValue = 4;
+      refreshStartedAtMs = Date.now();
+      lastRefreshDurationSeconds = 0;
+      setRefreshDuration(0);
       setRefreshProgress(4, "提交刷新任务", "4%");
       setRefreshLog("");
-      const startedAt = Date.now();
       refreshProgressTimer = window.setInterval(() => {
+        const elapsedSeconds = Math.max((Date.now() - refreshStartedAtMs) / 1000, 0);
+        setRefreshDuration(elapsedSeconds);
         if (refreshProgressHasBackend) return;
-        const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0);
         const target = Math.min(92, 8 + Math.log1p(elapsedSeconds) * 20);
         refreshProgressValue = Math.min(92, refreshProgressValue + Math.max(0.6, (target - refreshProgressValue) * 0.18));
         setRefreshProgress(refreshProgressValue, refreshProgressStage(refreshProgressValue), `${Math.round(refreshProgressValue)}%`);
@@ -1620,6 +2348,7 @@
 
     function finishRefreshProgress(ok, message) {
       clearRefreshProgressTimer();
+      setRefreshDuration(refreshDurationSeconds({}));
       setRefreshProgress(ok ? 100 : Math.max(refreshProgressValue, 18), message, ok ? "100%" : "失败");
       $("refreshProgress").classList.toggle("success", ok);
       $("refreshProgress").classList.toggle("error", !ok);
@@ -1641,6 +2370,28 @@
       panel.setAttribute("aria-hidden", "false");
       bar.style.width = `${Math.max(0, Math.min(value, 100))}%`;
       text.innerHTML = `<span>${esc(label || "")}</span><strong>${esc(percentText || "")}</strong>`;
+    }
+
+    function refreshDurationSeconds(payload = {}) {
+      const backend = Number(payload.durationSeconds);
+      if (Number.isFinite(backend) && backend >= 0) {
+        lastRefreshDurationSeconds = Math.max(lastRefreshDurationSeconds, backend);
+      } else if (refreshStartedAtMs) {
+        lastRefreshDurationSeconds = Math.max(lastRefreshDurationSeconds, (Date.now() - refreshStartedAtMs) / 1000);
+      }
+      return lastRefreshDurationSeconds;
+    }
+
+    function formatRefreshDuration(seconds) {
+      const value = Math.max(Number(seconds) || 0, 0);
+      if (value < 60) return `${value.toFixed(1)}秒`;
+      const minutes = Math.floor(value / 60);
+      const remainder = Math.round(value % 60).toString().padStart(2, "0");
+      return `${minutes}分${remainder}秒`;
+    }
+
+    function setRefreshDuration(seconds) {
+      $("refreshDuration").textContent = `本次刷新用时：${formatRefreshDuration(seconds)}`;
     }
 
     function setRefreshLog(message) {
@@ -1730,6 +2481,7 @@
         realizedPnl: numIn("realizedPnl", 0),
         remainingDays: Math.max(numIn("remainingDays", 20), 1),
         manualFuturePrice: toNum($("manualFuturePrice").value),
+        highDeltaPremiumThreshold: clamp(numIn("highDeltaPremiumThreshold", HIGH_DELTA_PREMIUM_THRESHOLD), 0, 1),
         allowed: [underlying],
         putDeltaMax: selectedPutDelta.length ? Math.max(...selectedPutDelta) : 0.35,
         callDeltaMax: selectedCallDelta.length ? Math.max(...selectedCallDelta) : 0.20,
@@ -1767,12 +2519,42 @@
       return Number.isFinite(value) ? value : fallback;
     }
 
+    function setPriceChartsCollapsed(collapsed) {
+      const section = $("priceChartSection");
+      const button = $("togglePriceCharts");
+      section.hidden = Boolean(collapsed);
+      button.textContent = collapsed ? "展开" : "折叠";
+      button.setAttribute("aria-expanded", String(!collapsed));
+    }
+
+    function syncInventoryChainViewControls() {
+      const chainActive = inventoryChainView === "chain";
+      const chainButton = $("inventoryViewChain");
+      const matrixButton = $("inventoryViewMatrix");
+      chainButton.className = chainActive ? "active" : "";
+      matrixButton.className = chainActive ? "" : "active";
+      chainButton.setAttribute("aria-pressed", String(chainActive));
+      matrixButton.setAttribute("aria-pressed", String(!chainActive));
+    }
+
+    function syncCandidateChainViewControls() {
+      const chainActive = candidateChainView === "chain";
+      const chainButton = $("candidateViewChain");
+      const matrixButton = $("candidateViewMatrix");
+      chainButton.className = chainActive ? "active" : "";
+      matrixButton.className = chainActive ? "" : "active";
+      chainButton.setAttribute("aria-pressed", String(chainActive));
+      matrixButton.setAttribute("aria-pressed", String(!chainActive));
+    }
+
     function render() {
       try {
         syncFilterChoices();
         const cfg = config();
-        const allShortPositions = parseShortPositions(positionRows, cfg, { respectInventoryDte: false });
-        shortPositions = parseShortPositions(positionRows, cfg);
+        const allShortPositions = parseShortPositions(positionRows, cfg, { respectInventoryDte: false })
+          .map(row => enrichPositionQuote(row, cfg));
+        shortPositions = parseShortPositions(positionRows, cfg)
+          .map(row => enrichPositionQuote(row, cfg));
         futurePositions = parseFuturePositions(positionRows, cfg);
         const inventory = aggregateInventory(shortPositions, cfg);
         const pressure = targetPressure(shortPositions, cfg);
@@ -1804,6 +2586,7 @@
       const box = $(id);
       const underlying = $("activeUnderlying").value || "ZF";
       const values = candidateDteValues(underlying);
+      const dateLabels = dteDateLabels(chainRows.filter(row => productOf(row) === underlying));
       const currentValues = Array.from(box.querySelectorAll ? box.querySelectorAll("input[type=checkbox]") : []).map(input => Number(input.value));
       const currentChecked = checkedNumbers(id).map(value => Math.max(0, Math.round(value)));
       const selected = choiceUserTouched[id]
@@ -1815,7 +2598,11 @@
         : "不限制DTE";
       box.innerHTML = values.length
         ? `<details class="multi-select"><summary>${esc(summary)}</summary><div class="multi-select-menu">${
-          values.map(value => `<label><input type="checkbox" value="${esc(value)}"${selected.includes(value) ? " checked" : ""}>${esc(value)}DTE</label>`).join("")
+          values.map(value => {
+            const dates = Array.from(dateLabels.get(value) || []).sort();
+            const dateText = dates.length ? ` · ${dates.join(" / ")}` : "";
+            return `<label><input type="checkbox" value="${esc(value)}"${selected.includes(value) ? " checked" : ""}>${esc(value)}DTE${esc(dateText)}</label>`;
+          }).join("")
         }</div></details>`
         : `<span class="note">暂无DTE</span>`;
     }
@@ -1844,8 +2631,12 @@
       const strikes = uniqueSortedStrikes(chainRows.filter(row => productOf(row) === underlying));
       const puts = strikes.filter(strike => !Number.isFinite(spot) || strike < spot);
       const calls = strikes.filter(strike => !Number.isFinite(spot) || strike > spot);
-      const defaultPut = Number.isFinite(spot) ? strikeAtOrAbove(puts, spot - 2.5) : puts[0];
-      const defaultCall = Number.isFinite(spot) ? strikeAtOrBelow(calls, spot + 1.5) : calls[calls.length - 1];
+      const defaultPut = underlying === "ZC"
+        ? puts[0]
+        : (Number.isFinite(spot) ? strikeAtOrAbove(puts, spot - 2.5) : puts[0]);
+      const defaultCall = underlying === "ZC"
+        ? calls[calls.length - 1]
+        : (Number.isFinite(spot) ? strikeAtOrBelow(calls, spot + 1.5) : calls[calls.length - 1]);
       renderStrikeSelect("putStrikeMin", puts, defaultPut);
       renderStrikeSelect("callStrikeMax", calls, defaultCall);
     }
@@ -1944,7 +2735,13 @@
         const unrealizedPnL = legacyZcEstimate && Number.isFinite(costBasis)
           ? marketValue - costBasis
           : firstNum(row.unrealizedPnL, 0);
+        const remainingPremium = Number.isFinite(marketValue) && marketValue < 0
+          ? -marketValue
+          : Math.abs(position * price * multiplier);
+        const observedDelta = directSignedDelta(row, right);
+        const delta = Number.isFinite(observedDelta) ? observedDelta : 0;
         return {
+          conId: toNum(row.conId),
           underlying,
           expiry: txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth),
           dte,
@@ -1955,13 +2752,15 @@
           position,
           contracts: Math.abs(position),
           marketValue,
-          remainingPremium: Number.isFinite(marketValue) && marketValue < 0 ? -marketValue : Math.abs(position * price * multiplier),
+          remainingPremium,
+          weightedPremium: deltaWeightedPremium(remainingPremium, delta, cfg.highDeltaPremiumThreshold),
           unrealizedPnL,
-          underlyingPrice: firstNum(row.underlyingPrice, row.undPrice, row.referencePrice),
+          underlyingPrice: normalizeFuturePrice(underlying, firstNum(row.underlyingPrice, row.undPrice, row.referencePrice)),
           bid,
           ask,
           mid,
-          delta: signedDelta(row, right),
+          delta,
+          deltaObserved: Number.isFinite(observedDelta),
           gamma: firstNum(row.gamma, row.modelGreeks_gamma, 0),
           theta: firstNum(row.theta, row.modelGreeks_theta, 0),
           vega: firstNum(row.vega, row.modelGreeks_vega, 0),
@@ -1992,14 +2791,100 @@
       }).filter(Boolean);
     }
 
+    function parseOptionExposurePositions(rows, cfg, futures = []) {
+      const allowed = new Set(cfg.allowed || [cfg.underlying]);
+      const productRows = rows.filter(row => productOf(row) === cfg.underlying);
+      const fallbackPrice = referencePriceFor(cfg.underlying, chainRows, productRows, cfg, futures).price;
+      return productRows.map(row => {
+        const underlying = productOf(row);
+        const position = toNum(row.position);
+        const right = normRight(row.right || row.direction);
+        const secType = txt(row.secType).toUpperCase();
+        const strike = strikeOf(row, underlying);
+        const dte = dteFromRow(row);
+        if (!Number.isFinite(position) || Math.abs(position) <= EPS) return null;
+        if (right !== "P" && right !== "C") return null;
+        if (secType && !["FOP", "OPT"].includes(secType)) return null;
+        if (allowed.size && !allowed.has(underlying)) return null;
+        if (!Number.isFinite(strike) || !Number.isFinite(dte) || dte < 0) return null;
+        const base = {
+          conId: toNum(row.conId),
+          underlying,
+          expiry: txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth),
+          dte,
+          right,
+          strike
+        };
+        const quote = quoteForPosition(base, cfg);
+        const delta = firstNum(directSignedDelta(row, right), quote.delta);
+        const bid = firstNum(row.bid, quote.bid);
+        const ask = firstNum(row.ask, quote.ask);
+        let optionPrice = firstNum(row.mid, row.price, row.markPrice, row.modelOptionPrice, row.last, quote.mid);
+        if (!Number.isFinite(optionPrice) && Number.isFinite(bid) && Number.isFinite(ask)) optionPrice = (bid + ask) / 2;
+        const underlyingPrice = rowReferencePrice(row, underlying, fallbackPrice);
+        const intrinsicValue = Number.isFinite(underlyingPrice)
+          ? (right === "C" ? Math.max(underlyingPrice - strike, 0) : Math.max(strike - underlyingPrice, 0))
+          : NaN;
+        const timeValue = Number.isFinite(optionPrice) && Number.isFinite(intrinsicValue)
+          ? Math.max(optionPrice - intrinsicValue, 0)
+          : NaN;
+        const timeValueTolerance = firstNum((PRODUCT_PRESETS[underlying] || {}).optionTick, 0.015625);
+        const deepItm = Number.isFinite(delta)
+          && Math.abs(delta) + EPS >= DEEP_ITM_DELTA_THRESHOLD
+          && Number.isFinite(intrinsicValue)
+          && intrinsicValue > timeValueTolerance + EPS
+          && Number.isFinite(timeValue)
+          && timeValue <= timeValueTolerance + EPS;
+        return {
+          ...base,
+          localSymbol: txt(row.localSymbol || row.optionName),
+          position,
+          bid,
+          ask,
+          optionPrice,
+          underlyingPrice,
+          intrinsicValue,
+          timeValue,
+          delta,
+          deltaExposure: Number.isFinite(delta) ? position * delta : 0,
+          deepItm,
+          equivalentFutureContracts: deepItm ? position * delta : 0
+        };
+      }).filter(Boolean);
+    }
+
+    function portfolioDeltaExposure(rows, cfg, futures = []) {
+      const options = parseOptionExposurePositions(rows, cfg, futures);
+      const shortOptionDelta = options
+        .filter(row => row.position < 0)
+        .reduce((acc, row) => acc + row.deltaExposure, 0);
+      const futureDelta = futures.reduce((acc, row) => acc + row.position * firstNum(row.delta, 1), 0);
+      const deepItmOptions = options.filter(row => row.deepItm && row.position > 0);
+      const deepItmFutureEquivalent = deepItmOptions.reduce((acc, row) => acc + row.equivalentFutureContracts, 0);
+      const equivalentFutureDelta = futureDelta + deepItmFutureEquivalent;
+      return {
+        options,
+        optionDelta: shortOptionDelta,
+        shortOptionDelta,
+        futureDelta,
+        equivalentFutureDelta,
+        portfolioDelta: shortOptionDelta + equivalentFutureDelta,
+        deepItmOptions,
+        deepItmContracts: deepItmOptions.reduce((acc, row) => acc + Math.abs(row.position), 0),
+        deepItmFutureEquivalent
+      };
+    }
+
     function aggregateInventory(positions, cfg) {
       const totalPremium = sum(positions, "remainingPremium");
+      const totalWeightedPremium = sum(positions, "weightedPremium");
       const totalGamma = positions.reduce((acc, row) => acc + Math.abs(row.position * row.gamma), 0);
       const totalTheta = positions.reduce((acc, row) => acc + Math.abs(row.position * row.theta), 0);
       const margin = positions.reduce((acc, row) => acc + positionMarginEstimate(row, cfg), 0);
       return {
         totalContracts: sum(positions, "contracts"),
         remainingPremium: totalPremium,
+        weightedPremium: totalWeightedPremium,
         margin,
         unrealizedPnL: sum(positions, "unrealizedPnL"),
         deltaExposure: positions.reduce((acc, row) => acc + row.position * row.delta, 0),
@@ -2024,12 +2909,14 @@
       });
       const grouped = Array.from(groups.entries()).map(([key, items]) => {
         const premium = sum(items, "remainingPremium");
+        const weightedPremium = sum(items, "weightedPremium");
         const gammaAbs = items.reduce((acc, row) => acc + Math.abs(row.position * row.gamma), 0);
         const thetaAbs = items.reduce((acc, row) => acc + Math.abs(row.position * row.theta), 0);
         return {
           key,
           contracts: sum(items, "contracts"),
           remainingPremium: premium,
+          weightedPremium,
           deltaExposure: items.reduce((acc, row) => acc + row.position * row.delta, 0),
           gammaExposure: items.reduce((acc, row) => acc + row.position * row.gamma, 0),
           thetaExposure: items.reduce((acc, row) => acc + row.position * row.theta, 0),
@@ -2059,6 +2946,7 @@
       const selectedDteSet = new Set((cfg.selectedCandidateDtes || []).map(value => Math.max(0, Math.round(value))));
       const ref = referencePriceFor(cfg.underlying, rows, positions, cfg, futurePositions);
       const spot = ref.price;
+      const latestSnapshot = latestProductSnapshotMs(rows, cfg.underlying);
       return rows.map((row, index) => {
         const underlying = productOf(row);
         const right = normRight(row.right || row.direction);
@@ -2069,7 +2957,8 @@
         if (allowed.size && !allowed.has(underlying)) return null;
         if (right !== "P" && right !== "C") return null;
         if (!Number.isFinite(strike)) return null;
-        if (!strikeWithinOpenWindow(strike, right, spot, cfg)) return null;
+        const rowSpot = rowReferencePrice(row, underlying, spot);
+        if (!strikeWithinOpenWindow(strike, right, rowSpot, cfg)) return null;
         const deltaInfo = candidateDeltaInfo(row, right, rows);
         const delta = deltaInfo.value;
         const absDelta = Math.abs(delta);
@@ -2078,6 +2967,7 @@
         const bid = firstNum(row.bid);
         const ask = firstNum(row.ask);
         if (!Number.isFinite(bid) || bid <= 0) return null;
+        if (!candidateSnapshotIsCurrent(row, latestSnapshot)) return null;
         let mid = firstNum(row.mid, row.price, row.last, row.modelOptionPrice, row.optPrice);
         if (!Number.isFinite(mid) && Number.isFinite(bid) && Number.isFinite(ask)) mid = (bid + ask) / 2;
         const estimatedCredit = cfg.creditSource === "bid" && Number.isFinite(bid) ? bid : mid;
@@ -2094,7 +2984,7 @@
         const spread = Math.max((Number.isFinite(ask) ? ask : estimatedCredit) - (Number.isFinite(bid) ? bid : estimatedCredit), 0);
         const incomeScore = estimatedCredit * captureRate(bucket) * multiplier;
         const distributionScore = distributionScoreFor(inventory, right, bucket, node);
-        const marginEstimate = estimatedOptionMargin({ underlying, right, strike, estimatedCredit, delta, multiplier }, cfg);
+        const marginEstimate = estimatedOptionMargin({ underlying, right, strike, estimatedCredit, delta, multiplier, underlyingPrice: rowSpot }, cfg);
         const riskScore = absDelta * 12 + Math.abs(gamma) * 8 + Math.abs(vega) + marginEstimate * 0.001 + spread * 10;
         const targetFitScore = Math.min(estimatedCredit * multiplier / Math.max(pressure.dailyTargetReference, EPS), 3);
         const finalScore = incomeScore * cfg.weights.income + distributionScore * cfg.weights.distribution + targetFitScore * 100 * cfg.weights.target - riskScore * cfg.weights.risk;
@@ -2102,6 +2992,7 @@
         return {
           id, underlying, expiry, dte, bucket, dateBand,
           right, strike, bid, ask, mid, estimatedCredit, delta, gamma, theta, vega,
+          underlyingPrice: rowSpot,
           deltaEstimated: deltaInfo.estimated,
           deltaSource: deltaInfo.source,
           multiplier,
@@ -2228,6 +3119,15 @@
     }
 
     function renderProductOverview(activeCfg) {
+      const productMeta = {
+        ZF: { icon: "5Y", name: "5年期美债", tone: "blue" },
+        ZN: { icon: "10Y", name: "10年期美债", tone: "violet" },
+        ZC: { icon: "C", name: "玉米期货", tone: "amber" }
+      };
+      const metricHtml = (icon, label, value, tone, title = "") => `<span class="product-metric ${tone}"${title ? ` title="${esc(title)}"` : ""}>
+        <span class="product-metric-label"><i aria-hidden="true">${icon}</i><em>${label}</em></span>
+        <b>${value}</b>
+      </span>`;
       const products = Array.from(new Set(
         Object.keys(PRODUCT_PRESETS)
           .concat(positionRows.map(productOf))
@@ -2235,34 +3135,61 @@
       )).filter(Boolean);
       $("productOverview").innerHTML = products.map(underlying => {
         const cfg = configForUnderlying(activeCfg, underlying);
-        const positions = parseShortPositions(positionRows, cfg);
+        const positions = parseShortPositions(positionRows, cfg).map(row => enrichPositionQuote(row, cfg));
         const futures = parseFuturePositions(positionRows, cfg);
         const inventory = aggregateInventory(positions, cfg);
-        const futuresQty = futures.reduce((acc, row) => acc + row.position, 0);
+        const portfolioExposure = portfolioDeltaExposure(positionRows, cfg, futures);
+        const visual = productMeta[underlying] || { icon: underlying.slice(0, 3), name: "期货品种", tone: "blue" };
         const futuresLabel = futures.length
           ? futures.map(row => `${row.localSymbol || row.underlying} ${num(row.position, 0)}`).join(" / ")
           : "无";
         const ref = referencePriceFor(underlying, chainRows, positions, cfg, futures);
-        const active = underlying === activeCfg.underlying ? " active" : "";
+        const isActive = underlying === activeCfg.underlying;
+        const active = isActive ? " active" : "";
         const hasChain = chainRows.some(row => productOf(row) === underlying);
         const hasFuturePrice = futurePriceRows.some(row => txt(row.root || row.symbol).toUpperCase() === underlying);
-        const status = hasChain || hasFuturePrice || positions.length ? "数据已载入" : "暂无默认链数据";
-        const missing = hasChain || hasFuturePrice || positions.length ? "" : " missing";
-        return `<button class="product-card${active}${missing}" data-underlying="${esc(underlying)}">
-          <div class="product-card-top">
-            <span class="product-symbol">${esc(underlying)}</span>
-            <span class="product-price"><span>期货价</span><b>${num(ref.price, 3)}</b></span>
-          </div>
-          <div class="product-metrics">
-            <span><em>合约</em><b>${num(inventory.totalContracts, 0)}</b></span>
-            <span title="${esc(futuresLabel)}"><em>期货</em><b>${num(futuresQty, 0)}</b></span>
-            <span><em>权利金</em><b>${money(inventory.remainingPremium)}</b></span>
-            <span><em>保证金</em><b>${money(inventory.margin + futuresMarginEstimate(futures, cfg))}</b></span>
-            <span><em>期权Delta</em><b>${num(inventory.deltaExposure, 2)}</b></span>
-            <span><em>Gamma</em><b>${num(inventory.gammaExposure, 2)}</b></span>
-            <span><em>Theta</em><b>${num(inventory.thetaExposure, 2)}</b></span>
-          </div>
-          <div class="product-status">${esc(status)}</div>
+        const hasData = hasChain || hasFuturePrice || positions.length || futures.length || portfolioExposure.options.length;
+        const status = hasData ? "数据已载入" : "暂无链数据";
+        const missing = hasData ? "" : " missing";
+        const equivalentFutures = portfolioExposure.equivalentFutureDelta;
+        const futuresTone = equivalentFutures > 0.01 ? "positive" : equivalentFutures < -0.01 ? "negative" : "";
+        const futuresIcon = equivalentFutures > 0.01 ? "↑" : equivalentFutures < -0.01 ? "↓" : "—";
+        const futuresSignal = Math.abs(equivalentFutures) > 0.01 ? `等效期货 ${signedNum(equivalentFutures, 2)}` : "无等效期货";
+        const deltaTone = portfolioExposure.portfolioDelta > 0.25 ? "positive" : portfolioExposure.portfolioDelta < -0.25 ? "negative" : "";
+        const deltaSignal = portfolioExposure.portfolioDelta > 0.25 ? "组合Delta 偏多" : portfolioExposure.portfolioDelta < -0.25 ? "组合Delta 偏空" : "组合Delta 中性";
+        const deepItmTitle = portfolioExposure.deepItmOptions.length
+          ? portfolioExposure.deepItmOptions.map(row => `${row.localSymbol || `${row.underlying} ${row.right}${num(row.strike, 3)}`} ${signedQty(row.position)}张；Delta ${num(row.delta, 2)}；时间价值 ${optPx(row.timeValue)}；等价 ${signedNum(row.equivalentFutureContracts, 2)}张期货`).join(" / ")
+          : `未识别到 |Delta|≥${num(DEEP_ITM_DELTA_THRESHOLD, 2)} 且时间价值不超过一个最小跳动的实值期权`;
+        const deepItmTimeValue = portfolioExposure.deepItmOptions.length
+          ? Math.max(...portfolioExposure.deepItmOptions.map(row => row.timeValue))
+          : NaN;
+        return `<button class="product-card tone-${visual.tone}${active}${missing}" data-underlying="${esc(underlying)}" type="button" aria-label="查看 ${esc(underlying)} ${esc(visual.name)}">
+          <span class="product-card-top">
+            <span class="product-identity">
+              <span class="product-icon" aria-hidden="true">${esc(visual.icon)}</span>
+              <span class="product-title"><strong class="product-symbol">${esc(underlying)}</strong><small class="product-name">${esc(visual.name)}</small></span>
+            </span>
+            <span class="product-card-meta">
+              <span class="product-badge${isActive ? " current" : ""}"><i aria-hidden="true"></i>${isActive ? "当前查看" : "点击切换"}</span>
+              <span class="product-price"><span>期货价</span><b>${num(ref.price, 3)}</b></span>
+            </span>
+          </span>
+          <span class="product-signal-row">
+            <span class="product-signal ${futuresTone}"><i aria-hidden="true">${futuresIcon}</i>${esc(futuresSignal)}</span>
+            <span class="product-signal ${deltaTone}"><i aria-hidden="true">Δ</i>${esc(deltaSignal)}</span>
+            ${portfolioExposure.deepItmOptions.length ? `<span class="product-signal synthetic" title="${esc(deepItmTitle)}"><i aria-hidden="true">≈</i>深度ITM ${num(portfolioExposure.deepItmContracts, 0)}张 ≈ ${signedNum(portfolioExposure.deepItmFutureEquivalent, 2)}期货 · 时间价值 ${optPx(deepItmTimeValue)}</span>` : ""}
+            <span class="product-signal data${hasData ? "" : " missing"}"><i aria-hidden="true"></i>${esc(status)}</span>
+          </span>
+          <span class="product-metrics">
+            ${metricHtml("▣", "合约", num(inventory.totalContracts, 0), "blue")}
+            ${metricHtml("⇄", "等效期货", signedNum(equivalentFutures, 2), "cyan", `实际期货 ${signedNum(portfolioExposure.futureDelta, 2)} + 深度ITM多头 ${signedNum(portfolioExposure.deepItmFutureEquivalent, 2)}；实际持仓：${futuresLabel}`)}
+            ${metricHtml("$", "权利金", money(inventory.remainingPremium), "green")}
+            ${metricHtml("◈", "期权金指标", money(inventory.weightedPremium), "violet", `|Delta|按两位小数达到${num(cfg.highDeltaPremiumThreshold, 2)}时，按1-实际|Delta|折算`)}
+            ${metricHtml("Δ", "期权Delta", num(inventory.deltaExposure, 2), inventory.deltaExposure < -0.25 ? "red" : "cyan", "卖方期权库存，不含多头期权和期货")}
+            ${metricHtml("ΣΔ", "组合Delta", signedNum(portfolioExposure.portfolioDelta, 2), deltaTone === "negative" ? "red" : "cyan", `short期权 ${signedNum(portfolioExposure.shortOptionDelta, 2)} + 等效期货 ${signedNum(portfolioExposure.equivalentFutureDelta, 2)}；其他多头期权不计入`)}
+            ${metricHtml("Γ", "Gamma", num(inventory.gammaExposure, 2), "amber")}
+            ${metricHtml("Θ", "Theta", num(inventory.thetaExposure, 2), "green")}
+          </span>
         </button>`;
       }).join("");
       $("productOverview").querySelectorAll("[data-underlying]").forEach(button => {
@@ -2271,6 +3198,44 @@
           proposed = {};
           render();
         });
+      });
+      renderPortfolioPremiumOverview(activeCfg, products);
+    }
+
+    function renderPortfolioPremiumOverview(baseCfg, products) {
+      const positions = products.flatMap(underlying => {
+        const cfg = configForUnderlying(baseCfg, underlying);
+        return parseShortPositions(positionRows, cfg, { respectInventoryDte: false })
+          .map(row => enrichPositionQuote(row, cfg));
+      });
+      const totalPremium = sum(positions, "remainingPremium");
+      const weightedPremium = sum(positions, "weightedPremium");
+      const threshold = baseCfg.highDeltaPremiumThreshold;
+      const highDeltaRows = positions.filter(row => isHighDeltaPremium(row.delta, threshold));
+      const highDeltaPremium = sum(highDeltaRows, "remainingPremium");
+      $("portfolioPremiumSummary").innerHTML = [
+        metric("全部剩余权利金", money(totalPremium), `${num(sum(positions, "contracts"), 0)} 张卖方期权`, "violet"),
+        metric("Delta 加权期权金", money(weightedPremium), `|Delta|≈${num(threshold, 2)}+ 按 1-|Delta| 折算`, "green"),
+        metric("高 Delta 原权利金", money(highDeltaPremium), `${num(sum(highDeltaRows, "contracts"), 0)} 张 |Delta|≈${num(threshold, 2)}+`, "amber"),
+        metric("风险折减", money(Math.max(totalPremium - weightedPremium, 0)), "原权利金减加权期权金", totalPremium > weightedPremium ? "red" : "cyan")
+      ].join("");
+
+      const groups = new Map();
+      positions.forEach(row => {
+        const expiry = row.expiry || "-";
+        if (!groups.has(expiry)) groups.set(expiry, []);
+        groups.get(expiry).push(row);
+      });
+      const expiryRows = Array.from(groups.entries()).map(([expiry, items]) => ({
+        expiry: formatExpiryDate(expiry),
+        dte: Math.min(...items.map(row => Math.max(0, Math.round(row.dte)))),
+        contracts: sum(items, "contracts"),
+        remainingPremium: sum(items, "remainingPremium"),
+        weightedPremium: sum(items, "weightedPremium"),
+        products: Array.from(new Set(items.map(row => row.underlying))).sort().join(" / ")
+      })).sort((a, b) => a.dte - b.dte || a.expiry.localeCompare(b.expiry));
+      renderTable("premiumExpiryTable", expiryRows, ["expiry", "dte", "products", "contracts", "remainingPremium", "weightedPremium"], {
+        expiry: "到期日", dte: "DTE", products: "品种", contracts: "张数", remainingPremium: "剩余权利金", weightedPremium: "Delta 加权期权金"
       });
     }
 
@@ -2285,8 +3250,8 @@
     }
 
     function renderGreekDte(rows) {
-      renderTable("greekDteTable", rows, ["key", "contracts", "deltaExposure", "gammaExposure", "thetaExposure", "vegaExposure", "remainingPremium"], {
-        key: "DTE分组", contracts: "张数", deltaExposure: "Delta", gammaExposure: "Gamma", thetaExposure: "Theta", vegaExposure: "Vega", remainingPremium: "剩余权利金"
+      renderTable("greekDteTable", rows, ["key", "contracts", "deltaExposure", "gammaExposure", "thetaExposure", "vegaExposure", "remainingPremium", "weightedPremium"], {
+        key: "DTE分组", contracts: "张数", deltaExposure: "Delta", gammaExposure: "Gamma", thetaExposure: "Theta", vegaExposure: "Vega", remainingPremium: "剩余权利金", weightedPremium: "Delta 加权期权金"
       });
     }
 
@@ -2322,12 +3287,14 @@
       });
       return Array.from(buckets.entries()).map(([key, items]) => {
         const premium = sum(items, "remainingPremium");
+        const weightedPremium = sum(items, "weightedPremium");
         const gammaAbs = items.reduce((acc, row) => acc + Math.abs(row.position * row.gamma), 0);
         const thetaAbs = items.reduce((acc, row) => acc + Math.abs(row.position * row.theta), 0);
         return {
           key,
           contracts: sum(items, "contracts"),
           remainingPremium: premium,
+          weightedPremium,
           deltaExposure: items.reduce((acc, row) => acc + row.position * row.delta, 0),
           gammaExposure: items.reduce((acc, row) => acc + row.position * row.gamma, 0),
           thetaExposure: items.reduce((acc, row) => acc + row.position * row.theta, 0),
@@ -2643,14 +3610,29 @@
       const estimatedDeltaNote = estimatedDeltaCount
         ? `；其中 ${estimatedDeltaCount} 个候选的单边 Delta 缺失，已用同到期日、同 Strike 的另一侧按 Put-Call parity 近似补全，并以 Delta≈ 标记`
         : "";
-      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；DTE：${dteText}；只显示满足 Delta、OTM、Strike 和 bid>0 的可交易候选：Call Delta ≤ ${num(cfg.callDeltaMax, 2)}、Strike ≤ ${num(cfg.callStrikeMax, 3)}；Put Delta ≤ ${num(cfg.putDeltaMax, 2)}、Strike ≥ ${num(cfg.putStrikeMin, 3)}${estimatedDeltaNote}。空白格表示该 Strike/DTE 没有合约，或报价/筛选条件不满足；当前持仓请在上方“当前库存行权节点”查看。`;
-      $("candidateTable").innerHTML = optionChainHtml(rows, cfg, {
+      const latestSnapshot = latestProductSnapshotMs(chainRows, cfg.underlying);
+      const staleQuoteCount = chainRows.filter(row => (
+        productOf(row) === cfg.underlying
+        && firstNum(row.bid) > 0
+        && !candidateSnapshotIsCurrent(row, latestSnapshot)
+      )).length;
+      const staleNote = staleQuoteCount
+        ? `；另有 ${staleQuoteCount} 条报价落后该品种最新快照超过 ${MAX_CANDIDATE_SNAPSHOT_LAG_HOURS} 小时，已排除，避免新旧报价混用`
+        : "";
+      const matrixView = candidateChainView === "matrix";
+      const viewNote = matrixView ? "矩阵以 DTE/现价为中轴并按 Strike 高低分左右；ITM 当前持仓会跨轴归位" : "期权链视角按中间 Strike、两侧 DTE 展开";
+      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；DTE：${dteText}；${viewNote}；只显示满足 Delta、OTM、Strike、bid>0 且快照一致的可交易候选：Call Delta ≤ ${num(cfg.callDeltaMax, 2)}、Strike ≤ ${num(cfg.callStrikeMax, 3)}；Put Delta ≤ ${num(cfg.putDeltaMax, 2)}、Strike ≥ ${num(cfg.putStrikeMin, 3)}${estimatedDeltaNote}${staleNote}。空白格表示该 Strike/DTE 没有合约，或报价/筛选条件不满足；当前持仓请在上方“当前库存行权节点”查看。`;
+      syncCandidateChainViewControls();
+      const options = {
         editable: true,
         showGreeks: true,
         futures: futurePositions,
         displayDtes: cfg.selectedCandidateDtes,
         dteRows: chainRows
-      });
+      };
+      $("candidateTable").innerHTML = matrixView
+        ? candidateStrikeDteHtml(rows, cfg, options)
+        : optionChainHtml(rows, cfg, options);
       $("candidateTable").querySelectorAll("input[data-id]").forEach(input => {
         input.addEventListener("input", () => {
           proposed[input.dataset.id] = Math.max(toNum(input.value), 0) || 0;
@@ -2658,19 +3640,48 @@
           renderNodes(shortPositions, candidates, config());
         });
       });
+      if (matrixView) centerCandidateMatrixAxis();
+    }
+
+    function centerCandidateMatrixAxis() {
+      centerMatrixAxis("candidateTable", ".candidate-matrix-wrap");
+    }
+
+    function centerInventoryMatrixAxis() {
+      centerMatrixAxis("inventoryChain", ".inventory-matrix-wrap");
+    }
+
+    function centerMatrixAxis(containerId, wrapSelector) {
+      const container = $(containerId);
+      if (typeof window === "undefined" || !container || !container.querySelector) return;
+      const center = () => {
+        const wrap = container.querySelector(wrapSelector);
+        const axis = container.querySelector(".inventory-matrix-center-head");
+        if (!wrap || !axis) return;
+        const wrapRect = wrap.getBoundingClientRect();
+        const axisRect = axis.getBoundingClientRect();
+        const delta = axisRect.left + axisRect.width / 2 - (wrapRect.left + wrapRect.width / 2);
+        wrap.scrollLeft = Math.max(wrap.scrollLeft + delta, 0);
+      };
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(center);
+      else center();
     }
 
     function enrichPositionQuote(row, cfg) {
       const quote = quoteForPosition(row, cfg);
+      const delta = row.deltaObserved === false
+        ? firstNum(quote.delta, row.delta)
+        : firstNum(row.delta, quote.delta);
       return {
         ...row,
         bid: firstNum(row.bid, quote.bid),
         ask: firstNum(row.ask, quote.ask),
         mid: firstNum(row.mid, quote.mid),
-        delta: firstNum(row.delta, quote.delta),
-        gamma: firstNum(row.gamma, quote.gamma),
-        theta: firstNum(row.theta, quote.theta),
-        vega: firstNum(row.vega, quote.vega)
+        delta,
+        gamma: firstNum(quote.gamma, row.gamma),
+        theta: firstNum(quote.theta, row.theta),
+        vega: firstNum(quote.vega, row.vega),
+        weightedPremium: deltaWeightedPremium(row.remainingPremium, delta, cfg.highDeltaPremiumThreshold)
       };
     }
 
@@ -2679,19 +3690,30 @@
       const strike = toNum(row.strike);
       const expiry = txt(row.expiry);
       const dte = Math.max(0, Math.round(row.dte));
-      return chainRows
+      const rowConId = toNum(row.conId);
+      const productRows = chainRows
         .filter(candidate => productOf(candidate) === cfg.underlying)
-        .filter(candidate => normRight(candidate.right || candidate.direction) === right)
-        .filter(candidate => Math.abs(strikeOf(candidate, cfg.underlying) - strike) < 0.0001)
-        .filter(candidate => {
-          const candidateExpiry = txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth);
-          return candidateExpiry === expiry || Math.max(0, Math.round(dteFromRow(candidate))) === dte;
-        })
+        .filter(candidate => normRight(candidate.right || candidate.direction) === right);
+      const exactConIdRows = Number.isFinite(rowConId)
+        ? productRows.filter(candidate => toNum(candidate.conId) === rowConId)
+        : [];
+      const sameStrikeRows = productRows
+        .filter(candidate => Math.abs(strikeOf(candidate, cfg.underlying) - strike) < 0.0001);
+      const exactExpiryRows = sameStrikeRows.filter(candidate => (
+        txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth) === expiry
+      ));
+      const sameDteRows = sameStrikeRows.filter(candidate => (
+        Math.max(0, Math.round(dteFromRow(candidate))) === dte
+      ));
+      const matchingRows = exactConIdRows.length
+        ? exactConIdRows
+        : (exactExpiryRows.length ? exactExpiryRows : sameDteRows);
+      return matchingRows
         .map(candidate => ({
           bid: firstNum(candidate.bid),
           ask: firstNum(candidate.ask),
           mid: firstNum(candidate.mid, candidate.price, candidate.modelOptionPrice, candidate.optPrice),
-          delta: signedDelta(candidate, right),
+          delta: directSignedDelta(candidate, right),
           gamma: firstNum(candidate.gamma, candidate.modelGreeks_gamma, candidate.bidGreeks_gamma, candidate.askGreeks_gamma),
           theta: firstNum(candidate.theta, candidate.modelGreeks_theta, candidate.bidGreeks_theta, candidate.askGreeks_theta),
           vega: firstNum(candidate.vega, candidate.modelGreeks_vega, candidate.bidGreeks_vega, candidate.askGreeks_vega)
@@ -2707,15 +3729,27 @@
         finalScore: 0
       }, cfg));
       const ref = referencePriceFor(cfg.underlying, chainRows, positions, cfg, futurePositions);
-      $("inventoryChainNote").textContent = Number.isFinite(ref.price)
-        ? `当前品种 ${cfg.underlying}；展示全部实际卖方持仓到期日；绿色行是当前期货价位置。`
-        : `当前品种 ${cfg.underlying}；展示全部实际卖方持仓到期日；未识别到当前期货价，可在上方“当前期货价”手动输入。`;
-      $("inventoryChain").innerHTML = optionChainHtml(inventoryRows, cfg, {
+      const matrixView = inventoryChainView === "matrix";
+      const viewText = matrixView
+        ? "DTE 与现价位于中轴；高于现价的 Strike 在左，低于现价的 Strike 在右，ITM Call/Put 会跨轴归位"
+        : "期权链视角按中间 Strike、两侧 Call/Put DTE 展开";
+      const priceText = Number.isFinite(ref.price)
+        ? (matrixView ? `中轴显示当前期货价 ${num(ref.price, 3)}，绿色表头标出各侧最接近现价的 Strike` : "绿色行是当前期货价位置")
+        : "未识别到当前期货价，可在下方“Greeks 与方向”中手动输入";
+      $("inventoryChainNote").textContent = `当前品种 ${cfg.underlying}；展示全部实际卖方持仓到期日；${viewText}；红色“高Delta”表示 |Delta| 已达到 ${num(cfg.highDeltaPremiumThreshold, 2)} 阈值；${priceText}。`;
+      syncInventoryChainViewControls();
+      const options = {
         editable: false,
         showGreeks: false,
         futures: futurePositions,
-        positions
-      });
+        positions,
+        markHighDelta: true,
+        highDeltaThreshold: cfg.highDeltaPremiumThreshold
+      };
+      $("inventoryChain").innerHTML = matrixView
+        ? inventoryStrikeDteHtml(inventoryRows, cfg, options)
+        : optionChainHtml(inventoryRows, cfg, options);
+      if (matrixView) centerInventoryMatrixAxis();
     }
 
     function optionChainHtml(rows, cfg, options) {
@@ -2747,6 +3781,184 @@
         cells.push(...spotHeaderCells(leftDtes, dtes, spot, dteDates, cfg, options));
       }
       return `<div class="expiry-sketch"><div class="chain-map" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
+    }
+
+    function inventoryStrikeDteHtml(rows, cfg, options = {}) {
+      const productRows = rows.filter(row => row.underlying === cfg.underlying);
+      if (!productRows.length) return `<div class="note">当前品种暂无可展示库存。</div>`;
+      const ref = referencePriceFor(cfg.underlying, chainRows, options.positions || shortPositions, cfg, options.futures || []);
+      const spot = ref.price;
+      const dtes = unifiedDtes(productRows);
+      const dteDates = dteDateLabels(productRows);
+      const axis = matrixAxisEntries(productRows, spot);
+      const nearestLeft = nearestMatrixEntry(axis.left, spot);
+      const nearestRight = nearestMatrixEntry(axis.right, spot);
+      const colTemplate = `${axis.left.map(() => "160px").join(" ")} 116px ${axis.right.map(() => "160px").join(" ")}`.trim();
+      const cells = [
+        ...axis.left.map(entry => matrixStrikeHeader(entry, nearestLeft)),
+        `<div class="inventory-matrix-center-head"><strong>DTE ↓</strong><small>高 Strike ← · → 低 Strike</small>${Number.isFinite(spot) ? `<small>现价 ${num(spot, 3)}</small>` : ""}</div>`,
+        ...axis.right.map(entry => matrixStrikeHeader(entry, nearestRight))
+      ];
+      dtes.forEach(dte => {
+        axis.left.forEach(entry => {
+          const matchingRows = matrixRowsAt(productRows, entry, dte);
+          const nearSpot = matrixEntryMatches(entry, nearestLeft);
+          const side = entry.right === "C" ? "call" : "put";
+          cells.push(inventoryMatrixCell(matchingRows, entry.strike, spot, options, nearSpot, side));
+        });
+        cells.push(`<div class="inventory-matrix-dte">${dte}DTE${matrixDteDateLabel(dte, dteDates)}</div>`);
+        axis.right.forEach(entry => {
+          const matchingRows = matrixRowsAt(productRows, entry, dte);
+          const nearSpot = matrixEntryMatches(entry, nearestRight);
+          const side = entry.right === "C" ? "call" : "put";
+          cells.push(inventoryMatrixCell(matchingRows, entry.strike, spot, options, nearSpot, side));
+        });
+      });
+      return `<div class="inventory-matrix-wrap"><div class="inventory-matrix inventory-axis-matrix" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
+    }
+
+    function matrixAxisEntries(rows, spot) {
+      const entries = Array.from(new Map(rows
+        .filter(row => (row.right === "C" || row.right === "P") && Number.isFinite(row.strike))
+        .map(row => [`${row.right}-${row.strike.toFixed(6)}`, { right: row.right, strike: row.strike }])).values());
+      const left = [], right = [];
+      entries.forEach(entry => {
+        entry.itm = Number.isFinite(spot) && (
+          (entry.right === "C" && entry.strike < spot) ||
+          (entry.right === "P" && entry.strike > spot)
+        );
+        if (!Number.isFinite(spot)) {
+          (entry.right === "C" ? left : right).push(entry);
+        } else if (entry.strike > spot + EPS) {
+          left.push(entry);
+        } else if (entry.strike < spot - EPS) {
+          right.push(entry);
+        } else {
+          (entry.right === "C" ? left : right).push(entry);
+        }
+      });
+      const sortEntries = (a, b) => (b.strike - a.strike) || a.right.localeCompare(b.right);
+      return { left: left.sort(sortEntries), right: right.sort(sortEntries) };
+    }
+
+    function nearestMatrixEntry(entries, spot) {
+      if (!Number.isFinite(spot) || !entries.length) return null;
+      return entries.reduce((nearest, entry) => (
+        Math.abs(entry.strike - spot) < Math.abs(nearest.strike - spot) ? entry : nearest
+      ), entries[0]);
+    }
+
+    function matrixEntryMatches(a, b) {
+      return Boolean(a && b && a.right === b.right && Math.abs(a.strike - b.strike) < EPS);
+    }
+
+    function matrixStrikeHeader(entry, nearestEntry) {
+      const side = entry.right === "C" ? "call" : "put";
+      const sideLabel = entry.right === "C" ? "Call" : "Put";
+      const nearSpot = matrixEntryMatches(entry, nearestEntry);
+      const itmText = entry.itm ? " · ITM" : "";
+      return `<div class="inventory-matrix-strike ${side}${nearSpot ? " near-spot" : ""}${entry.itm ? " itm-axis" : ""}"><span class="matrix-header-side">${sideLabel}${itmText}</span><strong>${num(entry.strike, 3)}</strong></div>`;
+    }
+
+    function matrixRowsAt(rows, entry, dte) {
+      return rows
+        .filter(row => row.right === entry.right && Math.abs(row.strike - entry.strike) < EPS && Math.max(0, Math.round(row.dte)) === dte)
+        .sort((a, b) => txt(a.expiry).localeCompare(txt(b.expiry)));
+    }
+
+    function candidateStrikeDteHtml(rows, cfg, options = {}) {
+      const productRows = rows.filter(row => row.underlying === cfg.underlying);
+      if (!productRows.length) return `<div class="note">当前品种暂无可展示期权链。</div>`;
+      const ref = referencePriceFor(cfg.underlying, chainRows, shortPositions, cfg, options.futures || []);
+      const spot = ref.price;
+      const dtes = unifiedDtes(productRows, options.displayDtes);
+      const dteDates = dteDateLabels(options.dteRows || productRows);
+      const axis = matrixAxisEntries(productRows, spot);
+      const nearestLeft = nearestMatrixEntry(axis.left, spot);
+      const nearestRight = nearestMatrixEntry(axis.right, spot);
+      const colTemplate = `${axis.left.map(() => "176px").join(" ")} 116px ${axis.right.map(() => "176px").join(" ")}`.trim();
+      const cells = [
+        ...axis.left.map(entry => matrixStrikeHeader(entry, nearestLeft)),
+        `<div class="inventory-matrix-center-head"><strong>DTE ↓</strong><small>高 Strike ← · → 低 Strike</small>${Number.isFinite(spot) ? `<small>当前期货价 ${num(spot, 3)}</small>` : ""}</div>`,
+        ...axis.right.map(entry => matrixStrikeHeader(entry, nearestRight))
+      ];
+      dtes.forEach(dte => {
+        axis.left.forEach(entry => {
+          const matchingRows = matrixRowsAt(productRows, entry, dte);
+          const nearSpot = matrixEntryMatches(entry, nearestLeft);
+          const side = entry.right === "C" ? "call" : "put";
+          cells.push(candidateMatrixCell(matchingRows, entry.strike, spot, nearSpot, side));
+        });
+        cells.push(`<div class="inventory-matrix-dte">${dte}DTE${matrixDteDateLabel(dte, dteDates)}</div>`);
+        axis.right.forEach(entry => {
+          const matchingRows = matrixRowsAt(productRows, entry, dte);
+          const nearSpot = matrixEntryMatches(entry, nearestRight);
+          const side = entry.right === "C" ? "call" : "put";
+          cells.push(candidateMatrixCell(matchingRows, entry.strike, spot, nearSpot, side));
+        });
+      });
+      return `<div class="inventory-matrix-wrap candidate-matrix-wrap"><div class="inventory-matrix candidate-matrix" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
+    }
+
+    function candidateMatrixCell(rows, strike, spot, nearSpot, side) {
+      const className = `inventory-matrix-cell candidate-matrix-cell ${side}-side${rows.length ? "" : " empty"}${nearSpot ? " near-spot" : ""}`;
+      if (!rows.length) return `<div class="${className}"></div>`;
+      return `<div class="${className}">${rows.map(row => candidateMatrixPositionHtml(row, strike, spot)).join("")}</div>`;
+    }
+
+    function candidateMatrixPositionHtml(row, strike, spot) {
+      const side = row.right === "C" ? "call" : "put";
+      const sideLabel = row.right === "C" ? "C" : "P";
+      const rowSpot = Number.isFinite(row.underlyingPrice) ? row.underlyingPrice : spot;
+      const isItm = Number.isFinite(rowSpot) && (
+        (row.right === "C" && strike < rowSpot) ||
+        (row.right === "P" && strike > rowSpot)
+      );
+      const current = currentContracts(row);
+      const qty = targetQuantity(row);
+      const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
+      const quoteLabel = row.isCurrentOnly && !(Number.isFinite(row.bid) && row.bid > 0) ? "当前报价" : "Bid/Ask";
+      const deltaLabel = row.deltaEstimated ? "Delta≈" : "Delta";
+      const riskBadge = isItm ? `<span class="matrix-risk-badge itm">ITM</span>` : "";
+      const qtyInput = `<input class="qty" data-id="${esc(row.id)}" type="number" min="0" step="1" value="${qty}" />`;
+      return `<div class="inventory-matrix-position candidate-matrix-position ${side}${current > 0 ? " has-position" : ""}${isItm ? " itm" : ""}"><strong><span class="matrix-side-badge">${sideLabel}</span>${current > 0 ? `当前${num(current, 0)}张` : "可开仓"}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><div class="matrix-position-meta"><span>${deltaLabel} ${num(row.delta, 2)}</span><span>评分 ${num(row.finalScore, 1)}</span>${riskBadge}</div><div class="matrix-position-meta"><span>保证金 ${money(row.marginEstimate)}</span></div><div class="matrix-position-quote"><span>${quoteLabel}</span><span>${quote}</span></div><label class="candidate-matrix-qty"><span>${current > 0 ? `当前 ${num(current, 0)}张 · ` : ""}目标张数</span>${qtyInput}</label></div>`;
+    }
+
+    function matrixDteDateLabel(dte, dteDates) {
+      const dates = Array.from(dteDates.get(dte) || []).sort();
+      if (!dates.length) return "";
+      const label = dates.length > 1 ? `${dates[0]} +${dates.length - 1}` : dates[0];
+      return `<small>${esc(label)}</small>`;
+    }
+
+    function inventoryMatrixCell(rows, strike, spot, options, nearSpot, side) {
+      const className = `inventory-matrix-cell ${side}-side${rows.length ? "" : " empty"}${nearSpot ? " near-spot" : ""}`;
+      if (!rows.length) return `<div class="${className}"></div>`;
+      return `<div class="${className}">${rows.map(row => inventoryMatrixPositionHtml(row, strike, spot, options)).join("")}</div>`;
+    }
+
+    function inventoryMatrixPositionHtml(row, strike, spot, options = {}) {
+      const side = row.right === "C" ? "call" : "put";
+      const sideLabel = row.right === "C" ? "C" : "P";
+      const rowSpot = Number.isFinite(row.underlyingPrice) ? row.underlyingPrice : spot;
+      const isItm = Number.isFinite(rowSpot) && (
+        (row.right === "C" && strike < rowSpot) ||
+        (row.right === "P" && strike > rowSpot)
+      );
+      const threshold = firstNum(options.highDeltaThreshold, HIGH_DELTA_PREMIUM_THRESHOLD);
+      const highDelta = Boolean(options.markHighDelta) && isHighDeltaPremium(row.delta, threshold);
+      const qty = Number.isFinite(row.position) ? row.position : -Math.abs(firstNum(row.contracts, 0));
+      const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
+      const pnlClass = row.unrealizedPnL > EPS ? " positive" : (row.unrealizedPnL < -EPS ? " negative" : "");
+      const pnlText = Number.isFinite(row.unrealizedPnL)
+        ? `${row.unrealizedPnL > EPS ? "+" : ""}${money(row.unrealizedPnL)}`
+        : "-";
+      const riskBadges = [
+        isItm ? `<span class="matrix-risk-badge itm">ITM</span>` : "",
+        highDelta ? `<span class="matrix-risk-badge high-delta">高Δ</span>` : ""
+      ].filter(Boolean).join("");
+      const riskBadgeGroup = riskBadges ? `<span class="matrix-risk-badges">${riskBadges}</span>` : "";
+      return `<div class="inventory-matrix-position ${side}${isItm ? " itm" : ""}${highDelta ? " high-delta" : ""}"><strong><span class="matrix-side-badge">${sideLabel}</span>${num(qty, 0)}张<span class="matrix-value">${money(row.marketValue)}</span></strong><div class="matrix-position-meta"><span>Delta ${num(row.delta, 2)}</span><span class="matrix-position-pnl${pnlClass}">PnL ${pnlText}</span>${riskBadgeGroup}</div><div class="matrix-position-quote"><span>Bid / Ask</span><span>${quote}</span></div></div>`;
     }
 
     function unifiedDtes(rows, requestedDtes = []) {
@@ -2823,19 +4035,25 @@
     }
 
     function chainMapCell(row, side, options, strike, spot) {
-      const isItm = Number.isFinite(spot) && (
-        (side === "call" && Number.isFinite(strike) && strike < spot) ||
-        (side === "put" && Number.isFinite(strike) && strike > spot)
+      const rowSpot = row && Number.isFinite(row.underlyingPrice) ? row.underlyingPrice : spot;
+      const isItm = Number.isFinite(rowSpot) && (
+        (side === "call" && Number.isFinite(strike) && strike < rowSpot) ||
+        (side === "put" && Number.isFinite(strike) && strike > rowSpot)
       );
       if (!row) return `<div class="chain-map-cell ${side} empty${isItm ? " invalid-zone" : ""}"></div>`;
-      return options.editable ? chainEditableMapCell(row, side, isItm) : chainReadonlyMapCell(row, side, isItm);
+      return options.editable
+        ? chainEditableMapCell(row, side, isItm)
+        : chainReadonlyMapCell(row, side, isItm, options);
     }
 
-    function chainReadonlyMapCell(row, side, isItm = false) {
+    function chainReadonlyMapCell(row, side, isItm = false, options = {}) {
       const label = esc(compactPositionName(row));
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
       const itmBadge = isItm ? `<span class="itm-badge">ITM 实值</span>` : "";
-      return `<div class="chain-map-cell ${side}${isItm ? " itm" : ""}"><strong>${label}<span class="title-value">${money(row.marketValue)}</span>${itmBadge}</strong><span>Delta ${num(row.delta, 2)}</span><span>Bid/Ask ${quote}</span></div>`;
+      const threshold = firstNum(options.highDeltaThreshold, HIGH_DELTA_PREMIUM_THRESHOLD);
+      const highDelta = Boolean(options.markHighDelta) && isHighDeltaPremium(row.delta, threshold);
+      const highDeltaBadge = highDelta ? `<span class="high-delta-badge">高Delta ≥${num(threshold, 2)}</span>` : "";
+      return `<div class="chain-map-cell ${side}${isItm ? " itm" : ""}${highDelta ? " high-delta" : ""}"><strong>${label}<span class="title-value">${money(row.marketValue)}</span>${itmBadge}${highDeltaBadge}</strong><span>Delta ${num(row.delta, 2)}</span><span>Bid/Ask ${quote}</span></div>`;
     }
 
     function chainEditableMapCell(row, side, isItm = false) {
@@ -3025,7 +4243,10 @@
       const preset = PRODUCT_PRESETS[underlying] || PRODUCT_PRESETS.ZF;
       const multiplier = firstNum(row.multiplier, preset.multiplier, 1000);
       const credit = Math.max(firstNum(row.estimatedCredit, 0), 0);
-      const spot = referencePriceFor(underlying, chainRows, shortPositions, cfg, futurePositions).price;
+      const spot = firstNum(
+        row.underlyingPrice,
+        referencePriceFor(underlying, chainRows, shortPositions, cfg, futurePositions).price
+      );
       const underlyingRisk = Number.isFinite(spot)
         ? Math.abs(spot) * multiplier * firstNum(preset.optionMarginRate, 0.02) * (0.6 + Math.min(Math.abs(firstNum(row.delta, 0)), 0.6))
         : 0;
@@ -3139,10 +4360,10 @@
     function tableCell(col, value) {
       if (Array.isArray(value)) return `<td class="text">${value.map(item => `<span class="badge amber">${esc(item)}</span>`).join(" ")}</td>`;
       if (isTextCol(col)) return `<td class="text">${esc(value ?? "")}</td>`;
-      if (["premium", "remainingPremium", "margin", "pnl", "deltaPart", "gammaPart", "vegaPart"].includes(col)) return `<td>${money(value)}</td>`;
+      if (["premium", "remainingPremium", "weightedPremium", "margin", "pnl", "deltaPart", "gammaPart", "vegaPart"].includes(col)) return `<td>${money(value)}</td>`;
       if (String(col).includes("Weight")) return `<td>${pct(value)}</td>`;
       if (typeof value === "number") {
-        if (["contracts", "current", "proposed", "after"].includes(col)) return `<td>${num(value, 0)}</td>`;
+        if (["contracts", "current", "proposed", "after", "dte"].includes(col)) return `<td>${num(value, 0)}</td>`;
         if (/Delta|Gamma|Theta|Vega|netDelta|netGamma|netTheta|netVega/.test(col)) return `<td>${num(value, 2)}</td>`;
         return `<td>${num(value, 3)}</td>`;
       }
@@ -3154,7 +4375,7 @@
     }
 
     function isTextCol(col) {
-      return ["label", "name", "key", "node", "worstNode", "worstExpiry", "worstSide", "warnings"].includes(col);
+      return ["label", "name", "key", "node", "expiry", "products", "worstNode", "worstExpiry", "worstSide", "warnings"].includes(col);
     }
 
     function exportPlan() {
@@ -3373,6 +4594,18 @@
       return price;
     }
 
+    function rowReferencePrice(row, underlying, fallback = NaN) {
+      return normalizeFuturePrice(underlying, firstNum(
+        row && row.underlyingPrice,
+        row && row.undPrice,
+        row && row.modelGreeks_undPrice,
+        row && row.bidGreeks_undPrice,
+        row && row.askGreeks_undPrice,
+        row && row.lastGreeks_undPrice,
+        fallback
+      ));
+    }
+
     function expirySortKey(value) {
       const text = txt(value).replace(/-/g, "").slice(0, 8);
       return /^\d{8}$/.test(text) ? Number(text) : Number.MAX_SAFE_INTEGER;
@@ -3395,6 +4628,42 @@
     function signedDelta(row, right) {
       const delta = directSignedDelta(row, right);
       return Number.isFinite(delta) ? delta : 0;
+    }
+
+    function deltaWeightedPremium(premium, delta, threshold = HIGH_DELTA_PREMIUM_THRESHOLD) {
+      const amount = Math.max(firstNum(premium, 0), 0);
+      const absDelta = Math.abs(firstNum(delta, 0));
+      if (!isHighDeltaPremium(absDelta, threshold)) return amount;
+      return amount * clamp(1 - absDelta, 0, 1);
+    }
+
+    function isHighDeltaPremium(delta, threshold = HIGH_DELTA_PREMIUM_THRESHOLD) {
+      const absDelta = Math.abs(firstNum(delta, 0));
+      const displayedDelta = Math.round((absDelta + EPS) * 100) / 100;
+      const displayedThreshold = Math.round((clamp(firstNum(threshold, HIGH_DELTA_PREMIUM_THRESHOLD), 0, 1) + EPS) * 100) / 100;
+      return displayedDelta + EPS >= displayedThreshold;
+    }
+
+    function rowSnapshotMs(row) {
+      const raw = txt(row.snapshotTimeUtc || row.snapshotTime || row.updatedAt || row.timestamp);
+      if (!raw) return NaN;
+      const value = Date.parse(raw);
+      return Number.isFinite(value) ? value : NaN;
+    }
+
+    function latestProductSnapshotMs(rows, underlying) {
+      const values = rows
+        .filter(row => productOf(row) === underlying)
+        .map(rowSnapshotMs)
+        .filter(Number.isFinite);
+      return values.length ? Math.max(...values) : NaN;
+    }
+
+    function candidateSnapshotIsCurrent(row, latestSnapshot) {
+      const rowSnapshot = rowSnapshotMs(row);
+      if (!Number.isFinite(rowSnapshot) || !Number.isFinite(latestSnapshot)) return true;
+      const lagHours = Math.max(latestSnapshot - rowSnapshot, 0) / 3600000;
+      return lagHours <= MAX_CANDIDATE_SNAPSHOT_LAG_HOURS + EPS;
     }
 
     function candidateDeltaInfo(row, right, peers = chainRows) {
@@ -3498,6 +4767,11 @@
     function signedQty(value) {
       if (!Number.isFinite(value)) return "0";
       return value > 0 ? `+${num(value, 0)}` : num(value, 0);
+    }
+
+    function signedNum(value, digits = 2) {
+      if (!Number.isFinite(value)) return "-";
+      return value > EPS ? `+${num(value, digits)}` : num(value, digits);
     }
 
     function pct(value) {

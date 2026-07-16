@@ -11,7 +11,7 @@
 
 ## 推荐启动与停止脚本
 
-日常使用请只选一种启动方式。两个脚本都会启动 planner、立即执行一次快速刷新、之后每 3 分钟自动快速刷新，并打开同一个页面：
+日常使用请只选一种启动方式。两个脚本都会启动 planner，并默认每 1 分钟执行一次“智能刷新”：按美国东部日期检查 ZF、ZN、ZC 的候选链，任一品种不是当天数据时先全量刷新；全部为当天数据时只刷新持仓期权和底层期货价。页面地址是：
 
 ```text
 http://127.0.0.1:8766/sell_side_inventory_planner.html
@@ -90,11 +90,13 @@ conda run -n ib python refresh_inventory_data.py --serve-planner --open-browser
 http://127.0.0.1:8766/sell_side_inventory_planner.html
 ```
 
-这条命令会做三件事：
+这条手动命令会做三件事：
 
 - 启动本地 planner server。
 - 默认执行一次 `fast refresh`。
 - 把最新 CSV 发布到 `data/planner/`，然后页面自动读取。
+
+手动命令仍默认只执行一次 fast refresh；一键启动脚本使用的是 `scheduled` 模式和 1 分钟循环。
 
 ## 默认参数
 
@@ -123,12 +125,12 @@ planner-port: 8766
 
 `repeat-minutes: 0` 的意思是：只刷新一次，不自动循环。
 
-## Fast Refresh 和 Full Refresh
+## Fast、Full 和 Scheduled Refresh
 
 外层脚本 `refresh_inventory_data.py` 使用这个参数：
 
 ```text
---refresh-mode {fast,full}
+--refresh-mode {fast,full,scheduled}
 ```
 
 默认是：
@@ -139,15 +141,18 @@ planner-port: 8766
 
 也就是你不写 `--refresh-mode`，它也是 fast。
 
-### Fast Refresh
+### Fast Refresh（持仓快刷）
 
 用于日内高频更新。特点：
 
-- 只请求近端 DTE、现价附近、当前持仓相关合约。
-- 当前持仓 conId 会强制加入刷新 universe。
-- 保留缓存里的远端期权链。
+- 账户持仓期权通过 `reqMktData(..., snapshot=False)` 的流式行情订阅更新。
+- 不扫描候选期权链，也不重新请求近端或近价候选合约。
+- 刷新 ZF、ZN、ZC 所选期货月份的底层价格。
+- 原样保留已有候选期权链和 K 线。
 - 如果已有 K 线数据，默认保留旧 K 线，不每次重刷 bars。
-- 适合页面按钮刷新、每几分钟自动刷新。
+- 适合页面“持仓快刷”和分钟级日常监控。
+
+当前实现每轮会建立 IB 连接、订阅持仓行情，取得结果后关闭连接；它不是跨刷新周期永久保持的长连接。
 
 命令：
 
@@ -159,7 +164,8 @@ planner-port: 8766
 
 用于盘前、缓存不可信、或者需要重建更完整期权链时。特点：
 
-- 请求更完整的 configured option chain。
+- 刷新配置月份内、经过 DTE/Strike/价内外等既有 filter 选中的全部候选期权。
+- 同时刷新账户持仓与底层期货价。
 - 会按配置刷新 bars，除非你显式传 `--skip-bars`。
 - 耗时明显更长。
 
@@ -173,6 +179,21 @@ planner-port: 8766
 
 ```powershell
 .\.venv\Scripts\python.exe .\refresh_inventory_data.py --full-refresh
+```
+
+### Scheduled Refresh（智能刷新）
+
+适合常驻启动：
+
+- 以 `America/New_York` 的当前日期作为“当天”，不使用北京时间判断。
+- 分别读取 ZF、ZN、ZC 候选链行中的最新 `snapshotTimeUtc`；三个品种都为当天才执行 fast。
+- 任一品种缺失或日期落后，执行一次 full；如果某个品种全量刷新失败、日期仍旧，下一轮会继续尝试 full。
+- fast 虽然会重新发布缓存链，但不会用文件修改时间冒充数据日期。
+
+命令：
+
+```powershell
+.\.venv\Scripts\python.exe .\refresh_inventory_data.py --refresh-mode scheduled
 ```
 
 ### 外层参数和底层参数的关系
@@ -192,13 +213,11 @@ target_treasury_monitor_clean.cli refresh-carry-html --fast-refresh
 自动转换成底层 --fast-refresh
 ```
 
-日常使用只需要记住外层的 `--refresh-mode fast/full`。
+日常使用只需要记住外层的 `--refresh-mode fast/full/scheduled`。
 
 ## 自动刷新时间间隔
 
-`fast refresh` 本身不是时间间隔，它只是刷新模式。
-
-循环间隔由 `--repeat-minutes` 控制。
+刷新模式本身不是时间间隔；循环间隔由 `--repeat-minutes` 控制。
 
 只刷新一次：
 
@@ -206,14 +225,14 @@ target_treasury_monitor_clean.cli refresh-carry-html --fast-refresh
 .\.venv\Scripts\python.exe .\refresh_inventory_data.py --refresh-mode fast
 ```
 
-每 3 分钟快速刷新一次：
+每 1 分钟智能刷新一次：
 
 ```powershell
 .\.venv\Scripts\python.exe .\refresh_inventory_data.py `
   --serve-planner `
   --open-browser `
-  --refresh-mode fast `
-  --repeat-minutes 3
+  --refresh-mode scheduled `
+  --repeat-minutes 1
 ```
 
 每 30 分钟快速刷新一次：
@@ -239,12 +258,16 @@ sleeping 1800s; press Ctrl+C to stop
 页面顶部有几个常用按钮：
 
 - `读取默认CSV`：只重新读取 `data/planner/` 下的 CSV，不连接 IB。
-- `快速刷新`：从页面发起 `POST /api/refresh-inventory-data`，后端执行 `refresh_inventory_data.py --refresh-mode fast`。
+- `持仓快刷`：刷新持仓期权的流式订阅行情和底层期货价，不扫描候选链。
 - `全量刷新`：后端执行 `refresh_inventory_data.py --refresh-mode full`。
+- `智能刷新`：按美国东部日期自动选择 fast 或 full。
+- `刷新合约月份`：分别选择 ZF、ZN、ZC 要刷新的底层期货月份；默认三者都只刷新 `202609`，也可切换到 `202612` 或同时刷新9月和12月。
 - `加载样例`：加载页面内置样例，不依赖 IB。
 - `导出JSON / CSV / Markdown`：导出当前手动规划结果。
 
 页面刷新按钮不是定时器。点一次就刷新一次。
+
+所选月份只约束普通期权行情订阅；真实持仓的 conId 即使不在所选月份，也会继续强制刷新，避免月份选择隐藏当前风险。
 
 如果你要定时刷新，需要在启动命令里使用 `--repeat-minutes`。
 
@@ -253,7 +276,7 @@ sleeping 1800s; press Ctrl+C to stop
 两套启动脚本的默认配置均为：
 
 ```text
-REFRESH_MINUTES=3
+REFRESH_MINUTES=1
 CLIENT_ID=7316
 PORT=8766
 ```
@@ -303,13 +326,14 @@ conda run -n ib python open_inventory_planner.py --port 8766
 .\.venv\Scripts\python.exe .\refresh_inventory_data.py --serve-planner --open-browser
 ```
 
-启动页面并每 3 分钟快速刷新：
+启动页面并每 1 分钟智能刷新：
 
 ```powershell
 .\.venv\Scripts\python.exe .\refresh_inventory_data.py `
   --serve-planner `
   --open-browser `
-  --repeat-minutes 3
+  --refresh-mode scheduled `
+  --repeat-minutes 1
 ```
 
 强制全量刷新：
@@ -389,15 +413,17 @@ data/planner/debug/
 
 ## 如何判断刷新真的在跑
 
-点击页面 `快速刷新` 后，终端或日志里会看到类似：
+点击页面 `持仓快刷` 后，终端或日志里会看到类似：
 
 ```text
 refresh request:
-  mode: fast
+  requested_mode: fast
+  effective_mode: fast
 refresh positions/account snapshot
 refresh option chains
-refresh chain: ZF months=...
-refresh chain: ZN months=...
+ZF fast refresh: candidate-chain quote scan skipped
+ZN fast refresh: candidate-chain quote scan skipped
+ZC fast refresh: candidate-chain quote scan skipped
 published: data/planner/carry_dashboard_chain.csv
 refresh finished
 ```
@@ -415,7 +441,10 @@ refresh finished
   "ok": true,
   "running": false,
   "returncode": 0,
-  "progress": 100
+  "progress": 100,
+  "durationSeconds": 9.3,
+  "requestedMode": "fast",
+  "effectiveMode": "fast"
 }
 ```
 

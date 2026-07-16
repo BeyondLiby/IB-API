@@ -9,7 +9,7 @@ fi
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 HOST="127.0.0.1"
 PORT="${1:-8766}"
-REFRESH_MINUTES="${REFRESH_MINUTES:-3}"
+REFRESH_MINUTES="${REFRESH_MINUTES:-1}"
 CLIENT_ID="${IB_CLIENT_ID:-7316}"
 LABEL="com.antony.ib-api.inventory-planner-${PORT}"
 URL="http://${HOST}:${PORT}/sell_side_inventory_planner.html"
@@ -63,12 +63,12 @@ else
 fi
 
 printf -v LAUNCH_COMMAND \
-  'cd %q && exec %q %q --refresh-mode fast --repeat-minutes %q --serve-planner --planner-host %q --planner-port %q --client-id %q' \
+  'cd %q && exec %q %q --refresh-mode scheduled --repeat-minutes %q --serve-planner --planner-host %q --planner-port %q --client-id %q' \
   "${ROOT}" "${PYTHON}" "${ROOT}/refresh_inventory_data.py" \
   "${REFRESH_MINUTES}" "${HOST}" "${PORT}" "${CLIENT_ID}"
 
 rm -f "${PIDFILE}"
-echo "Starting launchd planner with fast refresh every ${REFRESH_MINUTES} minutes..."
+echo "Starting launchd planner with US/Eastern date-aware refresh every ${REFRESH_MINUTES} minute(s)..."
 echo "Log: ${LOG}"
 launchctl submit -l "${LABEL}" -o "${LOG}" -e "${ERROR_LOG}" -- /bin/zsh -lc "${LAUNCH_COMMAND}"
 

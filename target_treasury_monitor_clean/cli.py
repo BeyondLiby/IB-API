@@ -42,7 +42,24 @@ from .settings import (
 
 
 DEFAULT_DASHBOARD_PRODUCTS = "ZF,ZN,ZC"
-DEFAULT_SHARED_CHAIN_SPECS = "ZF=202609,202612;ZN=202609,202612"
+DEFAULT_SHARED_CHAIN_SPECS = "ZF=202609;ZN=202609"
+
+
+def _product_filter_widths(root: str, near_width: float, far_width: float, *, fast_refresh: bool) -> tuple[float, float]:
+    """Return display-unit moneyness widths large enough for each product.
+
+    ZF/ZN strikes are quoted in points while normalized ZC strikes are cents per
+    bushel.  Reusing the Treasury fast width (0.75) for corn can select zero
+    contracts because a single corn strike step is already wider than that.
+    """
+    product = root.upper()
+    minimums = {
+        "ZF": (1.0, 2.0) if fast_refresh else (1.0, 3.0),
+        "ZN": (1.5, 3.0) if fast_refresh else (1.5, 3.0),
+        "ZC": (20.0, 40.0),
+    }
+    minimum_near, minimum_far = minimums.get(product, (0.75, 1.25) if fast_refresh else (1.0, 3.0))
+    return max(float(near_width), minimum_near), max(float(far_width), minimum_far)
 
 
 def _add_ib_args(parser: argparse.ArgumentParser) -> None:
@@ -396,7 +413,11 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--near-dte-days", type=int, default=7)
     refresh.add_argument("--near-strike-width", type=float, default=1.0)
     refresh.add_argument("--far-strike-width", type=float, default=3.0)
-    refresh.add_argument("--fast-refresh", action="store_true", help="Refresh only near/current-position contracts and preserve cached far-chain rows.")
+    refresh.add_argument(
+        "--fast-refresh",
+        action="store_true",
+        help="Refresh held-position streaming quotes and futures prices only; preserve the cached candidate chain and bars.",
+    )
     refresh.add_argument("--market-data-max-dte", type=int, default=0, help="Only request market data up to this DTE; 0 disables the cap.")
     refresh.add_argument("--future-price-wait-seconds", type=float, default=6.0, help="Seconds to wait when refreshing underlying futures prices for each root.")
     refresh.add_argument("--no-contract-cache", action="store_true")
@@ -740,12 +761,13 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     effective_stable_seconds = min(float(args.stable_seconds), 0.75) if fast_refresh else float(args.stable_seconds)
     effective_inter_batch_pause = min(float(args.inter_batch_pause_seconds), 0.25) if fast_refresh else float(args.inter_batch_pause_seconds)
     effective_near_dte = max(int(args.near_dte_days), 10) if fast_refresh else int(args.near_dte_days)
-    effective_near_width = min(float(args.near_strike_width), 0.75) if fast_refresh else float(args.near_strike_width)
-    effective_far_width = min(float(args.far_strike_width), 1.25) if fast_refresh else float(args.far_strike_width)
+    requested_near_width = float(args.near_strike_width)
+    requested_far_width = float(args.far_strike_width)
     effective_market_data_max_dte = int(args.market_data_max_dte or 0) or (10 if fast_refresh else 0)
     if fast_refresh:
         print(
-            "fast refresh enabled: near/current-position contracts only; cached far-chain rows are preserved",
+            "fast refresh enabled: held-position quotes come from streaming subscriptions; "
+            "the cached candidate chain and bars are preserved",
             flush=True,
         )
     print("refresh plan:", flush=True)
@@ -761,8 +783,8 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     )
     print(
         "  effective filter: "
-        f"near_dte_days={effective_near_dte}, near_width={effective_near_width}, "
-        f"far_width={effective_far_width}, market_data_max_dte={effective_market_data_max_dte or '<none>'}, "
+        f"near_dte_days={effective_near_dte}, requested_near_width={requested_near_width}, "
+        f"requested_far_width={requested_far_width}, market_data_max_dte={effective_market_data_max_dte or '<none>'}, "
         f"moneyness_filter={not args.no_market_data_filter}",
         flush=True,
     )
@@ -836,6 +858,16 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
             try:
                 for root, months in chain_specs.items():
                     print(f"refresh chain: {root} months={months}", flush=True)
+                    root_near_width, root_far_width = _product_filter_widths(
+                        root,
+                        requested_near_width,
+                        requested_far_width,
+                        fast_refresh=fast_refresh,
+                    )
+                    print(
+                        f"{root} filter widths: near={root_near_width:g}, far={root_far_width:g}",
+                        flush=True,
+                    )
                     settings = StaticChainSettings(
                         root=root,
                         future_months=months,
@@ -853,8 +885,8 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
                         force_rebuild_contract_cache=args.rebuild_contract_cache,
                         filter_market_data_by_moneyness=not args.no_market_data_filter,
                         near_dte_days=effective_near_dte,
-                        near_strike_width=effective_near_width,
-                        far_strike_width=effective_far_width,
+                        near_strike_width=root_near_width,
+                        far_strike_width=root_far_width,
                         market_data_max_dte=effective_market_data_max_dte or None,
                         force_con_ids=position_con_ids.get(root, ()),
                         future_price_wait_seconds=float(args.future_price_wait_seconds),
@@ -867,8 +899,21 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
                     )
                     if future_price_error:
                         print(f"{root} future price refresh warning: {future_price_error}", flush=True)
+                    if fast_refresh:
+                        print(
+                            f"{root} fast refresh: candidate-chain quote scan skipped; "
+                            f"holding conIds={len(position_con_ids.get(root, ()))}",
+                            flush=True,
+                        )
+                        continue
                     try:
-                        result = refresh_static_chain(ib, settings)
+                        result = refresh_static_chain(
+                            ib,
+                            settings,
+                            future_prices=future_prices,
+                            future_price_source=future_price_source,
+                            future_price_error=future_price_error,
+                        )
                         refreshed_frame = result.monitor_frame
                         raw = result.raw
                         print(
@@ -934,7 +979,14 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     if chain_frames:
         combined_chain = pd.concat(chain_frames, ignore_index=True)
     elif not existing_chain.empty:
-        print("all chain refreshes failed; preserving existing HTML chain file", flush=True)
+        if fast_refresh:
+            print(
+                f"fast refresh: preserving candidate chain ({len(existing_chain)} rows); "
+                "only held-position quotes and futures prices were refreshed",
+                flush=True,
+            )
+        else:
+            print("all chain refreshes failed; preserving existing HTML chain file", flush=True)
         combined_chain = existing_chain
     else:
         combined_chain = pd.DataFrame()

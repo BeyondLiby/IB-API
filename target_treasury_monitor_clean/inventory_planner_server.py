@@ -13,6 +13,40 @@ import uuid
 import webbrowser
 
 
+REFRESH_PRODUCTS = ("ZF", "ZN", "ZC")
+
+
+def normalize_refresh_contract_months(value: object) -> dict[str, str]:
+    """Validate optional product futures-month choices from the local planner."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("contractMonths must be an object keyed by ZF, ZN and ZC")
+    unknown = set(str(key).upper() for key in value) - set(REFRESH_PRODUCTS)
+    if unknown:
+        raise ValueError(f"unknown contract-month product: {sorted(unknown)[0]}")
+
+    normalized: dict[str, str] = {}
+    for product in REFRESH_PRODUCTS:
+        raw = value.get(product)
+        if raw is None:
+            raw = value.get(product.lower())
+        if raw is None or raw == "" or raw == []:
+            raise ValueError(f"missing {product} contract month")
+        parts = raw if isinstance(raw, list) else str(raw or "").split(",")
+        months: list[str] = []
+        for part in parts:
+            month = str(part).strip().replace("-", "")
+            if len(month) != 6 or not month.isdigit() or not 1 <= int(month[-2:]) <= 12:
+                raise ValueError(f"invalid {product} contract month: {part}")
+            if month not in months:
+                months.append(month)
+        if not months:
+            raise ValueError(f"missing {product} contract month")
+        normalized[product] = ",".join(months)
+    return normalized
+
+
 def relative_web_path(path: Path, directory: Path) -> str:
     return path.resolve().relative_to(directory).as_posix()
 
@@ -103,15 +137,20 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
     checks = [
         (8, "启动刷新进程", "refresh started"),
         (12, "执行刷新命令", "running:"),
+        (14, "检查美东数据日期", "refresh_decision:"),
         (20, "连接IB并读取持仓", "refresh positions/account snapshot"),
         (30, "持仓已读取", "positions:"),
         (36, "刷新期权链", "refresh option chains"),
         (46, "刷新ZF期权链", "refresh chain: zf"),
         (50, "刷新ZF期货价格", "zf future prices sidecar:"),
+        (52, "刷新ZF期权行情", "zf option quotes:"),
         (58, "刷新ZN期权链", "refresh chain: zn"),
         (62, "刷新ZN期货价格", "zn future prices sidecar:"),
+        (64, "刷新ZN期权行情", "zn option quotes:"),
         (68, "刷新ZC期权链", "refresh chain: zc"),
         (72, "刷新ZC期货价格", "zc future prices sidecar:"),
+        (74, "刷新ZC期权行情", "zc option quotes:"),
+        (78, "持仓快刷行情已完成", "fast refresh: preserving candidate chain"),
         (78, "刷新期货K线", "refresh futures bars"),
         (90, "发布CSV", "published:"),
         (96, "校验输出文件", "ready_for_full"),
@@ -127,6 +166,21 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
     if returncode is not None:
         return (100, "刷新完成") if returncode == 0 else (progress, stage if lock_busy else "刷新失败")
     return progress, stage
+
+
+def refresh_mode_details_from_output(
+    lines: list[str],
+    requested_mode: str,
+) -> tuple[str, str]:
+    effective_mode = requested_mode
+    refresh_decision = ""
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("effective_mode:"):
+            effective_mode = stripped.split(":", 1)[1].strip().split(" ", 1)[0]
+        elif stripped.startswith("refresh_decision:"):
+            refresh_decision = stripped.split(":", 1)[1].strip()
+    return effective_mode, refresh_decision
 
 
 def refresh_status_http_code(payload: dict[str, object]) -> int:
@@ -223,8 +277,13 @@ def inventory_planner_handler(directory: Path):
             except (OSError, json.JSONDecodeError, ValueError):
                 payload = {}
             mode = str(payload.get("mode") or "fast").strip().lower()
-            if mode not in {"fast", "full"}:
+            if mode not in {"fast", "full", "scheduled"}:
                 self.send_json(400, {"ok": False, "error": f"unknown refresh mode: {mode}"})
+                return
+            try:
+                contract_months = normalize_refresh_contract_months(payload.get("contractMonths"))
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
                 return
 
             latest = read_latest_refresh_status(directory)
@@ -237,6 +296,13 @@ def inventory_planner_handler(directory: Path):
 
             started = time.strftime("%Y-%m-%d %H:%M:%S")
             command = [sys.executable, str(script), "--refresh-mode", mode]
+            if contract_months:
+                command.extend([
+                    "--chain-specs",
+                    f"ZF={contract_months['ZF']};ZN={contract_months['ZN']}",
+                    "--zc-chain-specs",
+                    f"ZC={contract_months['ZC']}",
+                ])
 
             with jobs_lock:
                 running = next((job for job in jobs.values() if job.get("running")), None)
@@ -254,10 +320,15 @@ def inventory_planner_handler(directory: Path):
                     "returncode": None,
                     "progress": 4,
                     "stage": "提交刷新任务",
+                    "durationSeconds": 0.0,
                     "stdout": "",
                     "stderr": "",
                     "lines": [],
                     "mode": mode,
+                    "requestedMode": mode,
+                    "effectiveMode": mode,
+                    "refreshDecision": "",
+                    "contractMonths": contract_months,
                     "manifest": inventory_planner_manifest(directory),
                 }
                 jobs[job_id] = job
@@ -270,6 +341,8 @@ def inventory_planner_handler(directory: Path):
             lines: list[str] = []
             stderr = ""
             returncode: int | None = None
+            with jobs_lock:
+                requested_mode = str(jobs[job_id].get("requestedMode") or "")
             try:
                 process = subprocess.Popen(
                     command,
@@ -285,12 +358,19 @@ def inventory_planner_handler(directory: Path):
                     for line in process.stdout:
                         lines.append(line.rstrip())
                         progress, stage = refresh_progress_from_output(lines)
+                        effective_mode, refresh_decision = refresh_mode_details_from_output(
+                            lines,
+                            requested_mode,
+                        )
                         with jobs_lock:
                             job = jobs[job_id]
                             job["stdout"] = "\n".join(lines)
                             job["lines"] = lines[-80:]
                             job["progress"] = progress
                             job["stage"] = stage
+                            job["durationSeconds"] = round(time.monotonic() - started_at, 3)
+                            job["effectiveMode"] = effective_mode
+                            job["refreshDecision"] = refresh_decision
                         if time.monotonic() - started_at > 900:
                             process.kill()
                             stderr = "refresh timed out after 900s"
@@ -304,6 +384,8 @@ def inventory_planner_handler(directory: Path):
                 lines.append(stderr)
 
             progress, stage = refresh_progress_from_output(lines, returncode)
+            duration_seconds = round(time.monotonic() - started_at, 3) if "started_at" in locals() else 0.0
+            effective_mode, refresh_decision = refresh_mode_details_from_output(lines, requested_mode)
             finished = time.strftime("%Y-%m-%d %H:%M:%S")
             with jobs_lock:
                 job = jobs[job_id]
@@ -314,6 +396,9 @@ def inventory_planner_handler(directory: Path):
                     "returncode": returncode,
                     "progress": progress,
                     "stage": stage,
+                    "durationSeconds": duration_seconds,
+                    "effectiveMode": effective_mode,
+                    "refreshDecision": refresh_decision,
                     "stdout": "\n".join(lines),
                     "stderr": stderr,
                     "lines": lines[-80:],

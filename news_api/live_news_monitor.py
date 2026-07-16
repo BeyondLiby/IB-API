@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
-import sqlite3
 import sys
-import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,269 +10,206 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from news_api.bark_client import BarkClient
-from news_api.config import (
-    DEFAULT_BROADTAPE_PROVIDER_CODES,
-    DEFAULT_CONTRACT_NEWS_PROVIDER_CODES,
-    SETTINGS,
-    NewsSettings,
-    split_provider_codes,
-)
-from news_api.ib_client import IBArticleFetcher, IBNewsClient
-from news_api.portfolio_watchlist import ALL_NEWS_WATCHLIST, PORTFOLIO_WATCHLIST
+from news_api.config import SETTINGS, NewsSettings, split_provider_codes
+from news_api.portfolio_watchlist import PORTFOLIO_WATCHLIST
 from news_api.service import NewsService
 from news_api.storage import SQLiteNewsStorage
-from news_api.subscription_manager import SubscriptionManager
-
-
-def fetch_rows(db_path: Path, limit: int = 20) -> list[dict[str, Any]]:
-    if not db_path.exists():
-        return []
-
-    with sqlite3.connect(db_path) as connection:
-        connection.row_factory = sqlite3.Row
-        rows = connection.execute(
-            """
-            SELECT
-                r.received_at,
-                r.published_at,
-                r.symbol,
-                r.provider,
-                r.article_id,
-                r.publisher,
-                r.headline,
-                COALESCE(a.fetch_status, '') AS fetch_status,
-                COALESCE(a.error, '') AS article_error,
-                COALESCE(a.article_text, '') AS article_text,
-                COALESCE(e.event_type, '') AS event_type,
-                COALESCE(e.importance_score, '') AS importance_score,
-                COALESCE(e.should_push, '') AS should_push,
-                COALESCE(p.push_status, '') AS push_status,
-                COALESCE(p.response, '') AS push_response
-            FROM news_raw r
-            LEFT JOIN news_articles a ON a.unique_key = r.unique_key
-            LEFT JOIN news_events e ON e.unique_key = r.unique_key
-            LEFT JOIN news_push_log p ON p.unique_key = r.unique_key
-            ORDER BY r.received_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-
-    return [dict(row) for row in rows]
-
-
-def print_news(rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        print("No news received yet.")
-        return
-
-    for index, row in enumerate(rows, 1):
-        body = (row.get("article_text") or "").replace("\n", " ").strip()
-        if len(body) > 500:
-            body = body[:500] + "..."
-
-        print("=" * 100)
-        print(
-            f"#{index} {row['received_at']} "
-            f"(ib_time={row.get('published_at', '')}) "
-            f"[{row['symbol']}] {row['provider']} {row['publisher']}"
-        )
-        print("headline:", row["headline"])
-        print(
-            "article:",
-            row["fetch_status"] or "<not requested>",
-            row["article_error"] or "",
-        )
-        print("article_text:", body or "<empty>")
-        print(
-            "event/score/push:",
-            row["event_type"],
-            row["importance_score"],
-            "should_push=",
-            row["should_push"],
-            "push_status=",
-            row["push_status"],
-        )
-        if row.get("push_response"):
-            print("push_response:", row["push_response"][:300])
-
-
-def build_watchlist(mode: str) -> dict[str, dict]:
-    if mode == "all":
-        return dict(ALL_NEWS_WATCHLIST)
-    if mode == "portfolio":
-        return dict(PORTFOLIO_WATCHLIST)
-    if mode == "both":
-        return {**ALL_NEWS_WATCHLIST, **PORTFOLIO_WATCHLIST}
-    raise ValueError(f"unknown mode: {mode}")
+from news_api.verified_news_monitor import VerifiedIBNewsMonitor, monitoring_verdict
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="IBKR live news monitor: all-news BroadTape plus portfolio fallback."
+        description=(
+            "Verified IBKR news monitor. A clock redraw is never reported as a news refresh; "
+            "only a new article_id with a valid publication time is LIVE."
+        )
     )
-    parser.add_argument(
-        "--mode",
-        choices=["all", "portfolio", "both"],
-        default="both",
-        help="all=BroadTape only, portfolio=stock list only, both=both.",
-    )
+    parser.add_argument("--mode", choices=["all", "portfolio", "both"], default="both")
     parser.add_argument("--host", default=SETTINGS.host)
     parser.add_argument("--port", type=int, default=SETTINGS.port)
-    parser.add_argument("--client-id", type=int, default=SETTINGS.client_id)
-    parser.add_argument("--seconds", type=int, default=300)
-    parser.add_argument("--print-every", type=int, default=10)
+    parser.add_argument("--client-id", type=int, default=1198)
+    parser.add_argument("--seconds", type=float, default=300)
+    parser.add_argument("--heartbeat-seconds", type=float, default=10)
+    parser.add_argument("--warmup-seconds", type=float, default=15)
     parser.add_argument(
-        "--db",
-        default=str(Path(__file__).resolve().parent / "data" / "live_news.sqlite"),
+        "--symbols",
+        default="",
+        help="Comma-separated stocks. Known portfolio metadata is reused; unknown symbols default to SMART/USD.",
     )
     parser.add_argument(
         "--provider-codes",
-        default=DEFAULT_CONTRACT_NEWS_PROVIDER_CODES,
-        help=(
-            "Contract-specific stock news providers for reqMktData(stock, ...). "
-            "Default: BRFG+BRFUPDN+DJNL."
-        ),
+        default="auto",
+        help="Stock-news providers joined by +, or auto to use reqNewsProviders().",
     )
     parser.add_argument(
         "--broadtape-providers",
-        default=DEFAULT_BROADTAPE_PROVIDER_CODES,
+        default="auto",
         help=(
-            "BroadTape NEWS contract providers to try. Default: BRF+BZ+FLY. "
-            "Do not put BRFG/DJNL here unless IB confirms a matching NEWS contract exists."
+            "Provider codes to map to known NEWS contracts, or auto to probe "
+            "all visible providers (including Dow Jones classified channels)."
         ),
     )
+    parser.add_argument("--history-results", type=int, default=50)
     parser.add_argument(
-        "--broadtape-symbol-template",
-        default="{provider}:{provider}_ALL",
-        help='Template for BroadTape contract symbol. Default: "{provider}:{provider}_ALL".',
+        "--history-audit-symbol",
+        default="",
+        help="Periodically cross-check this stock's historical headlines against its stream.",
+    )
+    parser.add_argument("--history-poll-seconds", type=float, default=60)
+    parser.add_argument("--history-gap-grace-seconds", type=float, default=60)
+    parser.add_argument(
+        "--audit-log",
+        default=str(Path(__file__).resolve().parent / "data" / "news_delivery_audit.jsonl"),
     )
     parser.add_argument(
-        "--push",
+        "--db",
+        default=str(Path(__file__).resolve().parent / "data" / "verified_live_news.sqlite"),
+        help="Only verified LIVE headlines enter this existing news pipeline database.",
+    )
+    parser.add_argument("--push", action="store_true")
+    parser.add_argument(
+        "--require-live",
         action="store_true",
-        help="Send real Bark pushes. Without this, monitor only prints and stores.",
+        help="Exit with status 2 if no subscription produced a verified LIVE headline.",
     )
     parser.add_argument(
-        "--fetch-article",
+        "--stop-on-live",
         action="store_true",
-        help="Request article text after each headline.",
-    )
-    parser.add_argument(
-        "--list-providers",
-        action="store_true",
-        help="Request and print news providers visible to this account.",
+        help="End the monitor as soon as one verified LIVE headline arrives.",
     )
     return parser.parse_args()
 
 
-def main() -> None:
+def build_watchlist(mode: str, symbols_value: str) -> dict[str, dict[str, Any]]:
+    if mode == "all":
+        result: dict[str, dict[str, Any]] = {}
+    else:
+        result = dict(PORTFOLIO_WATCHLIST)
+    if symbols_value:
+        requested = [item.strip().upper() for item in symbols_value.split(",") if item.strip()]
+        result = {
+            symbol: dict(
+                PORTFOLIO_WATCHLIST.get(
+                    symbol,
+                    {
+                        "exchange": "SMART",
+                        "currency": "USD",
+                        "sec_type": "STK",
+                        "priority": 0,
+                        "aliases": [symbol],
+                    },
+                )
+            )
+            for symbol in requested
+        }
+    if mode in {"all", "both"}:
+        result["ALL"] = {
+            "exchange": "NEWS",
+            "currency": "",
+            "priority": 0,
+            "aliases": ["ALL"],
+        }
+    return result
+
+
+def main() -> int:
     args = parse_args()
+    if args.push and not os.getenv("BARK_KEY", ""):
+        raise RuntimeError("--push requires BARK_KEY.")
+
+    watchlist = build_watchlist(args.mode, args.symbols)
     db_path = Path(args.db).resolve()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    bark_key = os.getenv("BARK_KEY", "")
-    if args.push and not bark_key:
-        raise RuntimeError("You enabled --push. Please set BARK_KEY first.")
-
-    push_score = 0 if args.push else 101
-    article_fetch_score = 0 if args.fetch_article else 101
-    watchlist = build_watchlist(args.mode)
-
     settings = NewsSettings(
         host=args.host,
         port=args.port,
         client_id=args.client_id,
-        provider_codes=args.provider_codes,
         db_path=db_path,
-        article_fetch_score=article_fetch_score,
-        portfolio_push_score=push_score,
-        default_push_score=push_score,
-        bark_key=bark_key,
+        article_fetch_score=101,
+        portfolio_push_score=0 if args.push else 101,
+        default_push_score=0 if args.push else 101,
+        bark_key=os.getenv("BARK_KEY", ""),
         bark_base_url=SETTINGS.bark_base_url,
         dashboard_url=SETTINGS.dashboard_url,
     )
-
-    storage = SQLiteNewsStorage(db_path)
     service = NewsService(
         settings=settings,
         watchlist=watchlist,
-        storage=storage,
+        storage=SQLiteNewsStorage(db_path),
         bark_client=BarkClient(
-            key=bark_key,
+            key=settings.bark_key,
             base_url=settings.bark_base_url,
             dashboard_url=settings.dashboard_url,
-            timeout=30,
-            retries=2,
         ),
     )
-    client = IBNewsClient(service)
-    service.article_fetcher = IBArticleFetcher(client, timeout=20)
-
-    provider_codes = split_provider_codes(args.provider_codes)
-    broadtape_providers = split_provider_codes(args.broadtape_providers)
-
-    print("startup:")
-    print(
-        {
-            "mode": args.mode,
-            "host": args.host,
-            "port": args.port,
-            "client_id": args.client_id,
-            "db": str(db_path),
-            "push": args.push,
-            "fetch_article": args.fetch_article,
-            "contract_news_provider_codes": provider_codes,
-            "broadtape_providers": broadtape_providers,
-            "symbols": list(watchlist),
-        }
+    monitor = VerifiedIBNewsMonitor(
+        audit_path=Path(args.audit_log).resolve(),
+        live_sink=service.ingest_tick_news,
+        warmup_seconds=args.warmup_seconds,
+        history_results=args.history_results,
     )
+    service.start()
 
-    client.start_api(args.host, args.port, args.client_id)
-    manager = SubscriptionManager(client)
-
-    if args.list_providers:
-        client.reqNewsProviders()
-        time.sleep(2)
-        print("visible_news_providers:", client.news_providers)
-        print(
-            "note: visible_news_providers are article/provider channels. "
-            "Contract-specific stock news uses mdoff,292:BRFG+BRFUPDN+DJNL. "
-            "BroadTape NEWS contracts are separate, commonly BRF/BZ/FLY."
-        )
-
-    if args.mode in {"all", "both"}:
-        broadtape_subscribed: dict[str, int] = {}
-        for provider in broadtape_providers:
-            contract_symbol = args.broadtape_symbol_template.format(provider=provider)
-            ticker_id = manager.subscribe_broadtape(
-                provider,
-                symbol_alias="ALL",
-                contract_symbol=contract_symbol,
-            )
-            broadtape_subscribed[provider] = ticker_id
-        print("BroadTape subscriptions sent:", broadtape_subscribed)
-
-    if args.mode in {"portfolio", "both"}:
-        subscribed = manager.subscribe_watchlist(
-            PORTFOLIO_WATCHLIST,
-            args.provider_codes,
-        )
-        print("Portfolio stock news subscriptions sent:", subscribed)
-
-    deadline = time.time() + args.seconds
     try:
-        while time.time() < deadline:
-            print("\n" + "#" * 40, datetime.now().strftime("%H:%M:%S"), "#" * 40)
-            if client.errors:
-                print("IB errors:", client.errors[-10:])
-            print_news(fetch_rows(db_path, limit=10))
-            time.sleep(args.print_every)
+        monitor.connect(args.host, args.port, args.client_id)
+        print("visible_news_providers:", monitor.news_providers, flush=True)
+        provider_codes = (
+            monitor.visible_provider_codes
+            if args.provider_codes.lower() == "auto"
+            else split_provider_codes(args.provider_codes)
+        )
+        provider_string = "+".join(provider_codes)
+        if args.mode in {"portfolio", "both"}:
+            for symbol, item in watchlist.items():
+                if symbol == "ALL":
+                    continue
+                state = monitor.subscribe_stock(symbol, item, provider_string)
+                print(
+                    f"stock_subscription {symbol}: "
+                    f"{state.req_id if state else '<qualification failed>'}",
+                    flush=True,
+                )
+
+        if args.mode in {"all", "both"}:
+            broadtape_codes = (
+                monitor.visible_provider_codes
+                if args.broadtape_providers.lower() == "auto"
+                else split_provider_codes(args.broadtape_providers)
+            )
+            contracts = monitor.discover_broadtape_contracts(broadtape_codes)
+            print(
+                "broadtape_contracts:",
+                [(provider, contract.symbol, contract.conId) for provider, contract in contracts],
+                flush=True,
+            )
+            for provider, contract in contracts:
+                monitor.subscribe_broadtape(provider, contract)
+
+        monitor.run(
+            seconds=args.seconds,
+            heartbeat_seconds=args.heartbeat_seconds,
+            history_audit_symbol=args.history_audit_symbol.upper(),
+            history_poll_seconds=args.history_poll_seconds,
+            gap_grace_seconds=args.history_gap_grace_seconds,
+            stop_on_live=args.stop_on_live,
+        )
     finally:
-        print("Stopping monitor and disconnecting IB.")
-        client.stop_api()
-        print("database:", db_path)
-        print_news(fetch_rows(db_path, limit=50))
+        monitor.stop()
+        service.stop()
+
+    live_total = sum(item.live_callbacks for item in monitor.subscriptions.values())
+    verdict = monitoring_verdict(monitor.subscriptions.values())
+    print(
+        "FINAL_VERDICT:",
+        verdict,
+        f"live_total={live_total}",
+        f"audit_log={Path(args.audit_log).resolve()}",
+        f"db={db_path}",
+        flush=True,
+    )
+    if args.require_live and live_total == 0:
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
