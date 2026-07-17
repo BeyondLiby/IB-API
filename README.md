@@ -269,6 +269,41 @@ sleeping 1800s; press Ctrl+C to stop
 
 所选月份只约束普通期权行情订阅；真实持仓的 conId 即使不在所选月份，也会继续强制刷新，避免月份选择隐藏当前风险。
 
+### Dashboard 交易、保证金预检与安全边界
+
+页面在“底层资产走势”下方提供独立交易台。行情和交易分成两个进程：8766 planner 继续负责持仓与实时/延迟行情；8767 trade gateway 只在用户显式启动后负责 IB 原生 What-If、最终复核、提交和撤单。
+
+- 候选期权卡片中的 `选择预检` 或期货下拉框会建立订单草稿；第一版只允许 CBOT 的 `FUT/FOP`、`DAY`、`LMT`，市价单硬禁用。
+- trade gateway 默认是 Paper 模式，只绑定 `127.0.0.1:8767`，不允许公网地址；浏览器来源只接受本机 8766 Dashboard。
+- 每次进程生成随机解锁码。浏览器解锁会话只保存在内存，最多保持十分钟；一次提交或撤单后服务端立即自动锁定。
+- 保证金预览生成 SHA-256 订单指纹、短时效 preview-id 和动态确认词。提交接口不接受新的合约、方向、数量或价格，只接受原 preview-id、指纹和逐字确认词，因此页面字段变更不能偷换最终订单。
+- 最终发送前，服务端会对存储的同一订单重新执行一次 IB What-If。预留资金不足、IB warning、预览/会话过期或指纹变化都会阻止发送。
+- Live 模式还要求交易服务为所选合约取得 `marketDataType=1` 的有效 bid/ask/last；延迟、冻结或缺失行情会阻止发送。页面原有行情状态仍会显示实时/延迟，但最终许可以交易服务自己的 IB 行情检查为准。
+- 发送尝试会先消费 preview-id；网络结果不确定时自动锁定且禁止重试，避免重复订单。活动订单只显示并允许撤销带 `IBDASH:` orderRef、由本 Dashboard client-id 创建的订单。
+- 所有解锁、预览、发送和撤单事件写入权限为 `0600` 的 `data/planner/trading_audit.jsonl`；解锁码和会话 token 不写日志。
+- planner 自带的 `POST /api/margin-whatif` 仍固定返回 403；所有订单协议只存在于显式启动的独立 trade gateway。
+
+先用 Paper Gateway/TWS 验证：
+
+```bash
+IB_ACCOUNT=你的Paper账户 ./open_trade_gateway.sh paper
+```
+
+脚本会要求再次输入 `PAPER <账户>`，随后在前台显示本次进程解锁码。把该码粘贴到 Dashboard，完成“生成保证金预览 → 核对指纹/保证金 → 逐字输入动态确认词 → 复核并发送”。Paper 账户是模拟环境，保证金或成交行为可能与 Live 不完全一致。
+
+Live 模式必须显式配置正数资金缓冲，并再次输入 `LIVE <账户>`：
+
+```bash
+IB_ACCOUNT=你的Live账户 \
+IB_MINIMUM_RESERVE_FUNDS=10000 \
+IB_MAX_ORDER_QUANTITY=5 \
+./open_trade_gateway.sh live
+```
+
+Live trade gateway 需要 Gateway/TWS 允许 API 订单。`ib_async.connect(readonly=True)` 只影响连接初始化时的订单同步，不是权限控制；Gateway 的 Read-Only 复选框才是全局硬阻断。关闭它以后，同一个 Gateway 端口上的所有 API client 都失去这层硬阻断。更强的生产隔离方式是为行情和交易使用不同 IB 用户/会话与不同端口，并只给交易用户必要的产品权限。不要把 trade gateway 作为 launchd 常驻任务，也不要将 8767 暴露到局域网或公网。
+
+planner server 另用一个独立只读 client-id 常驻订阅当前持仓和指定期货月份；通过 `refresh_inventory_data.py --serve-planner` 启动时默认是刷新 client-id 加 2，单独启动 `open_inventory_planner.py` 时默认是 `7318`，可用 `--stream-client-id` 或 `IB_STREAM_CLIENT_ID` 修改。流服务请求 delayed fallback：账户具备实时权限时 IB 仍会返回 `marketDataType=1`，否则返回 `3` 延迟行情；发生实时会话冲突、Gateway 断线重连或登录账户变化时会自动重订阅，并在配置账户不可用时回退到当前 managed account 中实际持有 ZF/ZN/ZC 的账户。
+
 如果你要定时刷新，需要在启动命令里使用 `--repeat-minutes`。
 
 ## 脚本参数
@@ -295,7 +330,7 @@ Windows 自定义每 5 分钟刷新一次：
 
 两边都支持把端口作为第一个参数或 `-Port` 参数传入；端口变更后，停止时也要传同一个端口。
 
-## 只打开页面，不刷新 IB
+## 只启动页面和持仓行情流，不执行批量刷新
 
 Windows PowerShell：
 
@@ -310,7 +345,7 @@ macOS/Linux：
 conda run -n ib python open_inventory_planner.py --port 8766
 ```
 
-这个方式只提供页面和 API server，不会主动连接 IB 刷新数据。
+这个方式会启动页面/API server，并常驻订阅当前持仓和页面所选的 ZF/ZN/ZC 期货月份；不会执行候选期权链、K 线或 CSV 的批量刷新。页面每秒读取一次 `/api/live-positions`，只重算持仓相关模块；候选链与 K 线继续使用已发布 CSV。
 
 ## 常用刷新命令
 
@@ -432,7 +467,10 @@ refresh finished
 
 ```text
 /api/refresh-inventory-data/status
+/api/live-positions
 ```
+
+`/api/live-positions` 返回持仓/指定期货内存快照、`sampledAt`、订阅数量、当前账户和 IB `marketDataType`。页面在“组合资产总览”标题旁显示具体本地获取时间及“实时行情 / 延迟行情 / 混合 / 已断开”；这个状态来自 IB 实际返回类型，不根据启动参数猜测。延迟行情会明确标注约 15–20 分钟；`sampledAt` 是程序收到/采样报价的时间，不是交易所成交时间，因此不会机械减去一个固定延迟值。
 
 如果 `data/planner/refresh_status.json` 里是：
 

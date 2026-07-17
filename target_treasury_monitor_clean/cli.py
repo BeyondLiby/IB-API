@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
 from contextlib import contextmanager
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import os
 import random
 from pathlib import Path
 import signal
+import time
 import webbrowser
 
 import pandas as pd
@@ -23,7 +26,7 @@ from .carry_dashboard_sync import (
     validate_carry_dashboard_files,
     write_carry_dashboard_files,
 )
-from .chain_batch import refresh_future_prices_sidecar, refresh_static_chain
+from .chain_batch import refresh_future_prices_sidecars, refresh_static_chain
 from .chain_realtime import LiveChainMonitor
 from .future_bars import fetch_future_bars, parse_contract_specs, save_future_bars
 from .ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
@@ -45,6 +48,34 @@ DEFAULT_DASHBOARD_PRODUCTS = "ZF,ZN,ZC"
 DEFAULT_SHARED_CHAIN_SPECS = "ZF=202609;ZN=202609"
 
 
+@contextmanager
+def _summarize_repetitive_ib_logs(codes: tuple[int, ...] = (10090,)):
+    """Collapse high-volume per-contract IB entitlement logs at the source."""
+    logger = logging.getLogger("ib_async.wrapper")
+    counts: Counter[int] = Counter()
+
+    class Filter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            message = record.getMessage()
+            for code in codes:
+                if message.startswith(f"Error {code},") or message.startswith(f"Warning {code},"):
+                    counts[code] += 1
+                    return False
+            return True
+
+    log_filter = Filter()
+    logger.addFilter(log_filter)
+    try:
+        yield counts
+    finally:
+        logger.removeFilter(log_filter)
+        messages = {
+            10090: "部分合约缺少指定实时行情权限，已继续使用可用/延迟行情",
+        }
+        for code, count in sorted(counts.items()):
+            print(f"IB {code} ×{count}：{messages.get(code, '重复警告已折叠')}", flush=True)
+
+
 def _product_filter_widths(root: str, near_width: float, far_width: float, *, fast_refresh: bool) -> tuple[float, float]:
     """Return display-unit moneyness widths large enough for each product.
 
@@ -60,6 +91,24 @@ def _product_filter_widths(root: str, near_width: float, far_width: float, *, fa
     }
     minimum_near, minimum_far = minimums.get(product, (0.75, 1.25) if fast_refresh else (1.0, 3.0))
     return max(float(near_width), minimum_near), max(float(far_width), minimum_far)
+
+
+def _effective_option_batch_size(
+    requested: int,
+    position_con_ids: dict[str, set[int]],
+    chain_specs: dict[str, str],
+    *,
+    assumed_limit: int = 100,
+    reserve: int = 5,
+    position_line_floor: int = 0,
+) -> tuple[int, int, int]:
+    position_lines = max(sum(len(values) for values in position_con_ids.values()), int(position_line_floor))
+    future_lines = sum(
+        len({part.strip() for part in str(months).split(",") if part.strip()})
+        for months in chain_specs.values()
+    )
+    remaining = max(int(assumed_limit) - position_lines - future_lines - int(reserve), 1)
+    return min(max(int(requested), 1), remaining), position_lines, future_lines
 
 
 def _add_ib_args(parser: argparse.ArgumentParser) -> None:
@@ -402,11 +451,11 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--max-expiration", default="")
     refresh.add_argument("--quote-wait-seconds", type=float, default=6.0)
     refresh.add_argument("--infer-spreads", action="store_true")
-    refresh.add_argument("--batch-size", type=int, default=150)
-    refresh.add_argument("--wait-seconds", type=float, default=8.0)
-    refresh.add_argument("--stable-seconds", type=float, default=1.5)
+    refresh.add_argument("--batch-size", type=int, default=50, help="Requested temporary option quote batch size; runtime caps it to the remaining 100-line market-data budget.")
+    refresh.add_argument("--wait-seconds", type=float, default=5.0)
+    refresh.add_argument("--stable-seconds", type=float, default=0.75)
     refresh.add_argument("--request-interval", type=float, default=0.025)
-    refresh.add_argument("--inter-batch-pause-seconds", type=float, default=1.0)
+    refresh.add_argument("--inter-batch-pause-seconds", type=float, default=0.5)
     refresh.add_argument("--empty-batch-retries", type=int, default=1)
     refresh.add_argument("--empty-batch-retry-pause-seconds", type=float, default=5.0)
     refresh.add_argument("--no-market-data-filter", action="store_true")
@@ -734,23 +783,31 @@ def command_validate_carry_html(args: argparse.Namespace) -> None:
 
 def command_refresh_carry_html(args: argparse.Namespace) -> None:
     ib_settings = _ib_settings(args)
-    if getattr(args, "no_client_lock", False):
-        _run_refresh_carry_html(args, ib_settings)
-        return
-
-    try:
-        with acquire_ib_client_lock(
-            ib_settings.host,
-            ib_settings.port,
-            ib_settings.client_id,
-            purpose="refresh-carry-html",
-        ):
+    with _summarize_repetitive_ib_logs():
+        if getattr(args, "no_client_lock", False):
             _run_refresh_carry_html(args, ib_settings)
-    except IbClientLockBusy as exc:
-        raise SystemExit(str(exc)) from exc
+            return
+
+        try:
+            with acquire_ib_client_lock(
+                ib_settings.host,
+                ib_settings.port,
+                ib_settings.client_id,
+                purpose="refresh-carry-html",
+            ):
+                _run_refresh_carry_html(args, ib_settings)
+        except IbClientLockBusy as exc:
+            raise SystemExit(str(exc)) from exc
 
 
 def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -> None:
+    refresh_started_at = time.monotonic()
+
+    def record_phase(name: str, started_at: float, detail: str = "") -> None:
+        elapsed = max(time.monotonic() - started_at, 0.0)
+        marker = f"{name}.{detail}" if detail else name
+        print(f"phase timing: {marker}={elapsed:.3f}", flush=True)
+
     chain_specs = _parse_chain_specs(args.chain_specs)
     chain_specs.update(_parse_chain_specs(args.zc_chain_specs))
     working_dir = Path(args.working_dir)
@@ -794,6 +851,7 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
         flush=True,
     )
 
+    positions_phase_started = time.monotonic()
     if args.positions_csv.strip():
         position_frame = pd.read_csv(args.positions_csv)
         print(f"positions reused: {args.positions_csv} ({len(position_frame)} rows)", flush=True)
@@ -843,6 +901,32 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     position_con_ids = _position_con_ids_by_root(position_frame)
     force_summary = {root: len(values) for root, values in position_con_ids.items() if values}
     print(f"current-position conIds forced into refresh: {force_summary or '<none>'}", flush=True)
+    common_market_data_limit = 100
+    market_data_reserve = 5
+    position_line_floor = 0
+    if "conId" in position_frame.columns:
+        position_line_floor = int(
+            pd.to_numeric(position_frame["conId"], errors="coerce")
+            .dropna()
+            .astype("int64")
+            .nunique()
+        )
+    effective_batch_size, position_line_count, future_line_count = _effective_option_batch_size(
+        args.batch_size,
+        position_con_ids,
+        chain_specs,
+        assumed_limit=common_market_data_limit,
+        reserve=market_data_reserve,
+        position_line_floor=position_line_floor,
+    )
+    print(
+        "temporary option line budget: "
+        f"positions={position_line_count}, futures={future_line_count}, reserve={market_data_reserve}, "
+        f"requested_batch={args.batch_size}, effective_batch={effective_batch_size}, "
+        f"assumed_limit={common_market_data_limit}",
+        flush=True,
+    )
+    record_phase("positions", positions_phase_started)
 
     chain_frames: list[pd.DataFrame] = []
     print("refresh option chains", flush=True)
@@ -850,48 +934,66 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
     existing_chain = _read_csv_if_exists(existing_chain_path)
     if not existing_chain.empty:
         print(f"existing HTML chain cache: {existing_chain_path} ({len(existing_chain)} rows)", flush=True)
+
+    settings_by_root: dict[str, StaticChainSettings] = {}
+    filter_widths_by_root: dict[str, tuple[float, float]] = {}
+    for root, months in chain_specs.items():
+        root_near_width, root_far_width = _product_filter_widths(
+            root,
+            requested_near_width,
+            requested_far_width,
+            fast_refresh=fast_refresh,
+        )
+        filter_widths_by_root[root] = (root_near_width, root_far_width)
+        settings_by_root[root] = StaticChainSettings(
+            root=root,
+            future_months=months,
+            min_expiration=args.min_expiration.strip() or None,
+            max_expiration=args.max_expiration.strip() or None,
+            batch_size=effective_batch_size,
+            wait_max_seconds=effective_wait_seconds,
+            wait_stable_seconds=effective_stable_seconds,
+            request_interval=args.request_interval,
+            inter_batch_pause_seconds=effective_inter_batch_pause,
+            empty_batch_retries=args.empty_batch_retries,
+            empty_batch_retry_pause_seconds=args.empty_batch_retry_pause_seconds,
+            output_dir=working_dir,
+            use_contract_cache=not args.no_contract_cache,
+            force_rebuild_contract_cache=args.rebuild_contract_cache,
+            filter_market_data_by_moneyness=not args.no_market_data_filter,
+            near_dte_days=effective_near_dte,
+            near_strike_width=root_near_width,
+            far_strike_width=root_far_width,
+            market_data_max_dte=effective_market_data_max_dte or None,
+            force_con_ids=position_con_ids.get(root, ()),
+            future_price_wait_seconds=float(args.future_price_wait_seconds),
+        )
+    selected_future_specs = "; ".join(
+        f"{root}={settings.future_months}" for root, settings in settings_by_root.items()
+    )
+    print(f"future subscription filter: {selected_future_specs or '<none>'}", flush=True)
     try:
         with ib_connection(ib_settings) as ib:
             previous_timeout = getattr(ib, "RequestTimeout", None)
             if previous_timeout is not None:
                 ib.RequestTimeout = args.timeout
             try:
-                for root, months in chain_specs.items():
+                print("future price batch subscription started", flush=True)
+                future_phase_started = time.monotonic()
+                try:
+                    future_price_results = refresh_future_prices_sidecars(ib, settings_by_root)
+                finally:
+                    record_phase("futures", future_phase_started)
+
+                for root, settings in settings_by_root.items():
+                    months = settings.future_months
                     print(f"refresh chain: {root} months={months}", flush=True)
-                    root_near_width, root_far_width = _product_filter_widths(
-                        root,
-                        requested_near_width,
-                        requested_far_width,
-                        fast_refresh=fast_refresh,
-                    )
+                    root_near_width, root_far_width = filter_widths_by_root[root]
                     print(
                         f"{root} filter widths: near={root_near_width:g}, far={root_far_width:g}",
                         flush=True,
                     )
-                    settings = StaticChainSettings(
-                        root=root,
-                        future_months=months,
-                        min_expiration=args.min_expiration.strip() or None,
-                        max_expiration=args.max_expiration.strip() or None,
-                        batch_size=args.batch_size,
-                        wait_max_seconds=effective_wait_seconds,
-                        wait_stable_seconds=effective_stable_seconds,
-                        request_interval=args.request_interval,
-                        inter_batch_pause_seconds=effective_inter_batch_pause,
-                        empty_batch_retries=args.empty_batch_retries,
-                        empty_batch_retry_pause_seconds=args.empty_batch_retry_pause_seconds,
-                        output_dir=working_dir,
-                        use_contract_cache=not args.no_contract_cache,
-                        force_rebuild_contract_cache=args.rebuild_contract_cache,
-                        filter_market_data_by_moneyness=not args.no_market_data_filter,
-                        near_dte_days=effective_near_dte,
-                        near_strike_width=root_near_width,
-                        far_strike_width=root_far_width,
-                        market_data_max_dte=effective_market_data_max_dte or None,
-                        force_con_ids=position_con_ids.get(root, ()),
-                        future_price_wait_seconds=float(args.future_price_wait_seconds),
-                    )
-                    future_prices, future_price_source, future_price_error, future_prices_path = refresh_future_prices_sidecar(ib, settings)
+                    future_prices, future_price_source, future_price_error, future_prices_path = future_price_results[root]
                     print(
                         f"{root} future prices sidecar: source={future_price_source}, "
                         f"path={future_prices_path}, prices={_future_price_summary(future_prices)}",
@@ -906,6 +1008,8 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
                             flush=True,
                         )
                         continue
+                    print(f"{root} option quote refresh started", flush=True)
+                    option_phase_started = time.monotonic()
                     try:
                         result = refresh_static_chain(
                             ib,
@@ -958,6 +1062,8 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
                             if not fallback.empty:
                                 chain_frames.append(fallback)
                                 print(f"{root} fallback chain rows: {len(fallback)}", flush=True)
+                    finally:
+                        record_phase("options", option_phase_started, root)
             finally:
                 if previous_timeout is not None:
                     ib.RequestTimeout = previous_timeout
@@ -998,6 +1104,7 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
         print(f"fast refresh: preserving existing futures bars ({len(existing_bars)} rows)", flush=True)
     if not skip_bars:
         print("refresh futures bars", flush=True)
+        bars_phase_started = time.monotonic()
         bar_specs = parse_contract_specs(args.bars_contracts) if args.bars_contracts.strip() else _bar_specs_from_chain_specs(chain_specs)
         print(f"bar specs: {bar_specs}", flush=True)
         try:
@@ -1024,7 +1131,10 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
             if args.strict_bars:
                 raise SystemExit(message) from exc
             print(message, flush=True)
+        finally:
+            record_phase("bars", bars_phase_started)
 
+    publish_phase_started = time.monotonic()
     paths = write_carry_dashboard_files(
         position_frame,
         combined_chain,
@@ -1042,7 +1152,9 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
         max_chain_age_hours=args.max_chain_age_hours,
         max_bars_age_hours=args.max_bars_age_hours,
     )
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(_format_carry_html_summary(report), flush=True)
+    record_phase("publish", publish_phase_started)
+    print(f"phase timing: total={max(time.monotonic() - refresh_started_at, 0.0):.3f}", flush=True)
     if args.require_ready:
         _raise_if_carry_html_not_ready(report)
 

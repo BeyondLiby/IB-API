@@ -13,15 +13,37 @@ assert(html.includes('id="refreshFull"'), "full refresh button missing");
 assert(html.includes('id="refreshScheduled"'), "US/Eastern date-aware refresh button missing");
 assert(html.includes('id="refreshProgress"'), "refresh progress bar missing");
 assert(html.includes('id="refreshDuration"'), "per-refresh duration display missing");
+assert(html.includes('id="refreshPositionsDuration"'), "position quote timing missing");
+assert(html.includes('id="refreshOptionsDuration"'), "option refresh timing missing");
+assert(html.includes('id="refreshFuturesDuration"'), "futures refresh timing missing");
+assert(html.includes('id="refreshOtherDuration"'), "other refresh timing missing");
+assert(html.includes('id="refreshLogToggle"'), "raw/summary log toggle missing");
+assert(html.includes('id="refreshLogCopy"'), "copy-log button missing");
+assert(/Delta 预警阈值[\s\S]*id="highDeltaPremiumThreshold"/.test(html), "visible Delta warning threshold missing");
+assert(/等效期货 Delta ≥[\s\S]*id="equivalentFutureDeltaThreshold"/.test(html), "equivalent-future delta parameter missing");
+assert(/最小实值 ticks[\s\S]*id="equivalentFutureMinIntrinsicTicks"/.test(html), "equivalent-future intrinsic-value parameter missing");
+assert(/最大时间价值 ticks[\s\S]*id="equivalentFutureMaxTimeValueTicks"/.test(html), "equivalent-future time-value parameter missing");
+assert(/id="equivalentFutureDeltaThreshold"[^>]*value="0\.90"/.test(html), "equivalent-future delta should default to 0.90");
+assert(/id="equivalentFutureMinIntrinsicTicks"[^>]*value="1"/.test(html), "minimum intrinsic value should default to one tick");
+assert(/id="equivalentFutureMaxTimeValueTicks"[^>]*value="2"/.test(html), "maximum time value should default to two ticks");
+assert(!html.includes('id="positionFile"'), "retired positions upload should not remain in the header");
+assert(!html.includes('id="chainFile"'), "retired chain upload should not remain in the header");
+assert(!html.includes('id="barsFile"'), "retired bars upload should not remain in the header");
+assert(!html.includes('id="loadSample"'), "retired sample loader should not remain in the header");
+assert(!html.includes('id="exportJson"') && !html.includes('id="exportCsv"') && !html.includes('id="exportMarkdown"'), "retired export controls should not remain in the header");
+assert(!html.includes("链表颜色"), "retired chain color control should not remain visible");
 assert(html.includes('id="refreshMonthZF"'), "ZF refresh contract selector missing");
 assert(html.includes('id="refreshMonthZN"'), "ZN refresh contract selector missing");
 assert(html.includes('id="refreshMonthZC"'), "ZC refresh contract selector missing");
 assert(!html.includes('id="putZonePreset"'), "old put zone dropdown should be removed");
 assert(html.includes('id="inventoryChain"'), "inventory option-chain view missing");
 assert(html.includes('id="productOverview"'), "product overview missing");
+assert(html.includes('id="portfolioQuoteStatus"'), "portfolio quote timestamp/status missing beside the overview title");
+assert(html.includes('const LIVE_POSITIONS_PATH = "/api/live-positions"'), "live-position polling endpoint missing");
 assert(html.includes("深度ITM"), "deep-ITM future-equivalent identification missing");
 assert(html.includes('id="portfolioPremiumSummary"'), "portfolio premium summary missing");
 assert(html.includes('id="premiumExpiryTable"'), "premium by-expiry table missing");
+assert(html.includes('class="panel premium-overview-layout"'), "premium summary and expiry overview should share a compact two-column panel");
 assert(html.includes('id="highDeltaPremiumThreshold"'), "configurable delta-weighted premium threshold missing");
 assert(/id="highDeltaPremiumThreshold"[^>]*value="0\.40"/.test(html), "delta-weighted premium threshold should default to 0.40");
 assert(html.includes('<section class="planner-state" hidden aria-hidden="true">'), "planner defaults should remain available as hidden internal state");
@@ -39,8 +61,29 @@ assert(html.includes('id="chartRange"'), "chart range control missing");
 assert(html.includes('id="chartZoomIn"'), "chart zoom control missing");
 assert(html.includes('id="inventoryViewChain"'), "inventory option-chain view switch missing");
 assert(html.includes('id="inventoryViewMatrix"'), "inventory Strike by DTE view switch missing");
+assert(/id="inventoryViewChain"[^>]*aria-pressed="false"/.test(html), "inventory option-chain button should not be active by default");
+assert(/id="inventoryViewMatrix"[^>]*class="active"[^>]*aria-pressed="true"/.test(html), "inventory Strike by DTE button should be active by default");
+assert(html.includes('let inventoryChainView = "matrix";'), "inventory should initialize in Strike by DTE view");
+assert(html.includes('centerScrollableAxis("inventoryChain", ".expiry-sketch", ".chain-map-head.center")'), "inventory option-chain Strike axis should be centered in the viewport");
 assert(html.includes('id="candidateViewChain"'), "candidate option-chain view switch missing");
 assert(html.includes('id="candidateViewMatrix"'), "candidate Strike by DTE view switch missing");
+assert(html.includes('id="whatIfFutureContract"'), "futures What-If selector missing");
+assert(html.includes('id="whatIfRun"'), "IB margin What-If action missing");
+assert(html.includes('id="whatIfReserveFunds"'), "What-If reserve input missing");
+assert(html.includes('id="whatIfCalculateCapacity"'), "verified capacity control missing");
+assert(html.includes('id="whatIfResult"'), "What-If result panel missing");
+assert(html.includes('id="tradeActivationCode"'), "one-process trading unlock control missing");
+assert(html.includes('id="tradeConfirmationPhrase"'), "dynamic order confirmation input missing");
+assert(html.includes('id="tradeSubmit"'), "double-confirmed order submission action missing");
+assert(html.includes('id="tradeDisarm"'), "immediate trading lock control missing");
+assert(html.includes('id="toggleTradePanel"'), "trading panel collapse button missing");
+assert(html.includes('id="tradePanel"'), "collapsible trading panel missing");
+assert(/id="toggleTradePanel"[^>]*aria-expanded="false"[^>]*>展开<\/button>/.test(html), "trading panel should default to collapsed");
+assert(/id="tradePanel"[^>]*hidden/.test(html), "trading panel should be hidden by default");
+assert(/\.whatif-panel\[hidden\]\s*\{[^}]*display:\s*none/s.test(html), "trading panel hidden state must override its grid display");
+assert(html.includes('const TRADE_GATEWAY_URL = "http://127.0.0.1:8767"'), "loopback-only trade gateway URL missing");
+assert(html.includes('限价 LMT（唯一允许）'), "market orders must not be exposed in the first trading release");
+assert(!html.includes("placeOrder("), "planner must not expose a live-order call");
 assert(html.includes(".inventory-axis-matrix"), "inventory matrix should provide enough scroll space to center the DTE axis");
 assert(/\.inventory-matrix-center-head strong\s*\{[^}]*font-size:\s*16px/s.test(html), "DTE axis heading should use a larger font");
 assert(/\.inventory-matrix-dte\s*\{[^}]*font-size:\s*14px/s.test(html), "DTE row labels should use a larger font");
@@ -68,6 +111,7 @@ class StubInput {
     this.id = id;
     this.value = value;
     this.dataset = {};
+    this.style = {};
     this.listeners = {};
     this.attributes = new Map();
   }
@@ -182,8 +226,102 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(new vm.Script(`formatRefreshDuration(4.25)`).runInContext(context), "4.3秒", "short refresh duration formatting is wrong");
 assert.strictEqual(new vm.Script(`formatRefreshDuration(65)`).runInContext(context), "1分05秒", "long refresh duration formatting is wrong");
+assert.strictEqual(new vm.Script(`firstNonNegativeNum(-100, -1, 0.125)`).runInContext(context), 0.125, "negative IB option-price sentinels must be skipped");
+new vm.Script(`lastRefreshDurationSeconds = 12; refreshStartedAtMs = Date.now() - 12000;`).runInContext(context);
+assert.strictEqual(new vm.Script(`refreshDurationSeconds({ durationSeconds: 9.5 })`).runInContext(context), 9.5, "backend duration should replace browser polling delay");
 
-elements.get("loadSample").click();
+new vm.Script(`setRefreshDuration(10, { positionsSeconds: 2, optionsSeconds: 4, futuresSeconds: 3, otherSeconds: 1, totalSeconds: 10 })`).runInContext(context);
+assert.strictEqual(elements.get("refreshPositionsDuration").textContent, "2.0秒", "position timing text is wrong");
+assert.strictEqual(elements.get("refreshOptionsDuration").textContent, "4.0秒", "option timing text is wrong");
+assert.strictEqual(elements.get("refreshFuturesDuration").textContent, "3.0秒", "futures timing text is wrong");
+assert.strictEqual(elements.get("refreshOtherDuration").textContent, "1.0秒", "other timing text is wrong");
+assert.strictEqual(elements.get("refreshDuration").textContent, "10.0秒", "total timing text is wrong");
+assert.strictEqual(elements.get("refreshPositionsBar").style.width, "20%", "position timing segment width is wrong");
+assert.strictEqual(elements.get("refreshOptionsBar").style.width, "40%", "option timing segment width is wrong");
+const fallbackTimings = JSON.parse(new vm.Script(`JSON.stringify(refreshPhaseTimings({ stdout: [
+  "phase timing: positions=4.821",
+  "phase timing: futures=7.749",
+  "phase timing: total=12.767"
+].join("\\n") }))`).runInContext(context));
+assert(Math.abs(fallbackTimings.positionsSeconds - 4.821) < 1e-9, "stdout fallback should recover position timing");
+assert.strictEqual(fallbackTimings.optionsSeconds, 0, "fast-refresh fallback should not mislabel positions as option-chain time");
+assert(Math.abs(fallbackTimings.futuresSeconds - 7.749) < 1e-9, "stdout fallback should recover futures timing");
+assert(Math.abs(fallbackTimings.otherSeconds - 0.197) < 1e-9, "stdout fallback should recover unclassified timing");
+const detailedTimings = JSON.parse(new vm.Script(`JSON.stringify(refreshPhaseTimings({ stdout: [
+  "phase timing: positions=5.000",
+  "phase timing: futures.ZF=2.000",
+  "phase timing: futures.ZN=3.000",
+  "phase timing: futures.ZC=4.000",
+  "phase timing: options.ZF=1.000",
+  "phase timing: options.ZN=2.000",
+  "phase timing: total=20.000"
+].join("\\n") }))`).runInContext(context));
+assert.strictEqual(detailedTimings.positionsSeconds, 5, "detailed markers should preserve position timing");
+assert.strictEqual(detailedTimings.optionsSeconds, 3, "per-product option timings should be summed");
+assert.strictEqual(detailedTimings.futuresSeconds, 9, "per-product future timings should be summed");
+assert.strictEqual(detailedTimings.otherSeconds, 3, "detailed markers should leave connection/publish time unclassified");
+const summarizedLog = new vm.Script(`summarizeRefreshLog([
+  "{",
+  '  "readiness": {',
+  "  }",
+  "}",
+  "same useful line",
+  "same useful line",
+  "Error 10090, reqId 1: missing subscription",
+  "Error 10090, reqId 2: missing subscription",
+  "phase timing: futures.ZF=3.153"
+].join("\\n"))`).runInContext(context);
+assert(!summarizedLog.includes('"readiness"'), "expanded validation JSON should be removed from the log summary");
+assert.strictEqual((summarizedLog.match(/same useful line/g) || []).length, 1, "exact duplicate log lines should be collapsed");
+assert(summarizedLog.includes("IB 10090 ×2"), "repeated IB entitlement warnings should be summarized by code");
+assert(summarizedLog.includes("耗时 · 期货价格 ZF：3.2秒"), "machine timing markers should have a readable summary");
+assert.strictEqual(
+  new vm.Script(`rawRefreshLog({ lines: ["tail"], stdout: "full\\ntail" })`).runInContext(context),
+  "full\ntail",
+  "copyable raw log should prefer the complete stdout over a truncated status tail"
+);
+
+const liveMergeResult = JSON.parse(new vm.Script(`JSON.stringify({
+  positions: mergeLivePositionRows(
+    [{ conId: 1, symbol: "ZN", position: -1, bid: 0.10, ask: 0.12 }, { conId: 2, symbol: "ZF", position: -1 }],
+    [{ conId: 1, symbol: "ZN", position: -2, bid: 0.11, ask: null, delta: 0.25 }]
+  ),
+  futures: mergeLiveFutureRows(
+    [{ root: "ZN", month: "202609", price: 109.0 }, { root: "ZN", month: "202612", price: 108.5 }],
+    [{ root: "ZN", month: "202609", price: 109.125, marketDataType: 1 }]
+  )
+})`).runInContext(context));
+assert.strictEqual(liveMergeResult.positions.length, 1, "closed positions should disappear from an authoritative live snapshot");
+assert.strictEqual(liveMergeResult.positions[0].position, -2, "live position quantity should replace the cached quantity");
+assert.strictEqual(liveMergeResult.positions[0].ask, 0.12, "a temporarily empty live field should retain the last usable quote");
+assert.strictEqual(liveMergeResult.futures[0].price, 109.125, "streamed selected-future price should take precedence over cached data");
+assert.strictEqual(liveMergeResult.futures[1].month, "202612", "unsubscribed cached future months should remain available");
+new vm.Script(`updatePortfolioQuoteStatus({
+  connected: true, dataMode: "live", sampledAt: "2026-07-16T12:34:56.000Z",
+  positionSubscriptions: 38, futureSubscriptions: 3, marketDataTypes: { "1": 41 }
+})`).runInContext(context);
+assert(elements.get("portfolioQuoteStatus").textContent.includes("行情获取"), "portfolio title should show the concrete acquisition time");
+assert(elements.get("portfolioQuoteStatus").textContent.includes("实时行情"), "portfolio title should show the live/delayed data mode");
+assert(elements.get("portfolioQuoteStatus").className.includes("live"), "live data mode should use the live status style");
+new vm.Script(`updatePortfolioQuoteStatus({
+  connected: true, dataMode: "delayed", sampledAt: "2026-07-16T12:34:56.000Z",
+  configuredAccount: "OLD", activeAccount: "NEW", accountFallback: true,
+  positionSubscriptions: 38, futureSubscriptions: 3, marketDataTypes: { "3": 41 }
+})`).runInContext(context);
+assert(elements.get("portfolioQuoteStatus").textContent.includes("约15–20分钟"), "delayed mode should disclose the documented delay range");
+assert(elements.get("portfolioQuoteStatus").title.includes("本机获取时间"), "delayed timestamp must be described as acquisition time");
+assert(elements.get("portfolioQuoteStatus").title.includes("已自动切换"), "account fallback should be visible in the status tooltip");
+
+new vm.Script(`
+  positionRows = samplePositions();
+  chainRows = sampleChain();
+  futurePriceRows = sampleFuturePrices();
+  barsRows = sampleBars();
+  accountRows = [];
+  proposed = {};
+  choiceUserTouched = {};
+  render();
+`).runInContext(context);
 
 assert.strictEqual(elements.get("priceChartSection").hidden, true, "underlying charts should start collapsed");
 assert.strictEqual(elements.get("togglePriceCharts").textContent, "展开", "collapsed chart button should offer to expand");
@@ -195,9 +333,18 @@ assert.strictEqual(elements.get("togglePriceCharts").getAttribute("aria-expanded
 elements.get("togglePriceCharts").click();
 assert.strictEqual(elements.get("priceChartSection").hidden, true, "chart collapse button should hide the underlying chart panel");
 
-assert.strictEqual(elements.get("inventoryViewChain").getAttribute("aria-pressed"), "true", "inventory should default to the option-chain view");
-elements.get("inventoryViewMatrix").click();
-assert(elements.get("inventoryChain").innerHTML.includes("inventory-matrix"), "Strike by DTE inventory view should render a matrix");
+assert.strictEqual(elements.get("tradePanel").hidden, true, "trading panel should start collapsed");
+assert.strictEqual(elements.get("toggleTradePanel").textContent, "展开", "collapsed trading button should offer to expand");
+assert.strictEqual(elements.get("toggleTradePanel").getAttribute("aria-expanded"), "false", "default trading accessibility state is wrong");
+elements.get("toggleTradePanel").click();
+assert.strictEqual(elements.get("tradePanel").hidden, false, "trading expand button should reveal the trading panel");
+assert.strictEqual(elements.get("toggleTradePanel").textContent, "折叠", "expanded trading button should offer to collapse");
+assert.strictEqual(elements.get("toggleTradePanel").getAttribute("aria-expanded"), "true", "expanded trading accessibility state is wrong");
+elements.get("toggleTradePanel").click();
+assert.strictEqual(elements.get("tradePanel").hidden, true, "trading collapse button should hide the trading panel");
+
+assert.strictEqual(elements.get("inventoryViewMatrix").getAttribute("aria-pressed"), "true", "inventory should default to the Strike by DTE view");
+assert(elements.get("inventoryChain").innerHTML.includes("inventory-matrix"), "default inventory view should render a Strike by DTE matrix");
 assert(elements.get("inventoryChain").innerHTML.includes("DTE ↓"), "inventory matrix should place DTE on the vertical axis");
 assert(elements.get("inventoryChain").innerHTML.includes("高 Strike ← · → 低 Strike"), "inventory matrix should place strikes around the current-price axis");
 assert(elements.get("inventoryChain").innerHTML.includes("inventory-matrix-center-head"), "inventory matrix should render DTE as the center column");
@@ -209,6 +356,7 @@ assert(elements.get("inventoryChainNote").textContent.includes("ITM Call/Put 会
 assert.strictEqual(elements.get("inventoryViewMatrix").getAttribute("aria-pressed"), "true", "inventory matrix accessibility state is wrong");
 elements.get("inventoryViewChain").click();
 assert(elements.get("inventoryChain").innerHTML.includes("chain-map"), "inventory option-chain switch should restore the original view");
+assert.strictEqual(elements.get("inventoryViewChain").getAttribute("aria-pressed"), "true", "inventory option-chain accessibility state is wrong after switching views");
 
 const centeredMatrixResult = new vm.Script(`
   (() => {
@@ -258,7 +406,7 @@ const deepItmExposureResult = new vm.Script(`
     const cfg = { ...config(), underlying: "ZN", allowed: ["ZN"], manualFuturePrice: 109.3125 };
     const rows = [
       { symbol: "ZN", secType: "FUT", position: -1, localSymbol: "ZNU6", delta: 1, underlyingPrice: 109.3125 },
-      { symbol: "ZN", secType: "FOP", position: 1, localSymbol: "HY3N6 C1087", expiry: "20260710", strike: 108.75, right: "C", mid: 0.5625, underlyingPrice: 109.3125, delta: 0.9769432151727014 },
+      { symbol: "ZN", secType: "FOP", position: 1, localSymbol: "HY3N6 C1087", expiry: "20260710", strike: 108.75, right: "C", mid: 0.5625, underlyingPrice: 109.3125, delta: 0.8991115407769299 },
       { symbol: "ZN", secType: "FOP", position: 1, localSymbol: "ZN3N6 C1095", expiry: "20260710", strike: 109.5, right: "C", mid: 0.1, underlyingPrice: 109.3125, delta: 0.30 },
       { symbol: "ZN", secType: "FOP", position: -1, localSymbol: "HY3N6 P1100", expiry: "20260710", strike: 110, right: "P", mid: 0.8, underlyingPrice: 109.3125, delta: -0.20 }
     ];
@@ -271,11 +419,46 @@ const deepItmExposure = JSON.parse(deepItmExposureResult);
 assert.strictEqual(deepItmExposure.deepItmOptions.length, 1, "only the zero-time-value, near-unit-delta call should be a future equivalent");
 assert.strictEqual(deepItmExposure.deepItmOptions[0].localSymbol, "HY3N6 C1087", "the intended deep-ITM call was not identified");
 assert(Math.abs(deepItmExposure.deepItmOptions[0].timeValue) < 1e-9, "deep-ITM call time value should be zero");
-assert(Math.abs(deepItmExposure.deepItmFutureEquivalent - 0.9769432151727014) < 1e-9, "deep-ITM future-equivalent exposure is wrong");
+assert(Math.abs(deepItmExposure.deepItmFutureEquivalent - 0.8991115407769299) < 1e-9, "deep-ITM future-equivalent exposure is wrong");
 assert(Math.abs(deepItmExposure.optionDelta - 0.20) < 1e-9, "option delta should include short options only");
 assert.strictEqual(deepItmExposure.futureDelta, -1, "actual futures delta is wrong");
-assert(Math.abs(deepItmExposure.equivalentFutureDelta + 0.0230567848272986) < 1e-9, "equivalent futures should combine actual futures with deep-ITM long options only");
-assert(Math.abs(deepItmExposure.portfolioDelta - 0.1769432151727014) < 1e-9, "portfolio delta must equal short-option delta plus equivalent futures, excluding ordinary long options");
+assert(Math.abs(deepItmExposure.equivalentFutureDelta + 0.1008884592230701) < 1e-9, "equivalent futures should combine actual futures with deep-ITM long options only");
+assert(Math.abs(deepItmExposure.portfolioDelta - 0.0991115407769299) < 1e-9, "portfolio delta must equal short-option delta plus equivalent futures, excluding ordinary long options");
+
+const currentZnEquivalentResult = new vm.Script(`
+  (() => {
+    const cfg = { ...config(), underlying: "ZN", allowed: ["ZN"], manualFuturePrice: 109.078125 };
+    const rows = [{
+      symbol: "ZN", secType: "FOP", position: 1, localSymbol: "HY3N6 C1087",
+      expiry: "20260710", strike: 108.75, right: "C", mid: 0.359375,
+      underlyingPrice: 109.078125, delta: 0.9268225743656249
+    }];
+    const accepted = portfolioDeltaExposure(rows, cfg, []);
+    const rejected = portfolioDeltaExposure(rows, { ...cfg, equivalentFutureMaxTimeValueTicks: 1 }, []);
+    return JSON.stringify({ accepted, rejected });
+  })()
+`).runInContext(context);
+const currentZnEquivalent = JSON.parse(currentZnEquivalentResult);
+assert.strictEqual(currentZnEquivalent.accepted.deepItmOptions.length, 1, "the live-like ZN call should pass the default two-tick time-value limit");
+assert(Math.abs(currentZnEquivalent.accepted.deepItmOptions[0].timeValueTicks - 2) < 1e-9, "the live-like ZN call should have two ticks of time value");
+assert(Math.abs(currentZnEquivalent.accepted.equivalentFutureDelta - 0.9268225743656249) < 1e-9, "the live-like ZN call equivalent future is wrong");
+assert.strictEqual(currentZnEquivalent.rejected.deepItmOptions.length, 0, "a one-tick limit should reject the same ZN call");
+assert(currentZnEquivalent.rejected.rejectedDeepItmOptions[0].deepItmReasons.some(reason => reason.includes("时间价值 2.0ticks > 1.0ticks")), "rejected equivalent-future candidates should explain the failed parameter");
+
+const normalizedZcPremiumResult = new vm.Script(`
+  (() => {
+    const cfg = { ...config(), underlying: "ZC", allowed: ["ZC"] };
+    const rows = [{
+      symbol: "ZC", secType: "FOP", position: -1, expiry: "20260717", dte: 1,
+      strike: 4.25, right: "P", price: 0.625, marketValue: -3125,
+      valueSource: "portfolio", contractMultiplier: 5000, multiplier: 50, costBasis: -34.48
+    }];
+    return JSON.stringify(parseShortPositions(rows, cfg, { respectInventoryDte: false })[0]);
+  })()
+`).runInContext(context);
+const normalizedZcPremium = JSON.parse(normalizedZcPremiumResult);
+assert.strictEqual(normalizedZcPremium.remainingPremium, 31.25, "ZC raw-contract-multiplier portfolio value should be normalized to $50 per quoted cent");
+assert(Math.abs(normalizedZcPremium.unrealizedPnL - 3.23) < 1e-9, "ZC normalized unrealized PnL is wrong");
 
 assert(elements.get("targetSummary").innerHTML.includes("本月目标"), "target summary missing");
 assert(elements.get("targetSummary").innerHTML.includes("本月已完成"), "completed PnL summary missing");
@@ -321,6 +504,9 @@ assert(elements.get("candidateTable").innerHTML.includes("candidate-matrix"), "c
 assert(elements.get("candidateTable").innerHTML.includes("高 Strike ← · → 低 Strike"), "candidate matrix should use the same current-price-centered strike axis");
 assert(elements.get("candidateTable").innerHTML.includes("保证金"), "candidate matrix should retain margin information");
 assert(elements.get("candidateTable").innerHTML.includes("评分"), "candidate matrix should retain score information");
+assert(elements.get("candidateTable").innerHTML.includes("选择预检"), "candidate cards should populate the margin preflight draft");
+assert.strictEqual(elements.get("whatIfRun").disabled, true, "order preview must remain disabled while the trade gateway is offline");
+assert(elements.get("whatIfResult").innerHTML.includes("独立交易服务未启动"), "offline trading safety status should be visible");
 elements.get("candidateViewChain").click();
 assert(elements.get("candidateTable").innerHTML.includes("chain-map"), "candidate option-chain switch should restore the original view");
 assert.strictEqual(elements.get("candidateViewChain").getAttribute("aria-pressed"), "true", "candidate option-chain accessibility state is wrong");
@@ -329,6 +515,79 @@ assert(elements.get("candidateTable").innerHTML.includes("candidate-matrix"), "c
 assert(elements.get("beforeAfter").innerHTML.includes("当前"), "before/after table missing current row");
 assert(elements.get("nodeTable").innerHTML.includes("106.500"), "short position strike missing");
 assert(!elements.get("nodeTable").innerHTML.includes("ZF-P-105.500"), "long option leaked into core node table");
+
+const whatIfUiResult = new vm.Script(`
+  (() => {
+    const savedCandidates = candidates;
+    candidates = [{
+      id: "12345", conId: 12345, secType: "FOP", exchange: "CBOT", underlying: "ZF",
+      localSymbol: "ZF1N6 P1065", expiry: "20260710", strike: 106.5, right: "P",
+      bid: 0.03125, ask: 0.046875, mid: 0.0390625
+    }];
+    selectWhatIfCandidate("12345");
+    const selectedHtml = document.getElementById("whatIfSelected").innerHTML;
+    const action = document.getElementById("whatIfAction").value;
+    const limitPrice = Number(document.getElementById("whatIfLimitPrice").value);
+    const runDisabled = document.getElementById("whatIfRun").disabled;
+    whatIfResponse = {
+      supported: true, reserve_funds: 100, binding_constraint: "available_funds",
+      available_headroom_after: 900, excess_headroom_after: 1200, max_quantity: 7,
+      max_quantity_is_search_cap: false, probe_count: 6,
+      first_unsupported_result: { quantity: 8 },
+      requested: {
+        contract_label: "ZF1N6 P1065", action: "SELL", quantity: 1, requested_at: "2026-07-16 20:00:00 +0800",
+        initial_margin_before: 1000, initial_margin_change: 250, initial_margin_after: 1250,
+        maintenance_margin_before: 800, maintenance_margin_change: 200, maintenance_margin_after: 1000,
+        available_funds_before: 1250, estimated_available_funds_after: 1000,
+        excess_liquidity_before: 1500, estimated_excess_liquidity_after: 1300,
+        warning_text: ""
+      }
+    };
+    renderWhatIfResult();
+    const resultHtml = document.getElementById("whatIfResult").innerHTML;
+    candidates = savedCandidates;
+    whatIfInstrument = null;
+    whatIfResponse = null;
+    return JSON.stringify({ selectedHtml, action, limitPrice, runDisabled, resultHtml });
+  })()
+`).runInContext(context);
+const whatIfUi = JSON.parse(whatIfUiResult);
+assert(whatIfUi.selectedHtml.includes("ZF1N6 P1065") && whatIfUi.selectedHtml.includes("conId 12345"), "candidate selection should populate the What-If ticket");
+assert.strictEqual(whatIfUi.action, "SELL", "candidate option What-If should default to the sell direction");
+assert(Math.abs(whatIfUi.limitPrice - 0.03125) < 1e-9, "candidate option What-If should default to bid limit");
+assert.strictEqual(whatIfUi.runDisabled, true, "selecting a candidate must not enable the IB order protocol");
+assert(whatIfUi.resultHtml.includes("当前数量通过保证金预检"), "passing What-If result should be explicit");
+assert(whatIfUi.resultHtml.includes("7 张") && whatIfUi.resultHtml.includes("8 张不通过"), "verified capacity boundary should be visible");
+
+const tradeConfirmationUi = JSON.parse(new vm.Script(`
+  (() => {
+    tradeSessionToken = "session-token";
+    tradeGatewayStatus = {
+      ...tradeGatewayStatus, online: true, mode: "paper", armed: true,
+      maxOrderQuantity: 5, maxPreviewQuantity: 50, minimumReserveFunds: 1000
+    };
+    whatIfInstrument = { conId: 12345, secType: "FOP", exchange: "CBOT", underlying: "ZF", label: "ZF1N6 P1065" };
+    tradePreview = {
+      previewId: "preview-1", fingerprint: "abcdef1234567890", fingerprintShort: "abcdef123456",
+      expiresAt: Date.now() / 1000 + 30, confirmationPhrase: "确认 PAPER SELL 1 ZF1N6 P1065 @0.03125",
+      submittable: true
+    };
+    renderWhatIfPanel(config());
+    const previewDisabled = document.getElementById("whatIfRun").disabled;
+    document.getElementById("tradeConfirmationPhrase").value = tradePreview.confirmationPhrase;
+    renderTradeConfirmation();
+    const submitDisabled = document.getElementById("tradeSubmit").disabled;
+    const fingerprint = document.getElementById("tradeFingerprint").textContent;
+    tradeSessionToken = "";
+    tradeGatewayStatus = { ...tradeGatewayStatus, online: false, mode: "offline", armed: false };
+    tradePreview = null;
+    whatIfInstrument = null;
+    return JSON.stringify({ previewDisabled, submitDisabled, fingerprint });
+  })()
+`).runInContext(context));
+assert.strictEqual(tradeConfirmationUi.previewDisabled, false, "armed paper session should enable margin preview");
+assert.strictEqual(tradeConfirmationUi.submitDisabled, false, "exact dynamic confirmation phrase should enable final submit");
+assert(tradeConfirmationUi.fingerprint.includes("abcdef123456") && tradeConfirmationUi.fingerprint.includes("preview-1"), "order fingerprint and preview id must be visible");
 
 const qtyInput = elements.get("candidateTable").querySelectorAll("input[data-id]")[0];
 assert(qtyInput, "quantity input listener missing");

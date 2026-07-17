@@ -10,7 +10,7 @@ from .settings import IBSettings
 
 
 def connect_ib(settings: IBSettings, *, fetch_fields: StartupFetch | None = None) -> IB:
-    """Open a readonly IB connection and set the requested market-data mode."""
+    """Open an IB connection with the configured synchronization mode."""
     util.startLoop()
     ib = IB()
     ib.connect(
@@ -31,11 +31,10 @@ def ib_connection(
     *,
     fetch_fields: StartupFetch | None = None,
 ) -> Iterator[IB]:
-    """Context manager that always disconnects from IB on exit."""
+    """Context manager that always disconnects the configured IB session on exit."""
     ib = connect_ib(settings, fetch_fields=fetch_fields)
     try:
         yield ib
     finally:
         if ib.isConnected():
             ib.disconnect()
-

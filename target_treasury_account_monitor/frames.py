@@ -39,14 +39,45 @@ def positions_to_frame(
         has_ticker = ticker is not None
         has_portfolio_item = portfolio_item is not None
         quote = ticker_snapshot(ticker) if ticker is not None else {}
+        symbol = str(getattr(contract, "symbol", "") or "").upper()
+        sec_type = str(getattr(contract, "secType", "") or "").upper()
+        is_option = sec_type in {"FOP", "OPT"}
+
+        def valid_price(value: float) -> bool:
+            # IB commonly uses -1/-100 as an unavailable option-price sentinel.
+            # A listed option price cannot be negative, so never let those values
+            # flow into premium or market-value calculations.
+            return is_valid_number(value) and (not is_option or value >= 0)
 
         price = math.nan
         price_source = ""
         if portfolio_item is not None:
             price = clean_number(getattr(portfolio_item, "marketPrice", math.nan))
-            price_source = "portfolio" if is_valid_number(price) else ""
-        if ticker is not None and not is_valid_number(price):
+            price_source = "portfolio" if valid_price(price) else ""
+            if not valid_price(price):
+                price = math.nan
+        if ticker is not None and not valid_price(price):
             price, price_source = ticker_price(ticker)
+        if is_option and not valid_price(price):
+            price = math.nan
+            price_source = ""
+            for quote_name in (
+                "mid",
+                "last",
+                "markPrice",
+                "close",
+                "delayedMid",
+                "delayedLast",
+                "delayedClose",
+                "bid",
+                "ask",
+                "modelOptionPrice",
+            ):
+                candidate = clean_number(quote.get(quote_name, math.nan))
+                if valid_price(candidate):
+                    price = candidate
+                    price_source = quote_name
+                    break
 
         contract_multiplier_value = contract_multiplier(contract)
         multiplier = contract_cash_multiplier(contract)
@@ -59,6 +90,28 @@ def positions_to_frame(
         if not is_valid_number(market_value) and is_valid_number(price):
             market_value = quantity * price * multiplier
             value_source = f"estimated_from_{price_source}"
+
+        # IB reports ZC option quotes in cents, while the contract metadata still
+        # carries the raw 5,000 bushel multiplier.  A stale/derived portfolio value
+        # can therefore be exactly 100x too large.  Prefer the cash-value convention
+        # ($50 per quoted cent) whenever the portfolio value is implausibly far from
+        # the live price-derived value.
+        expected_market_value = quantity * price * multiplier if is_valid_number(price) else math.nan
+        value_ratio = (
+            abs(market_value / expected_market_value)
+            if is_valid_number(market_value) and is_valid_number(expected_market_value) and abs(expected_market_value) > 1e-9
+            else math.nan
+        )
+        normalized_zc_value = (
+            symbol == "ZC"
+            and sec_type in {"FOP", "OPT"}
+            and is_valid_number(expected_market_value)
+            and is_valid_number(value_ratio)
+            and value_ratio > 10.0
+        )
+        if normalized_zc_value:
+            market_value = expected_market_value
+            value_source = "normalized_from_portfolio"
 
         unrealized_pnl = (
             clean_number(getattr(portfolio_item, "unrealizedPNL", math.nan))
@@ -76,7 +129,7 @@ def positions_to_frame(
             if is_valid_number(market_value) and is_valid_number(cost_basis)
             else math.nan
         )
-        if not is_valid_number(unrealized_pnl) and is_valid_number(estimated_unrealized_pnl):
+        if (normalized_zc_value or not is_valid_number(unrealized_pnl)) and is_valid_number(estimated_unrealized_pnl):
             unrealized_pnl = estimated_unrealized_pnl
 
         greek = read_ticker_greeks(ticker)

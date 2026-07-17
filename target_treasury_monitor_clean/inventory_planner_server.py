@@ -4,6 +4,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import threading
@@ -11,6 +12,9 @@ import time
 from urllib.parse import parse_qs, urlparse
 import uuid
 import webbrowser
+
+from .inventory_market_stream import InventoryMarketStream
+from .settings import IBSettings
 
 
 REFRESH_PRODUCTS = ("ZF", "ZN", "ZC")
@@ -111,6 +115,15 @@ def inventory_planner_manifest(directory: Path) -> dict[str, object]:
         "products": products,
         "defaults": defaults,
         "dataUpdatedAt": local_timestamp(latest_mtime(data_files)),
+        "marginWhatIf": {
+            "enabled": False,
+            "mode": "read_only",
+            "requiresOrderChannel": True,
+            "reason": (
+                "IB 原生 What-If 使用订单协议；当前 Dashboard 保持 Read-Only API，"
+                "因此不会发起在线测算。"
+            ),
+        },
     }
 
 
@@ -142,13 +155,19 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
         (30, "持仓已读取", "positions:"),
         (36, "刷新期权链", "refresh option chains"),
         (46, "刷新ZF期权链", "refresh chain: zf"),
+        (49, "刷新ZF期货价格", "zf future price refresh started"),
         (50, "刷新ZF期货价格", "zf future prices sidecar:"),
+        (51, "刷新ZF期权行情", "zf option quote refresh started"),
         (52, "刷新ZF期权行情", "zf option quotes:"),
         (58, "刷新ZN期权链", "refresh chain: zn"),
+        (61, "刷新ZN期货价格", "zn future price refresh started"),
         (62, "刷新ZN期货价格", "zn future prices sidecar:"),
+        (63, "刷新ZN期权行情", "zn option quote refresh started"),
         (64, "刷新ZN期权行情", "zn option quotes:"),
         (68, "刷新ZC期权链", "refresh chain: zc"),
+        (71, "刷新ZC期货价格", "zc future price refresh started"),
         (72, "刷新ZC期货价格", "zc future prices sidecar:"),
+        (73, "刷新ZC期权行情", "zc option quote refresh started"),
         (74, "刷新ZC期权行情", "zc option quotes:"),
         (78, "持仓快刷行情已完成", "fast refresh: preserving candidate chain"),
         (78, "刷新期货K线", "refresh futures bars"),
@@ -166,6 +185,53 @@ def refresh_progress_from_output(lines: list[str], returncode: int | None = None
     if returncode is not None:
         return (100, "刷新完成") if returncode == 0 else (progress, stage if lock_busy else "刷新失败")
     return progress, stage
+
+
+def refresh_phase_timings_from_output(
+    lines: list[str],
+    total_seconds: float = 0.0,
+) -> dict[str, float]:
+    """Aggregate machine-readable phase timers emitted by the refresh command."""
+    raw = {"positions": 0.0, "futures": 0.0, "options": 0.0, "bars": 0.0, "publish": 0.0, "total": 0.0}
+    base_seen: set[str] = set()
+    details: dict[str, dict[str, float]] = {name: {} for name in raw}
+    pattern = re.compile(
+        r"^phase timing:\s*(positions|futures|options|bars|publish|total)"
+        r"(?:\.([A-Za-z0-9_-]+))?=([0-9]+(?:\.[0-9]+)?)\s*$",
+        re.I,
+    )
+    for line in lines:
+        match = pattern.match(str(line).strip())
+        if not match:
+            continue
+        name = match.group(1).lower()
+        detail = (match.group(2) or "").upper()
+        value = max(float(match.group(3)), 0.0)
+        if detail:
+            # Per-product markers are individual durations. Using a keyed map
+            # also prevents a repeated status line from being counted twice.
+            details[name][detail] = value
+        else:
+            # Legacy refreshes emitted a cumulative value after every product;
+            # the latest base value is therefore authoritative.
+            raw[name] = value
+            base_seen.add(name)
+
+    for name, values in details.items():
+        if name not in base_seen and values:
+            raw[name] = sum(values.values())
+
+    total = max(raw["total"], float(total_seconds or 0.0), 0.0)
+    option_seconds = raw["options"]
+    futures_seconds = raw["futures"] + raw["bars"]
+    other_seconds = max(total - raw["positions"] - option_seconds - futures_seconds, 0.0)
+    return {
+        "positionsSeconds": round(raw["positions"], 3),
+        "optionsSeconds": round(option_seconds, 3),
+        "futuresSeconds": round(futures_seconds, 3),
+        "otherSeconds": round(other_seconds, 3),
+        "totalSeconds": round(total, 3),
+    }
 
 
 def refresh_mode_details_from_output(
@@ -225,7 +291,10 @@ def read_latest_refresh_status(directory: Path) -> dict[str, object]:
     return {"ok": None, "running": False, "error": "invalid refresh status"}
 
 
-def inventory_planner_handler(directory: Path):
+def inventory_planner_handler(
+    directory: Path,
+    market_stream: InventoryMarketStream | None = None,
+):
     jobs: dict[str, dict[str, object]] = {}
     jobs_lock = threading.Lock()
 
@@ -244,6 +313,17 @@ def inventory_planner_handler(directory: Path):
             if parsed.path == "/inventory-planner-defaults.json":
                 self.send_json(200, inventory_planner_manifest(directory))
                 return
+            if parsed.path == "/api/live-positions":
+                if market_stream is None:
+                    self.send_json(503, {
+                        "ok": False,
+                        "connected": False,
+                        "dataMode": "offline",
+                        "error": "persistent IB market stream is not enabled",
+                    })
+                    return
+                self.send_json(200, market_stream.snapshot())
+                return
             if parsed.path == "/api/refresh-inventory-data/status":
                 job_id = parse_qs(parsed.query).get("job", [""])[0]
                 if job_id in {"", "latest"}:
@@ -260,7 +340,23 @@ def inventory_planner_handler(directory: Path):
             super().do_GET()
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib handler method name
-            if self.path.split("?", 1)[0] != "/api/refresh-inventory-data":
+            path = self.path.split("?", 1)[0]
+            if path == "/api/margin-whatif":
+                # IB's native What-If flag still travels through placeOrder at
+                # the API protocol layer.  Keep the everyday planner strictly
+                # read-only and reject this path before reading input or
+                # opening any IB session.
+                self.send_json(403, {
+                    "ok": False,
+                    "mode": "read_only",
+                    "requiresOrderChannel": True,
+                    "error": (
+                        "IB 原生 What-If 已停用：它使用订单协议，而当前 Dashboard "
+                        "保持 Read-Only API。"
+                    ),
+                })
+                return
+            if path != "/api/refresh-inventory-data":
                 self.send_error(404, "not found")
                 return
 
@@ -285,6 +381,8 @@ def inventory_planner_handler(directory: Path):
             except ValueError as exc:
                 self.send_json(400, {"ok": False, "error": str(exc)})
                 return
+            if market_stream is not None and contract_months:
+                market_stream.set_future_months(contract_months)
 
             latest = read_latest_refresh_status(directory)
             if latest.get("running"):
@@ -321,6 +419,7 @@ def inventory_planner_handler(directory: Path):
                     "progress": 4,
                     "stage": "提交刷新任务",
                     "durationSeconds": 0.0,
+                    "phaseTimings": refresh_phase_timings_from_output([], 0.0),
                     "stdout": "",
                     "stderr": "",
                     "lines": [],
@@ -369,6 +468,7 @@ def inventory_planner_handler(directory: Path):
                             job["progress"] = progress
                             job["stage"] = stage
                             job["durationSeconds"] = round(time.monotonic() - started_at, 3)
+                            job["phaseTimings"] = refresh_phase_timings_from_output(lines, job["durationSeconds"])
                             job["effectiveMode"] = effective_mode
                             job["refreshDecision"] = refresh_decision
                         if time.monotonic() - started_at > 900:
@@ -397,6 +497,7 @@ def inventory_planner_handler(directory: Path):
                     "progress": progress,
                     "stage": stage,
                     "durationSeconds": duration_seconds,
+                    "phaseTimings": refresh_phase_timings_from_output(lines, duration_seconds),
                     "effectiveMode": effective_mode,
                     "refreshDecision": refresh_decision,
                     "stdout": "\n".join(lines),
@@ -408,15 +509,39 @@ def inventory_planner_handler(directory: Path):
     return partial(InventoryPlannerHandler, directory=str(directory))
 
 
-def serve_inventory_planner(directory: Path, host: str = "127.0.0.1", port: int = 8766, open_browser: bool = False) -> None:
+def serve_inventory_planner(
+    directory: Path,
+    host: str = "127.0.0.1",
+    port: int = 8766,
+    open_browser: bool = False,
+    stream_settings: IBSettings | None = None,
+    stream_future_months: dict[str, object] | None = None,
+) -> None:
     directory = directory.resolve()
     html_path = directory / "sell_side_inventory_planner.html"
     if not html_path.exists():
         raise SystemExit(f"sell_side_inventory_planner.html not found under {directory}")
 
+    stream_settings = stream_settings or IBSettings(
+        client_id=7318,
+        market_data_type=3,
+        readonly=True,
+    )
+    market_stream = InventoryMarketStream(
+        stream_settings,
+        future_months=stream_future_months,
+    )
+    market_stream.start()
     try:
-        server = ThreadingHTTPServer((host, port), inventory_planner_handler(directory))
+        server = ThreadingHTTPServer(
+            (host, port),
+            inventory_planner_handler(
+                directory,
+                market_stream=market_stream,
+            ),
+        )
     except OSError as exc:
+        market_stream.stop()
         raise SystemExit(f"cannot bind {host}:{port} ({exc}); try another port") from exc
 
     host, bound_port = server.server_address[:2]
@@ -432,3 +557,4 @@ def serve_inventory_planner(directory: Path, host: str = "127.0.0.1", port: int 
         print("\nstopped", flush=True)
     finally:
         server.server_close()
+        market_stream.stop()

@@ -9,9 +9,11 @@ from target_treasury_monitor_clean.margin_whatif import (
     MarginWhatIfError,
     MarginWhatIfRequest,
     build_margin_whatif_order,
+    margin_support_decision,
     margin_whatif_result,
     read_margin_account_snapshot,
     run_margin_whatif,
+    run_margin_whatif_capacity,
 )
 
 
@@ -89,6 +91,53 @@ class MarginWhatIfTests(unittest.TestCase):
         self.assertEqual(result.estimated_available_funds_after, 4740.0)
         self.assertEqual(result.linear_max_quantity_estimate, 38)
         self.assertEqual(result.contract_label, "ZNU6 C10925")
+
+    def test_capacity_search_verifies_supported_and_first_unsupported_sizes(self) -> None:
+        class CapacityIB(FakeIB):
+            def whatIfOrder(self, contract: Contract, order):
+                quantity = float(order.totalQuantity)
+                return SimpleNamespace(
+                    initMarginBefore="1000",
+                    initMarginChange=str(quantity * 100),
+                    initMarginAfter=str(1000 + quantity * 100),
+                    maintMarginBefore="800",
+                    maintMarginChange=str(quantity * 80),
+                    maintMarginAfter=str(800 + quantity * 80),
+                    equityWithLoanBefore="6000",
+                    equityWithLoanChange="0",
+                    equityWithLoanAfter="6000",
+                    warningText="",
+                )
+
+        result = run_margin_whatif_capacity(
+            CapacityIB(),
+            "U16251798",
+            MarginWhatIfRequest(contract=Contract(conId=12345), action="SELL", quantity=5),
+            reserve_funds=1000,
+            max_search_quantity=100,
+        )
+
+        self.assertTrue(result.supported)
+        self.assertEqual(result.max_quantity, 40)
+        self.assertFalse(result.max_quantity_is_search_cap)
+        self.assertEqual(result.max_quantity_result.quantity, 40)
+        self.assertEqual(result.first_unsupported_result.quantity, 41)
+        self.assertEqual(result.available_headroom_after, 3500)
+        self.assertGreater(result.probe_count, 2)
+
+    def test_support_decision_requires_both_observed_buffers_to_keep_reserve(self) -> None:
+        result = run_margin_whatif(
+            FakeIB(),
+            "U16251798",
+            MarginWhatIfRequest(contract=Contract(conId=12345), action="SELL", quantity=2),
+        )
+
+        supported, binding, available, excess = margin_support_decision(result, reserve_funds=4050)
+
+        self.assertFalse(supported)
+        self.assertEqual(binding, "excess_liquidity")
+        self.assertEqual(available, 690)
+        self.assertEqual(excess, -60)
 
     def test_release_is_positive_when_a_closing_trade_reduces_margin(self) -> None:
         snapshot = read_margin_account_snapshot(FakeIB(), "U16251798")

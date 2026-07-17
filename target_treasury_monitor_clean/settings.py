@@ -45,8 +45,8 @@ class StaticChainSettings:
     max_expiration: str | None = None
     qualify_batch_size: int = 300
     batch_size: int = 150
-    wait_max_seconds: float = 10.0
-    wait_stable_seconds: float = 2.0
+    wait_max_seconds: float = 5.0
+    wait_stable_seconds: float = 0.75
     request_interval: float = 0.025
     inter_batch_pause_seconds: float = 0.5
     empty_batch_retries: int = 1

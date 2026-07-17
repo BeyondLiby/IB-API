@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 import math
 import re
@@ -42,10 +42,22 @@ class MarginAccountSnapshot:
     excess_liquidity: float | None
     full_initial_margin: float | None
     full_maintenance_margin: float | None
+    full_available_funds: float | None
+    full_excess_liquidity: float | None
     look_ahead_initial_margin: float | None
     look_ahead_maintenance_margin: float | None
     look_ahead_available_funds: float | None
     look_ahead_excess_liquidity: float | None
+
+    @property
+    def effective_available_funds(self) -> float | None:
+        """Prefer IB's consolidated account value when it is available."""
+        return self.full_available_funds if self.full_available_funds is not None else self.available_funds
+
+    @property
+    def effective_excess_liquidity(self) -> float | None:
+        """Prefer IB's consolidated maintenance-margin buffer when available."""
+        return self.full_excess_liquidity if self.full_excess_liquidity is not None else self.excess_liquidity
 
 
 @dataclass(frozen=True)
@@ -115,6 +127,44 @@ class MarginWhatIfResult:
         return data
 
 
+@dataclass(frozen=True)
+class MarginCapacityResult:
+    """A requested-order decision plus a broker-verified size search."""
+
+    requested: MarginWhatIfResult
+    supported: bool | None
+    reserve_funds: float
+    binding_constraint: str
+    available_headroom_after: float | None
+    excess_headroom_after: float | None
+    max_quantity: int | None
+    max_quantity_is_search_cap: bool
+    max_search_quantity: int
+    probe_count: int
+    capacity_note: str
+    max_quantity_result: MarginWhatIfResult | None
+    first_unsupported_result: MarginWhatIfResult | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "requested": self.requested.to_dict(),
+            "supported": self.supported,
+            "reserve_funds": self.reserve_funds,
+            "binding_constraint": self.binding_constraint,
+            "available_headroom_after": self.available_headroom_after,
+            "excess_headroom_after": self.excess_headroom_after,
+            "max_quantity": self.max_quantity,
+            "max_quantity_is_search_cap": self.max_quantity_is_search_cap,
+            "max_search_quantity": self.max_search_quantity,
+            "probe_count": self.probe_count,
+            "capacity_note": self.capacity_note,
+            "max_quantity_result": self.max_quantity_result.to_dict() if self.max_quantity_result else None,
+            "first_unsupported_result": (
+                self.first_unsupported_result.to_dict() if self.first_unsupported_result else None
+            ),
+        }
+
+
 def _number(value: object) -> float | None:
     if value is None:
         return None
@@ -124,14 +174,15 @@ def _number(value: object) -> float | None:
     text = str(value).replace(",", "").strip()
     if not text:
         return None
-    match = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", text)
+    match = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", text)
     if match is None:
         return None
     try:
         number = float(match.group(0))
     except ValueError:
         return None
-    return number if math.isfinite(number) else None
+    # IB uses DBL_MAX-like sentinels for unavailable numeric order-state fields.
+    return number if math.isfinite(number) and abs(number) < 1e100 else None
 
 
 def _difference(before: float | None, after: float | None, reported: object) -> float | None:
@@ -195,6 +246,8 @@ def read_margin_account_snapshot(ib: IB, account: str) -> MarginAccountSnapshot:
         excess_liquidity=values.get("ExcessLiquidity"),
         full_initial_margin=values.get("FullInitMarginReq"),
         full_maintenance_margin=values.get("FullMaintMarginReq"),
+        full_available_funds=values.get("FullAvailableFunds"),
+        full_excess_liquidity=values.get("FullExcessLiquidity"),
         look_ahead_initial_margin=values.get("LookAheadInitMarginReq"),
         look_ahead_maintenance_margin=values.get("LookAheadMaintMarginReq"),
         look_ahead_available_funds=values.get("LookAheadAvailableFunds"),
@@ -275,14 +328,16 @@ def margin_whatif_result(
         if equity_change is not None and maintenance_change is not None
         else None
     )
+    available_before = account_snapshot.effective_available_funds
+    excess_before = account_snapshot.effective_excess_liquidity
     available_after = (
-        account_snapshot.available_funds + estimated_available_change
-        if account_snapshot.available_funds is not None and estimated_available_change is not None
+        available_before + estimated_available_change
+        if available_before is not None and estimated_available_change is not None
         else None
     )
     excess_after = (
-        account_snapshot.excess_liquidity + estimated_excess_change
-        if account_snapshot.excess_liquidity is not None and estimated_excess_change is not None
+        excess_before + estimated_excess_change
+        if excess_before is not None and estimated_excess_change is not None
         else None
     )
 
@@ -306,14 +361,14 @@ def margin_whatif_result(
         equity_with_loan_before=equity_before,
         equity_with_loan_change=equity_change,
         equity_with_loan_after=equity_after,
-        available_funds_before=account_snapshot.available_funds,
+        available_funds_before=available_before,
         estimated_available_funds_change=estimated_available_change,
         estimated_available_funds_after=available_after,
-        excess_liquidity_before=account_snapshot.excess_liquidity,
+        excess_liquidity_before=excess_before,
         estimated_excess_liquidity_change=estimated_excess_change,
         estimated_excess_liquidity_after=excess_after,
         linear_max_quantity_estimate=_linear_max_quantity(
-            float(request.quantity), account_snapshot.available_funds, estimated_available_change
+            float(request.quantity), available_before, estimated_available_change
         ),
         warning_text=warning_text,
     )
@@ -332,3 +387,240 @@ def run_margin_whatif(
     order = build_margin_whatif_order(request, account)
     order_state = ib.whatIfOrder(contract, order)
     return margin_whatif_result(request, account_snapshot, contract, order_state)
+
+
+def margin_support_decision(
+    result: MarginWhatIfResult,
+    reserve_funds: float = 0.0,
+) -> tuple[bool | None, str, float | None, float | None]:
+    """Decide support from the two account buffers affected by IB margin."""
+    reserve = float(reserve_funds)
+    if not math.isfinite(reserve) or reserve < 0:
+        raise MarginWhatIfError("reserve_funds must be a non-negative number")
+    available_headroom = (
+        result.estimated_available_funds_after - reserve
+        if result.estimated_available_funds_after is not None
+        else None
+    )
+    excess_headroom = (
+        result.estimated_excess_liquidity_after - reserve
+        if result.estimated_excess_liquidity_after is not None
+        else None
+    )
+    constraints = [
+        ("available_funds", available_headroom),
+        ("excess_liquidity", excess_headroom),
+    ]
+    observed = [(name, value) for name, value in constraints if value is not None]
+    if not observed:
+        return None, "unavailable", available_headroom, excess_headroom
+    binding, minimum_headroom = min(observed, key=lambda item: item[1])
+    return minimum_headroom >= 0, binding, available_headroom, excess_headroom
+
+
+def run_margin_whatif_capacity(
+    ib: IB,
+    account: str,
+    request: MarginWhatIfRequest,
+    *,
+    reserve_funds: float = 0.0,
+    calculate_capacity: bool = True,
+    max_search_quantity: int = 10_000,
+) -> MarginCapacityResult:
+    """Preview a requested order and verify the largest supported integer size.
+
+    Capacity probing uses IB's portfolio-level What-If result at every sampled
+    quantity. It expands exponentially, then binary-searches and verifies the
+    boundary. This is materially safer than multiplying a one-contract margin
+    estimate, while still keeping the number of IB requests bounded.
+    """
+    reserve = float(reserve_funds)
+    if not math.isfinite(reserve) or reserve < 0:
+        raise MarginWhatIfError("reserve_funds must be a non-negative number")
+    search_cap = int(max_search_quantity)
+    if search_cap < 1 or search_cap > 1_000_000:
+        raise MarginWhatIfError("max_search_quantity must be between 1 and 1000000")
+
+    account_snapshot = read_margin_account_snapshot(ib, account)
+    contract = qualify_margin_contract(ib, request.contract)
+    probes: dict[int, MarginWhatIfResult] = {}
+    decisions: dict[int, bool | None] = {}
+
+    def probe(quantity: int) -> MarginWhatIfResult:
+        quantity = int(quantity)
+        if quantity not in probes:
+            candidate_request = replace(request, contract=contract, quantity=float(quantity))
+            order = build_margin_whatif_order(candidate_request, account)
+            order_state = ib.whatIfOrder(contract, order)
+            result = margin_whatif_result(candidate_request, account_snapshot, contract, order_state)
+            probes[quantity] = result
+            decisions[quantity] = margin_support_decision(result, reserve)[0]
+        return probes[quantity]
+
+    requested_quantity = float(request.quantity)
+    if not requested_quantity.is_integer() or requested_quantity < 1:
+        raise MarginWhatIfError("futures and options What-If quantity must be a positive integer")
+    requested_int = int(requested_quantity)
+    requested_result = probe(requested_int)
+    supported, binding, available_headroom, excess_headroom = margin_support_decision(
+        requested_result,
+        reserve,
+    )
+
+    if not calculate_capacity or supported is None:
+        note = (
+            "Capacity search was not requested."
+            if not calculate_capacity
+            else "IB did not return enough margin fields to determine supported size."
+        )
+        return MarginCapacityResult(
+            requested=requested_result,
+            supported=supported,
+            reserve_funds=reserve,
+            binding_constraint=binding,
+            available_headroom_after=available_headroom,
+            excess_headroom_after=excess_headroom,
+            max_quantity=None,
+            max_quantity_is_search_cap=False,
+            max_search_quantity=search_cap,
+            probe_count=len(probes),
+            capacity_note=note,
+            max_quantity_result=None,
+            first_unsupported_result=None,
+        )
+
+    one_result = probe(1)
+    if decisions[1] is None:
+        return MarginCapacityResult(
+            requested=requested_result,
+            supported=supported,
+            reserve_funds=reserve,
+            binding_constraint=binding,
+            available_headroom_after=available_headroom,
+            excess_headroom_after=excess_headroom,
+            max_quantity=None,
+            max_quantity_is_search_cap=False,
+            max_search_quantity=search_cap,
+            probe_count=len(probes),
+            capacity_note="IB did not return enough fields for the one-contract capacity probe.",
+            max_quantity_result=None,
+            first_unsupported_result=None,
+        )
+    if decisions[1] is False:
+        # A larger passing request would prove the feasible set is non-monotonic;
+        # in that unusual case do not make a false maximum-size claim.
+        non_monotonic = requested_int > 1 and supported is True
+        return MarginCapacityResult(
+            requested=requested_result,
+            supported=supported,
+            reserve_funds=reserve,
+            binding_constraint=binding,
+            available_headroom_after=available_headroom,
+            excess_headroom_after=excess_headroom,
+            max_quantity=None if non_monotonic else 0,
+            max_quantity_is_search_cap=False,
+            max_search_quantity=search_cap,
+            probe_count=len(probes),
+            capacity_note=(
+                "Margin feasibility is non-monotonic; the requested size passed although one contract failed. "
+                "No maximum is reported."
+                if non_monotonic
+                else "One contract does not preserve the requested account reserve."
+            ),
+            max_quantity_result=None,
+            first_unsupported_result=one_result,
+        )
+
+    low = 1
+    high: int | None = None
+    while low < search_cap:
+        candidate = min(low * 2, search_cap)
+        probe(candidate)
+        if decisions[candidate] is not True:
+            high = candidate
+            break
+        low = candidate
+        if low == search_cap:
+            break
+
+    if high is None:
+        return MarginCapacityResult(
+            requested=requested_result,
+            supported=supported,
+            reserve_funds=reserve,
+            binding_constraint=binding,
+            available_headroom_after=available_headroom,
+            excess_headroom_after=excess_headroom,
+            max_quantity=low,
+            max_quantity_is_search_cap=True,
+            max_search_quantity=search_cap,
+            probe_count=len(probes),
+            capacity_note=(
+                f"IB verified support through the configured search cap of {search_cap}; "
+                "this is a lower bound, not an unlimited-size claim."
+            ),
+            max_quantity_result=probes[low],
+            first_unsupported_result=None,
+        )
+
+    # A missing decision is not a valid failing boundary for binary search.
+    if decisions[high] is None:
+        return MarginCapacityResult(
+            requested=requested_result,
+            supported=supported,
+            reserve_funds=reserve,
+            binding_constraint=binding,
+            available_headroom_after=available_headroom,
+            excess_headroom_after=excess_headroom,
+            max_quantity=None,
+            max_quantity_is_search_cap=False,
+            max_search_quantity=search_cap,
+            probe_count=len(probes),
+            capacity_note="IB stopped returning enough margin fields while searching for the capacity boundary.",
+            max_quantity_result=None,
+            first_unsupported_result=probes[high],
+        )
+
+    while high - low > 1:
+        middle = (low + high) // 2
+        probe(middle)
+        if decisions[middle] is None:
+            return MarginCapacityResult(
+                requested=requested_result,
+                supported=supported,
+                reserve_funds=reserve,
+                binding_constraint=binding,
+                available_headroom_after=available_headroom,
+                excess_headroom_after=excess_headroom,
+                max_quantity=None,
+                max_quantity_is_search_cap=False,
+                max_search_quantity=search_cap,
+                probe_count=len(probes),
+                capacity_note="IB returned incomplete fields near the capacity boundary.",
+                max_quantity_result=None,
+                first_unsupported_result=probes[middle],
+            )
+        if decisions[middle] is True:
+            low = middle
+        else:
+            high = middle
+
+    # Both sides of the boundary are actual IB What-If probes in the cache.
+    return MarginCapacityResult(
+        requested=requested_result,
+        supported=supported,
+        reserve_funds=reserve,
+        binding_constraint=binding,
+        available_headroom_after=available_headroom,
+        excess_headroom_after=excess_headroom,
+        max_quantity=low,
+        max_quantity_is_search_cap=False,
+        max_search_quantity=search_cap,
+        probe_count=len(probes),
+        capacity_note=(
+            f"IB What-If verified {low} as supported and {high} as unsupported for the same order fields. "
+            "Re-run What-If immediately before any future live order because portfolio and market inputs can change."
+        ),
+        max_quantity_result=probes[low],
+        first_unsupported_result=probes[high],
+    )

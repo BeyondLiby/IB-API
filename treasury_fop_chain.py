@@ -5,7 +5,7 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import pandas as pd
 from ib_async import Contract, Future, FuturesOption, IB
@@ -169,6 +169,30 @@ def get_reference_price(ib: IB, contract: Contract, *, fallback: float | None = 
     raise RuntimeError(f"Could not get a reference price for {contract}")
 
 
+def _future_values_from_ticker(ticker: Any) -> dict[str, float]:
+    bid = clean_number(getattr(ticker, "bid", math.nan))
+    ask = clean_number(getattr(ticker, "ask", math.nan))
+    mid = (bid + ask) / 2.0 if is_valid_number(bid) and is_valid_number(ask) else math.nan
+    market_price_attr = getattr(ticker, "marketPrice", None)
+    market_price = market_price_attr() if callable(market_price_attr) else math.nan
+    return {
+        "marketPrice": clean_number(market_price),
+        "mid": mid,
+        "last": clean_number(getattr(ticker, "last", math.nan)),
+        "close": clean_number(getattr(ticker, "close", math.nan)),
+        "bid": bid,
+        "ask": ask,
+    }
+
+
+def _select_future_price(values: Mapping[str, float]) -> tuple[float, str]:
+    for source in ("marketPrice", "mid", "last", "close", "bid", "ask"):
+        value = values.get(source, math.nan)
+        if is_valid_number(value):
+            return float(value), source
+    return math.nan, ""
+
+
 def get_future_price(
     ib: IB,
     root: str,
@@ -205,37 +229,16 @@ def get_future_price(
         exchange=exchange,
         currency=currency,
     )
-    def values_from_ticker(ticker_obj: Any) -> dict[str, float]:
-        bid = clean_number(getattr(ticker_obj, "bid", math.nan))
-        ask = clean_number(getattr(ticker_obj, "ask", math.nan))
-        mid = (bid + ask) / 2.0 if is_valid_number(bid) and is_valid_number(ask) else math.nan
-        market_price_attr = getattr(ticker_obj, "marketPrice", None)
-        market_price = market_price_attr() if callable(market_price_attr) else math.nan
-        return {
-            "marketPrice": clean_number(market_price),
-            "mid": mid,
-            "last": clean_number(getattr(ticker_obj, "last", math.nan)),
-            "close": clean_number(getattr(ticker_obj, "close", math.nan)),
-            "bid": bid,
-            "ask": ask,
-        }
-
-    def select_price(values: dict[str, float]) -> tuple[float, str]:
-        for source in ("marketPrice", "mid", "last", "close", "bid", "ask"):
-            if is_valid_number(values[source]):
-                return float(values[source]), source
-        return math.nan, ""
-
     ticker = ib.reqTickers(contract)[0]
-    values = values_from_ticker(ticker)
-    price, price_source = select_price(values)
+    values = _future_values_from_ticker(ticker)
+    price, price_source = _select_future_price(values)
 
     if not is_valid_number(price) and wait_seconds > 0:
         stream_ticker = ib.reqMktData(contract, genericTickList="", snapshot=False)
         try:
             ib.sleep(wait_seconds)
-            stream_values = values_from_ticker(stream_ticker)
-            stream_price, stream_source = select_price(stream_values)
+            stream_values = _future_values_from_ticker(stream_ticker)
+            stream_price, stream_source = _select_future_price(stream_values)
             if is_valid_number(stream_price):
                 ticker = stream_ticker
                 values = stream_values
@@ -650,22 +653,146 @@ def get_future_prices_for_months(
     wait_seconds: float = 2.0,
     raise_on_missing: bool = False,
 ) -> pd.DataFrame:
-    rows = []
     fallback_by_month = {str(k): float(v) for k, v in (fallback_by_month or {}).items()}
-    for month in months:
-        info = get_future_price(
-            ib,
-            root,
-            month,
-            exchange=exchange,
-            currency=currency,
-            market_data_type=market_data_type,
-            fallback=fallback_by_month.get(str(month)),
-            wait_seconds=wait_seconds,
-            raise_on_missing=raise_on_missing,
-        )
-        rows.append({k: v for k, v in info.items() if k not in {"contract", "ticker"}})
-    return pd.DataFrame(rows)
+    fallback_by_contract = {(root.upper(), month): value for month, value in fallback_by_month.items()}
+    return get_future_prices_for_specs(
+        ib,
+        {root.upper(): months},
+        exchange=exchange,
+        currency=currency,
+        market_data_type=market_data_type,
+        fallback_by_contract=fallback_by_contract,
+        wait_seconds=wait_seconds,
+        raise_on_missing=raise_on_missing,
+    )
+
+
+def get_future_prices_for_specs(
+    ib: IB,
+    specs: Mapping[str, Sequence[str] | str],
+    *,
+    exchange: str = "CBOT",
+    currency: str = "USD",
+    market_data_type: int | None = None,
+    fallback_by_contract: Mapping[tuple[str, str], float] | None = None,
+    wait_seconds: float = 2.0,
+    raise_on_missing: bool = False,
+) -> pd.DataFrame:
+    """Stream prices for the pre-filtered futures set with one shared wait.
+
+    IB still requires one ``reqMktData`` call per contract.  The requests are
+    started back-to-back and observed together, so three products do not pay
+    three independent quote waits.  Only months present in ``specs`` are ever
+    qualified or subscribed.
+    """
+    requested: list[tuple[str, str, Contract]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_root, raw_months in specs.items():
+        root = str(raw_root).strip().upper()
+        months = str(raw_months).split(",") if isinstance(raw_months, str) else raw_months
+        for raw_month in months:
+            month = str(raw_month).strip()
+            key = (root, month)
+            if not root or not month or key in seen:
+                continue
+            seen.add(key)
+            requested.append(
+                (
+                    root,
+                    month,
+                    Future(
+                        symbol=root,
+                        lastTradeDateOrContractMonth=month,
+                        exchange=exchange,
+                        currency=currency,
+                    ),
+                )
+            )
+
+    if not requested:
+        return pd.DataFrame()
+    if market_data_type is not None:
+        ib.reqMarketDataType(market_data_type)
+
+    contracts = [contract for _, _, contract in requested]
+    qualification_error = ""
+    try:
+        ib.qualifyContracts(*contracts)
+    except Exception as exc:
+        qualification_error = f"qualification failed: {type(exc).__name__}: {exc}"
+
+    tickers: dict[int, Any] = {}
+    request_errors: dict[int, str] = {}
+    for index, (root, month, contract) in enumerate(requested):
+        if int(getattr(contract, "conId", 0) or 0) <= 0:
+            request_errors[index] = qualification_error or f"could not qualify future {root}{month}"
+            continue
+        try:
+            tickers[index] = ib.reqMktData(
+                contract,
+                genericTickList="",
+                snapshot=False,
+                regulatorySnapshot=False,
+            )
+        except Exception as exc:
+            request_errors[index] = f"market data request failed: {type(exc).__name__}: {exc}"
+
+    deadline = time.monotonic() + max(float(wait_seconds), 0.0)
+    try:
+        while tickers:
+            if all(is_valid_number(_select_future_price(_future_values_from_ticker(ticker))[0]) for ticker in tickers.values()):
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            ib.sleep(min(0.05, remaining))
+
+        rows: list[dict[str, Any]] = []
+        fallback_by_contract = {
+            (str(root).upper(), str(month)): float(value)
+            for (root, month), value in (fallback_by_contract or {}).items()
+        }
+        missing: list[str] = []
+        empty_values = {name: math.nan for name in ("marketPrice", "mid", "last", "close", "bid", "ask")}
+        for index, (root, month, contract) in enumerate(requested):
+            ticker = tickers.get(index)
+            values = _future_values_from_ticker(ticker) if ticker is not None else dict(empty_values)
+            price, source = _select_future_price(values)
+            if is_valid_number(price):
+                source = f"stream_{source}"
+            else:
+                fallback = fallback_by_contract.get((root, month))
+                if fallback is not None and is_valid_number(fallback):
+                    price = float(fallback)
+                    source = "fallback"
+                else:
+                    missing.append(f"{root}{month}")
+            error = request_errors.get(index, "")
+            if not is_valid_number(price) and not error:
+                error = "stream returned no valid price before shared deadline"
+            rows.append(
+                {
+                    "root": root,
+                    "month": month,
+                    "exchange": exchange,
+                    "conId": int(getattr(contract, "conId", 0) or 0),
+                    "localSymbol": str(getattr(contract, "localSymbol", "") or ""),
+                    "price": price,
+                    "priceSource": source,
+                    **values,
+                    "error": error,
+                }
+            )
+        if missing and raise_on_missing:
+            raise RuntimeError(f"Could not get a valid price for {', '.join(missing)}")
+        return pd.DataFrame(rows)
+    finally:
+        for index, ticker in tickers.items():
+            contract = requested[index][2]
+            try:
+                ib.cancelMktData(contract)
+            except Exception:
+                pass
 
 
 def prepare_snapshot_features(
@@ -967,9 +1094,14 @@ class FOPMarketDataStreamer:
         max_seconds: float = 15.0,
         stable_seconds: float = 2.0,
         poll_seconds: float = 0.25,
+        stability_fields: Sequence[str] = ("quote", "greeks", "oi", "volume"),
     ) -> StreamStats:
         start = time.monotonic()
-        last_score = (-1, -1, -1, -1)
+        valid_fields = {"quote", "greeks", "oi", "volume"}
+        selected_fields = tuple(field for field in stability_fields if field in valid_fields)
+        if not selected_fields:
+            selected_fields = ("quote", "greeks")
+        last_score: tuple[int, ...] | None = None
         last_change = start
         stats = self.readiness()
 
@@ -977,7 +1109,13 @@ class FOPMarketDataStreamer:
             self.ib.sleep(poll_seconds)
             stats = self.readiness()
             now = time.monotonic()
-            score = (stats.quote_ready, stats.greek_ready, stats.oi_ready, stats.volume_ready)
+            values = {
+                "quote": stats.quote_ready,
+                "greeks": stats.greek_ready,
+                "oi": stats.oi_ready,
+                "volume": stats.volume_ready,
+            }
+            score = tuple(values[field] for field in selected_fields)
             if score != last_score:
                 last_score = score
                 last_change = now
@@ -998,6 +1136,8 @@ class FOPMarketDataStreamer:
             if has_any_data and elapsed >= min_seconds and now - last_change >= stable_seconds:
                 break
         print()
+        reason = "timeout" if stats.elapsed_seconds >= max_seconds else "stable"
+        print(f"market data wait complete: reason={reason}, stability={'+'.join(selected_fields)}")
         return stats
 
     def snapshot(self) -> pd.DataFrame:
@@ -1025,6 +1165,7 @@ def snapshot_in_batches(
     contracts: Sequence[Contract],
     *,
     batch_size: int = 300,
+    wait_min_seconds: float = 1.0,
     wait_max_seconds: float = 15.0,
     wait_stable_seconds: float = 2.0,
     request_interval: float = 0.025,
@@ -1040,6 +1181,7 @@ def snapshot_in_batches(
         batch_frame = pd.DataFrame()
         attempts = max(int(empty_batch_retries), 0) + 1
         for attempt in range(1, attempts + 1):
+            retry_empty_batch = False
             streamer = FOPMarketDataStreamer(
                 ib,
                 generic_ticks=generic_ticks,
@@ -1048,19 +1190,25 @@ def snapshot_in_batches(
             try:
                 streamer.subscribe(batch)
                 stats = streamer.wait_until_stable(
+                    min_seconds=wait_min_seconds,
                     max_seconds=wait_max_seconds,
                     stable_seconds=wait_stable_seconds,
+                    # Bid/ask and model Greeks drive the candidate filter and
+                    # risk display. OI/volume remain collected opportunistically,
+                    # but late optional ticks must not hold every batch open.
+                    stability_fields=("quote", "greeks"),
                 )
                 batch_frame = streamer.snapshot()
                 is_empty_batch = stats.quote_ready == 0 and stats.greek_ready == 0 and stats.oi_ready == 0
                 if not is_empty_batch or attempt == attempts:
                     break
+                retry_empty_batch = True
                 print(
                     f"empty market-data batch {batch_no}; retrying after "
                     f"{empty_batch_retry_pause_seconds:.1f}s ({attempt}/{attempts - 1})"
                 )
             finally:
-                pause = empty_batch_retry_pause_seconds if attempt < attempts else inter_batch_pause_seconds
+                pause = empty_batch_retry_pause_seconds if retry_empty_batch else inter_batch_pause_seconds
                 streamer.cancel(wait_seconds=pause)
         frames.append(batch_frame)
         print(f"finished {min(batch_no * batch_size, total)}/{total}")

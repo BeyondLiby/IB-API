@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
-from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
+from target_treasury_monitor_clean.inventory_planner_server import refresh_phase_timings_from_output, refresh_progress_from_output
 from target_treasury_monitor_clean.ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
 from target_treasury_monitor_clean.settings import DEFAULT_IB_ACCOUNT
 
@@ -236,6 +236,20 @@ def build_server_command(args: argparse.Namespace) -> list[str]:
         args.planner_host,
         "--port",
         str(args.planner_port),
+        "--ib-host",
+        args.ib_host,
+        "--ib-port",
+        str(args.ib_port),
+        "--account",
+        args.account,
+        "--stream-client-id",
+        str(min(args.client_id + 1, 9999)),
+        "--market-data-type",
+        args.market_data_type,
+        "--chain-specs",
+        args.chain_specs,
+        "--zc-chain-specs",
+        args.zc_chain_specs,
     ]
     if not args.open_browser:
         command.append("--no-open")
@@ -342,6 +356,7 @@ def _refresh_status_payload(
         "progress": progress,
         "stage": stage,
         "durationSeconds": round(max(float(duration_seconds), 0.0), 3),
+        "phaseTimings": refresh_phase_timings_from_output(lines, duration_seconds),
         "requestedMode": requested_mode,
         "effectiveMode": effective_mode,
         "refreshDecision": refresh_decision,
@@ -579,11 +594,11 @@ def main() -> None:
     parser.add_argument("--max-expiration", default="")
     parser.add_argument("--working-dir", type=Path, default=Path("data/planner/debug"))
     parser.add_argument("--html-data-dir", type=Path, default=Path("data/planner"))
-    parser.add_argument("--batch-size", type=int, default=150)
-    parser.add_argument("--wait-seconds", type=float, default=8.0)
-    parser.add_argument("--stable-seconds", type=float, default=1.5)
+    parser.add_argument("--batch-size", type=int, default=50, help="Requested temporary option quote batch size; the child caps it using current persistent subscriptions and a 100-line budget.")
+    parser.add_argument("--wait-seconds", type=float, default=5.0)
+    parser.add_argument("--stable-seconds", type=float, default=0.75)
     parser.add_argument("--request-interval", type=float, default=0.025)
-    parser.add_argument("--inter-batch-pause-seconds", type=float, default=1.0)
+    parser.add_argument("--inter-batch-pause-seconds", type=float, default=0.5)
     parser.add_argument("--market-data-max-dte", type=int, default=0, help="Only request option market data up to this DTE. 0 means auto/default.")
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--bar-size", default="30 mins")

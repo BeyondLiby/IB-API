@@ -72,6 +72,47 @@
       margin: 0;
     }
 
+    .portfolio-overview-heading {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .portfolio-quote-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 9px;
+      border: 1px solid #d0d5dd;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .portfolio-quote-status.live {
+      border-color: #75e0a7;
+      background: #ecfdf3;
+      color: var(--green);
+    }
+
+    .portfolio-quote-status.delayed,
+    .portfolio-quote-status.mixed,
+    .portfolio-quote-status.other {
+      border-color: #fec84b;
+      background: #fffaeb;
+      color: var(--amber);
+    }
+
+    .portfolio-quote-status.offline {
+      border-color: #fda29b;
+      background: #fef3f2;
+      color: var(--red);
+    }
+
     .section-heading button {
       height: 30px;
     }
@@ -154,9 +195,10 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(150px, 1fr)) repeat(4, minmax(92px, auto));
+      grid-template-columns: minmax(120px, 160px) repeat(4, minmax(135px, 170px)) repeat(3, minmax(105px, 125px));
       gap: 8px;
       align-items: end;
+      justify-content: start;
     }
 
     .refresh-contracts {
@@ -174,11 +216,8 @@
     }
 
     .refresh-duration {
-      display: inline-block;
-      margin-top: 6px;
       color: #344054;
-      font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
     }
 
     .config-grid {
@@ -496,6 +535,26 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(130px, 1fr));
       gap: 8px;
+    }
+
+    .premium-overview-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.78fr) minmax(560px, 1.22fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .premium-overview-summary,
+    .premium-overview-expiry {
+      min-width: 0;
+    }
+
+    .premium-overview-summary .note {
+      margin-bottom: 0;
+    }
+
+    .premium-overview-expiry h3 {
+      margin: 0 0 8px;
     }
 
     .stack {
@@ -862,6 +921,12 @@
       color: #5925dc;
     }
 
+    .product-signal.warning {
+      border-color: #fedf89;
+      background: #fffaeb;
+      color: #b54708;
+    }
+
     .product-signal.data {
       border-color: #b2ddff;
       background: #eff8ff;
@@ -887,7 +952,7 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
       color: var(--muted);
-      font-size: 10px;
+      font-size: 11px;
       line-height: 1.2;
     }
 
@@ -910,14 +975,14 @@
 
     .product-metric-label i {
       display: grid;
-      flex: 0 0 17px;
-      width: 17px;
-      height: 17px;
+      flex: 0 0 18px;
+      width: 18px;
+      height: 18px;
       place-items: center;
       border-radius: 5px;
       background: #eef2f6;
       color: #475467;
-      font-size: 10px;
+      font-size: 11px;
       font-style: normal;
       font-weight: 900;
     }
@@ -926,6 +991,7 @@
       overflow: hidden;
       color: var(--muted);
       font-style: normal;
+      font-weight: 700;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -934,7 +1000,7 @@
       display: block;
       overflow: hidden;
       color: var(--ink);
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 850;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1549,6 +1615,221 @@
       gap: 7px;
     }
 
+    .whatif-panel {
+      display: grid;
+      grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
+      gap: 14px;
+      border-color: #b2ccff;
+      background: linear-gradient(135deg, #f8fbff 0%, #ffffff 55%, #f8fafc 100%);
+    }
+
+    .whatif-panel[hidden] {
+      display: none;
+    }
+
+    .whatif-ticket,
+    .whatif-result {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .trade-gateway-bar {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr) auto auto;
+      gap: 8px;
+      align-items: end;
+      border: 1px solid #b2ccff;
+      border-radius: 8px;
+      padding: 10px;
+      background: #eff4ff;
+    }
+
+    .trade-gateway-status {
+      display: flex;
+      min-height: 38px;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+    }
+
+    .trade-mode-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #667085;
+      color: #fff;
+      font-size: 11px;
+    }
+
+    .trade-mode-badge.paper { background: #155eef; }
+    .trade-mode-badge.live { background: #d92d20; }
+    .trade-mode-badge.armed { box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.2); }
+
+    .trade-confirmation {
+      margin-top: 10px;
+      border: 1px solid #f79009;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fffaeb;
+    }
+
+    .trade-confirmation code {
+      display: block;
+      margin: 6px 0;
+      padding: 7px 8px;
+      border-radius: 5px;
+      background: #fff;
+      color: #b42318;
+      font-size: 12px;
+      white-space: normal;
+      user-select: all;
+    }
+
+    .trade-confirmation-actions,
+    .trade-order-actions {
+      display: flex;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .trade-submit {
+      border-color: #d92d20;
+      background: #d92d20;
+      color: #fff;
+    }
+
+    .trade-submit:hover { background: #b42318; }
+
+    .trade-order-result {
+      margin-top: 9px;
+      font-size: 11px;
+    }
+
+    .whatif-selected {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 8px 0 10px;
+      border: 1px solid #b2ccff;
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: #eff4ff;
+    }
+
+    .whatif-selected strong,
+    .whatif-selected span {
+      display: block;
+    }
+
+    .whatif-selected span {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .whatif-form {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(110px, 1fr));
+      gap: 8px;
+      align-items: end;
+    }
+
+    .whatif-form .wide {
+      grid-column: span 2;
+    }
+
+    .whatif-form .check-label {
+      display: flex;
+      min-height: 38px;
+      flex-direction: row;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 9px;
+      background: #f8fafc;
+    }
+
+    .whatif-form .check-label input {
+      width: auto;
+    }
+
+    .whatif-actions {
+      display: flex;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .whatif-status {
+      border-left: 5px solid #98a2b3;
+      border-radius: 7px;
+      padding: 9px 10px;
+      background: #f2f4f7;
+    }
+
+    .whatif-status.pass {
+      border-left-color: #12b76a;
+      background: #ecfdf3;
+      color: #047857;
+    }
+
+    .whatif-status.fail {
+      border-left-color: #f04438;
+      background: #fff1f3;
+      color: #b42318;
+    }
+
+    .whatif-status.unknown {
+      border-left-color: #f79009;
+      background: #fffaeb;
+      color: #b54708;
+    }
+
+    .whatif-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 9px;
+    }
+
+    .whatif-metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 8px;
+      background: #fff;
+    }
+
+    .whatif-metric span,
+    .whatif-metric small {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .whatif-metric strong {
+      display: block;
+      margin: 3px 0;
+      font-size: 15px;
+    }
+
+    .whatif-pick {
+      width: 100%;
+      min-height: 24px;
+      margin-top: 4px;
+      padding: 2px 6px;
+      border-color: #84adff;
+      background: #eff4ff;
+      color: #155eef;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
     .selected-item {
       border: 1px solid var(--line);
       border-left: 4px solid var(--blue);
@@ -1601,7 +1882,7 @@
 
     .refresh-progress {
       display: none;
-      width: min(520px, 100%);
+      width: min(760px, 100%);
       margin-top: 8px;
       color: var(--muted);
       font-size: 12px;
@@ -1649,34 +1930,149 @@
       line-height: 1.3;
     }
 
-    .refresh-log {
+    .refresh-phase-track {
+      display: flex;
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #f2f4f7;
+    }
+
+    .refresh-phase-segment {
+      width: 0;
+      min-width: 0;
+      height: 100%;
+      transition: width 420ms ease;
+    }
+
+    .refresh-phase-segment.positions { background: #7f56d9; }
+    .refresh-phase-segment.options { background: #12b76a; }
+    .refresh-phase-segment.futures { background: #06aed4; }
+    .refresh-phase-segment.other { background: #98a2b3; }
+
+    .refresh-phase-labels {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(100px, auto));
+      gap: 6px;
+    }
+
+    .refresh-phase-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 4px 7px;
+      white-space: nowrap;
+    }
+
+    .refresh-phase-label span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .refresh-phase-label i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #98a2b3;
+    }
+
+    .refresh-phase-label.positions i { background: #7f56d9; }
+    .refresh-phase-label.options i { background: #12b76a; }
+    .refresh-phase-label.futures i { background: #06aed4; }
+    .refresh-phase-label.other i { background: #98a2b3; }
+    .refresh-phase-label.total i { background: #155eef; }
+
+    .refresh-log-panel {
       display: none;
-      max-height: 88px;
-      overflow: auto;
       margin: 6px 0 0;
-      padding: 7px 8px;
       border: 1px solid var(--line);
       border-radius: 6px;
       background: #101828;
+      overflow: hidden;
+    }
+
+    .refresh-log-panel.active {
+      display: block;
+    }
+
+    .refresh-log-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+      border-bottom: 1px solid #344054;
+      background: #1d2939;
+      color: #d0d5dd;
+      font-size: 11px;
+    }
+
+    .refresh-log-actions {
+      display: flex;
+      gap: 5px;
+    }
+
+    .refresh-log-actions button {
+      min-height: 24px;
+      padding: 2px 8px;
+      border-color: #475467;
+      background: #344054;
+      color: #f2f4f7;
+      font-size: 11px;
+    }
+
+    .refresh-log-actions button:hover {
+      background: #475467;
+    }
+
+    .refresh-log {
+      max-height: 210px;
+      overflow: auto;
+      margin: 0;
+      padding: 9px 10px;
       color: #d0d5dd;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 11px;
       line-height: 1.45;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      user-select: text;
+      cursor: text;
     }
 
-    .refresh-log.active {
-      display: block;
+    @media (max-width: 760px) {
+      .refresh-phase-labels {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
     }
 
     @media (max-width: 1100px) {
-      .toolbar, .refresh-contracts, .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid {
+      .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .premium-overview-layout, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid, .whatif-panel {
         grid-template-columns: 1fr;
       }
+      .toolbar { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
+      .refresh-contracts { grid-template-columns: auto repeat(3, minmax(130px, 1fr)); }
+      .refresh-contracts .note { grid-column: 1 / -1; }
+      .trade-gateway-bar { grid-template-columns: 1fr 1fr; }
       table { min-width: 0; }
     }
 
     @media (max-width: 720px) {
+      .toolbar, .refresh-contracts, .refresh-phase-labels {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .refresh-contracts > strong,
+      .refresh-contracts .note {
+        grid-column: 1 / -1;
+      }
+
       .product-overview {
         grid-template-columns: 1fr;
       }
@@ -1691,9 +2087,6 @@
   <header>
     <h1>Sell-Side Option Inventory Planner｜卖方期权库存规划器</h1>
     <div class="toolbar">
-      <label>当前持仓 CSV/JSON<input id="positionFile" type="file" accept=".csv,.json,.txt" /></label>
-      <label>期权链 CSV/JSON<input id="chainFile" type="file" accept=".csv,.json,.txt" /></label>
-      <label>K线 CSV/JSON<input id="barsFile" type="file" accept=".csv,.json,.txt" /></label>
       <label>当前品种
         <select id="activeUnderlying">
           <option value="ZF">ZF</option>
@@ -1701,22 +2094,21 @@
           <option value="ZC">ZC</option>
         </select>
       </label>
-      <label>链表颜色
-        <select id="heatMetric">
-          <option value="finalScore">综合分</option>
-          <option value="estimatedCredit">权利金</option>
-          <option value="gamma">Gamma</option>
-          <option value="distributionScore">分布分</option>
-        </select>
+      <label>Delta 预警阈值
+        <input id="highDeltaPremiumThreshold" type="number" value="0.40" min="0" max="1" step="0.01" title="同时用于高 Delta 持仓标记和 Delta 加权期权金" />
       </label>
-      <button id="loadDefault">读取默认CSV</button>
+      <label>等效期货 Delta ≥
+        <input id="equivalentFutureDeltaThreshold" type="number" value="0.90" min="0" max="1" step="0.01" title="多头实值期权按两位小数显示后达到此 Delta，才可能计入等效期货" />
+      </label>
+      <label>最小实值 ticks
+        <input id="equivalentFutureMinIntrinsicTicks" type="number" value="1" min="0" max="100" step="0.5" title="价内价值至少达到该品种多少期权最小跳动" />
+      </label>
+      <label>最大时间价值 ticks
+        <input id="equivalentFutureMaxTimeValueTicks" type="number" value="2" min="0" max="100" step="0.5" title="时间价值不超过该品种多少期权最小跳动；当前 ZN 108.75 Call 约为 2 ticks" />
+      </label>
       <button id="refreshDefault" class="secondary">持仓快刷</button>
       <button id="refreshFull" class="secondary">全量刷新</button>
-      <button id="refreshScheduled" class="secondary">智能刷新</button>
-      <button id="loadSample" class="secondary">加载样例</button>
-      <button id="exportJson" class="secondary">导出JSON</button>
-      <button id="exportCsv" class="secondary">导出CSV</button>
-      <button id="exportMarkdown" class="secondary">导出Markdown</button>
+      <button id="refreshScheduled">智能刷新</button>
     </div>
     <div class="refresh-contracts">
       <strong>刷新合约月份</strong>
@@ -1744,14 +2136,35 @@
       <span class="note">持仓快刷只更新持仓与期货价；全量刷新按既有筛选条件更新候选链；智能刷新按美国东部日期决定本次执行全量或持仓快刷。</span>
     </div>
     <div id="refreshStatus" class="note"></div>
-    <div id="refreshDuration" class="refresh-duration">本次刷新用时：--</div>
     <div id="refreshProgress" class="refresh-progress" aria-hidden="true">
       <div class="refresh-progress-track">
         <span id="refreshProgressBar" class="refresh-progress-bar"></span>
       </div>
       <div id="refreshProgressText" class="refresh-progress-text"></div>
+      <div class="refresh-phase-track" aria-label="刷新各阶段耗时占比">
+        <span id="refreshPositionsBar" class="refresh-phase-segment positions"></span>
+        <span id="refreshOptionsBar" class="refresh-phase-segment options"></span>
+        <span id="refreshFuturesBar" class="refresh-phase-segment futures"></span>
+        <span id="refreshOtherBar" class="refresh-phase-segment other"></span>
+      </div>
+      <div class="refresh-phase-labels">
+        <span class="refresh-phase-label positions"><span><i></i>持仓行情</span><strong id="refreshPositionsDuration">--</strong></span>
+        <span class="refresh-phase-label options"><span><i></i>期权链</span><strong id="refreshOptionsDuration">--</strong></span>
+        <span class="refresh-phase-label futures"><span><i></i>期货数据</span><strong id="refreshFuturesDuration">--</strong></span>
+        <span class="refresh-phase-label other"><span><i></i>连接/发布</span><strong id="refreshOtherDuration">--</strong></span>
+        <span class="refresh-phase-label total"><span><i></i>总计</span><strong id="refreshDuration" class="refresh-duration">--</strong></span>
+      </div>
     </div>
-    <pre id="refreshLog" class="refresh-log" aria-live="polite"></pre>
+    <section id="refreshLogPanel" class="refresh-log-panel" aria-label="刷新日志">
+      <div class="refresh-log-toolbar">
+        <span id="refreshLogMode">日志摘要</span>
+        <span class="refresh-log-actions">
+          <button id="refreshLogToggle" type="button">查看原始日志</button>
+          <button id="refreshLogCopy" type="button">复制日志</button>
+        </span>
+      </div>
+      <pre id="refreshLog" class="refresh-log" tabindex="0" aria-live="polite"></pre>
+    </section>
     <div id="error" class="error"></div>
   </header>
 
@@ -1762,7 +2175,7 @@
       <input id="realizedPnl" type="number" value="0" />
       <input id="remainingDays" type="number" value="20" />
       <input id="manualFuturePrice" type="number" value="" />
-      <input id="highDeltaPremiumThreshold" type="number" value="0.40" />
+      <select id="heatMetric"><option value="finalScore" selected>综合分</option></select>
       <select id="inventoryDtePreset">
         <option value="all" selected>全部库存</option>
         <option value="short">0DTE-一周内</option>
@@ -1773,14 +2186,21 @@
     </section>
 
     <h2>总体权利金统计</h2>
-    <section class="panel">
-      <div id="portfolioPremiumSummary" class="target-grid"></div>
-      <p class="note">“Delta 加权期权金”默认对 |Delta| 按两位小数显示后达到 0.40 的卖方期权，按 <code>权利金 × (1 - 实际 |Delta|)</code> 折算；其余仓位按原权利金计入。该指标是风险调整后的观察值，不代表真实胜率或最终收益。</p>
-      <h3 style="margin-top:14px;">按到期日的权利金总览</h3>
-      <div id="premiumExpiryTable" class="table-wrap"></div>
+    <section class="panel premium-overview-layout">
+      <div class="premium-overview-summary">
+        <div id="portfolioPremiumSummary" class="target-grid"></div>
+        <p class="note">“Delta 加权期权金”默认对 |Delta| 按两位小数显示后达到 0.40 的卖方期权，按 <code>权利金 × (1 - 实际 |Delta|)</code> 折算；其余仓位按原权利金计入。该指标是风险调整后的观察值，不代表真实胜率或最终收益。</p>
+      </div>
+      <div class="premium-overview-expiry">
+        <h3>按到期日的权利金总览</h3>
+        <div id="premiumExpiryTable" class="table-wrap"></div>
+      </div>
     </section>
 
-    <h2>组合资产总览</h2>
+    <div class="section-heading portfolio-overview-heading">
+      <h2>组合资产总览</h2>
+      <span id="portfolioQuoteStatus" class="portfolio-quote-status connecting" title="持仓与指定期货流式行情状态">行情连接中…</span>
+    </div>
     <section class="panel">
       <div id="productOverview" class="product-overview"></div>
     </section>
@@ -1820,10 +2240,71 @@
     </section>
 
     <div class="section-heading">
+      <h2>IBKR 交易台｜实时行情 · 保证金预检 · 双确认下单</h2>
+      <button id="toggleTradePanel" class="secondary" type="button" aria-expanded="false" aria-controls="tradePanel">展开</button>
+    </div>
+    <section id="tradePanel" class="panel whatif-panel" hidden>
+      <div class="trade-gateway-bar">
+        <div id="tradeGatewayStatus" class="trade-gateway-status"><span class="trade-mode-badge">OFFLINE</span>交易服务未启动</div>
+        <label>本次进程解锁码
+          <input id="tradeActivationCode" type="password" value="" autocomplete="off" placeholder="从交易服务终端复制" />
+        </label>
+        <button id="tradeArm" type="button">解锁交易会话</button>
+        <button id="tradeDisarm" type="button" class="secondary" disabled>立即锁定</button>
+      </div>
+      <div class="whatif-ticket">
+        <h3>订单草稿</h3>
+        <p class="note">实时行情仍由只读连接提供。交易服务是独立进程，默认关闭；解锁后先做 IBKR 原生保证金预览，生成不可变订单指纹。第一版只允许 CBOT 的 FUT/FOP、DAY 限价单，不允许市价单。</p>
+        <label>快捷选择期货
+          <select id="whatIfFutureContract"></select>
+        </label>
+        <div id="whatIfSelected" class="whatif-selected"></div>
+        <div class="whatif-form">
+          <label>方向
+            <select id="whatIfAction"><option value="BUY">买入 BUY</option><option value="SELL" selected>卖出 SELL</option></select>
+          </label>
+          <label>数量
+            <input id="whatIfQuantity" type="number" value="1" min="1" max="10000" step="1" />
+          </label>
+          <label>订单类型
+            <select id="whatIfOrderType"><option value="LMT" selected>限价 LMT（唯一允许）</option></select>
+          </label>
+          <label>限价
+            <input id="whatIfLimitPrice" type="number" value="" min="0" step="0.00001" />
+          </label>
+          <label>预留资金
+            <input id="whatIfReserveFunds" type="number" value="0" min="0" step="100" />
+          </label>
+          <label>容量搜索上限
+            <input id="whatIfMaxSearch" type="number" value="100" min="1" max="10000" step="10" />
+          </label>
+          <label class="check-label wide"><input id="whatIfCalculateCapacity" type="checkbox" checked />验证“最多可做多少”</label>
+        </div>
+        <div class="whatif-actions">
+          <button id="whatIfRun" type="button" disabled>1. 生成保证金预览</button>
+          <button id="tradeRefreshOrders" type="button" class="secondary" disabled>刷新 Dashboard 活动订单</button>
+        </div>
+        <div id="tradeConfirmation" class="trade-confirmation" hidden>
+          <strong>最终订单确认</strong>
+          <div id="tradeFingerprint" class="note"></div>
+          <span class="note">请逐字输入下面的动态确认词：</span>
+          <code id="tradeConfirmationExpected"></code>
+          <input id="tradeConfirmationPhrase" type="text" value="" autocomplete="off" placeholder="逐字输入确认词" />
+          <div class="trade-confirmation-actions">
+            <button id="tradeSubmit" type="button" class="trade-submit" disabled>2. 复核并发送订单</button>
+            <button id="tradeDiscardPreview" type="button" class="secondary">放弃本次预览</button>
+          </div>
+        </div>
+        <div id="tradeOrderResult" class="trade-order-result"></div>
+      </div>
+      <div id="whatIfResult" class="whatif-result"></div>
+    </section>
+
+    <div class="section-heading">
       <h2>当前库存行权节点</h2>
       <div class="view-switch" role="group" aria-label="库存行权节点视角">
-        <button id="inventoryViewChain" class="active" type="button" aria-pressed="true">期权链</button>
-        <button id="inventoryViewMatrix" type="button" aria-pressed="false">Strike × DTE</button>
+        <button id="inventoryViewChain" type="button" aria-pressed="false">期权链</button>
+        <button id="inventoryViewMatrix" class="active" type="button" aria-pressed="true">Strike × DTE</button>
       </div>
     </div>
     <section class="panel option-cross">
@@ -1910,10 +2391,14 @@
     const DEFAULT_ACCOUNT_SUMMARY_PATH = "data/planner/debug/dashboard_account_summary.csv";
     const DEFAULT_MANIFEST_PATH = "inventory-planner-defaults.json";
     const REFRESH_STATUS_PATH = "/api/refresh-inventory-data/status";
+    const LIVE_POSITIONS_PATH = "/api/live-positions";
+    const TRADE_GATEWAY_URL = "http://127.0.0.1:8767";
     const EPS = 1e-9;
     const MAX_CANDIDATE_SNAPSHOT_LAG_HOURS = 24;
     const HIGH_DELTA_PREMIUM_THRESHOLD = 0.40;
-    const DEEP_ITM_DELTA_THRESHOLD = 0.90;
+    const DEFAULT_EQUIVALENT_FUTURE_DELTA_THRESHOLD = 0.90;
+    const DEFAULT_EQUIVALENT_FUTURE_MIN_INTRINSIC_TICKS = 1;
+    const DEFAULT_EQUIVALENT_FUTURE_MAX_TIME_VALUE_TICKS = 2;
     const PRODUCT_PRESETS = {
       ZF: {
         multiplier: 1000,
@@ -1960,18 +2445,58 @@
     let refreshProgressHasBackend = false;
     let refreshStartedAtMs = 0;
     let lastRefreshDurationSeconds = 0;
+    let lastRefreshPhaseTimings = { positionsSeconds: 0, optionsSeconds: 0, futuresSeconds: 0, otherSeconds: 0, totalSeconds: 0 };
+    let lastRefreshHasPhaseTimings = false;
+    let lastRefreshRawLog = "";
+    let lastRefreshSummaryLog = "";
+    let refreshLogRawMode = false;
     let latestRefreshWatchBusy = false;
     let latestRefreshPollTimer = null;
     let lastHandledRefreshFinished = "";
+    let livePositionPollTimer = null;
+    let livePositionPollBusy = false;
+    let lastLiveSampledAt = "";
     let chartView = { range: "1M", zoom: 1, offset: 0 };
     let chartDrag = null;
-    let inventoryChainView = "chain";
+    let inventoryChainView = "matrix";
     let candidateChainView = "matrix";
+    let whatIfInstrument = null;
+    let whatIfResponse = null;
+    let whatIfBusy = false;
+    let tradeSessionToken = "";
+    let tradePreview = null;
+    let tradeSubmitBusy = false;
+    let tradeGatewayPollTimer = null;
+    let tradeGatewayStatus = {
+      online: false,
+      mode: "offline",
+      armed: false,
+      maxOrderQuantity: 0,
+      maxPreviewQuantity: 0,
+      minimumReserveFunds: 0,
+      error: "独立交易服务未启动"
+    };
+    let marginWhatIfCapability = {
+      enabled: false,
+      mode: "read_only",
+      requiresOrderChannel: true,
+      reason: "IB 原生 What-If 使用订单协议；当前 Dashboard 保持 Read-Only API，因此不会发起在线测算。"
+    };
+    let whatIfDraft = {
+      action: "SELL",
+      quantity: 1,
+      orderType: "LMT",
+      limitPrice: "",
+      reserveFunds: 0,
+      calculateCapacity: true,
+      maxSearchQuantity: 100
+    };
 
     const $ = id => document.getElementById(id);
     const controls = [
       "activeUnderlying", "capital", "targetReturn", "realizedPnl", "remainingDays", "manualFuturePrice",
-      "highDeltaPremiumThreshold", "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
+      "highDeltaPremiumThreshold", "equivalentFutureDeltaThreshold", "equivalentFutureMinIntrinsicTicks", "equivalentFutureMaxTimeValueTicks",
+      "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
     ];
     controls.forEach(id => $(id).addEventListener("input", render));
     ["putDeltaChoices", "callDeltaChoices", "candidateDteChoices"].forEach(id => $(id).addEventListener("change", () => {
@@ -1980,13 +2505,20 @@
     }));
     $("activeUnderlying").addEventListener("change", () => {
       proposed = {};
+      whatIfInstrument = null;
+      whatIfResponse = null;
+      tradePreview = null;
       render();
     });
     $("recompute").addEventListener("click", render);
-    $("loadDefault").addEventListener("click", loadDefaultData);
     $("refreshDefault").addEventListener("click", () => refreshDefaultData("fast"));
     $("refreshFull").addEventListener("click", () => refreshDefaultData("full"));
     $("refreshScheduled").addEventListener("click", () => refreshDefaultData("scheduled"));
+    $("refreshLogToggle").addEventListener("click", () => {
+      refreshLogRawMode = !refreshLogRawMode;
+      renderRefreshLog();
+    });
+    $("refreshLogCopy").addEventListener("click", copyRefreshLog);
     $("loadDefaultBars").addEventListener("click", loadDefaultBars);
     setPriceChartsCollapsed(true);
     $("togglePriceCharts").addEventListener("click", () => {
@@ -1994,6 +2526,10 @@
       const collapsed = !section.hidden;
       setPriceChartsCollapsed(collapsed);
       if (!collapsed) renderPriceChart(config(), futurePositions);
+    });
+    setTradePanelCollapsed(true);
+    $("toggleTradePanel").addEventListener("click", () => {
+      setTradePanelCollapsed(!$("tradePanel").hidden);
     });
     $("inventoryViewChain").addEventListener("click", () => {
       inventoryChainView = "chain";
@@ -2011,6 +2547,18 @@
       candidateChainView = "matrix";
       render();
     });
+    $("whatIfFutureContract").addEventListener("change", () => selectWhatIfFuture($("whatIfFutureContract").value));
+    $("whatIfRun").addEventListener("click", runDashboardMarginWhatIf);
+    $("tradeArm").addEventListener("click", armTradeGateway);
+    $("tradeDisarm").addEventListener("click", disarmTradeGateway);
+    $("tradeRefreshOrders").addEventListener("click", refreshTradeOrders);
+    $("tradeSubmit").addEventListener("click", submitTradePreview);
+    $("tradeDiscardPreview").addEventListener("click", discardTradePreview);
+    $("tradeConfirmationPhrase").addEventListener("input", renderTradeConfirmation);
+    ["whatIfAction", "whatIfQuantity", "whatIfOrderType", "whatIfLimitPrice", "whatIfReserveFunds", "whatIfMaxSearch", "whatIfCalculateCapacity"].forEach(id => {
+      $(id).addEventListener("change", syncWhatIfDraftFromForm);
+      $(id).addEventListener("input", syncWhatIfDraftFromForm);
+    });
     $("chartRange").addEventListener("change", () => {
       chartView.range = $("chartRange").value;
       chartView.offset = 0;
@@ -2026,33 +2574,6 @@
       render();
     });
     ["dailyPriceChart", "intradayPriceChart"].forEach(id => attachChartPointerHandlers($(id)));
-    $("loadSample").addEventListener("click", () => {
-      positionRows = samplePositions();
-      chainRows = sampleChain();
-      futurePriceRows = sampleFuturePrices();
-      barsRows = sampleBars();
-      accountRows = [];
-      proposed = {};
-      choiceUserTouched = {};
-      render();
-    });
-    $("positionFile").addEventListener("change", event => loadFile(event, rows => { positionRows = rows; proposed = {}; render(); }));
-    $("chainFile").addEventListener("change", event => loadFile(event, rows => {
-      chainRows = rows;
-      proposed = {};
-      render();
-    }));
-    $("barsFile").addEventListener("change", event => loadFile(event, rows => { barsRows = rows; render(); }));
-    $("exportJson").addEventListener("click", () => downloadText("sell-side-plan.json", JSON.stringify(exportPlan(), null, 2)));
-    $("exportCsv").addEventListener("click", () => downloadText("sell-side-plan.csv", exportCsv()));
-    $("exportMarkdown").addEventListener("click", () => downloadText("sell-side-plan.md", exportMarkdown()));
-
-    async function loadFile(event, callback) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      callback(parseInput(await file.text()));
-    }
-
     async function loadDefaultData() {
       try {
         await fetchDefaultManifest().catch(() => undefined);
@@ -2085,6 +2606,330 @@
       } catch (error) {
         setError(`读取默认CSV失败：${error.message || error}`);
       }
+    }
+
+    function startLivePositionPolling() {
+      if (livePositionPollTimer || typeof window === "undefined" || window.location.protocol === "file:") return;
+      pollLivePositionSnapshot();
+      livePositionPollTimer = window.setInterval(pollLivePositionSnapshot, 1000);
+    }
+
+    async function tradeGatewayRequest(path, { method = "GET", payload = null, useSession = true } = {}) {
+      const headers = {};
+      if (payload !== null) headers["Content-Type"] = "application/json";
+      if (useSession && tradeSessionToken) headers["X-Trade-Session"] = tradeSessionToken;
+      const response = await fetch(`${TRADE_GATEWAY_URL}${path}`, {
+        method,
+        mode: "cors",
+        cache: "no-store",
+        headers,
+        body: payload === null ? undefined : JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || body.ok === false) throw new Error(body.error || `HTTP ${response.status}`);
+      return body;
+    }
+
+    function startTradeGatewayPolling() {
+      if (tradeGatewayPollTimer || typeof window === "undefined" || window.location.protocol === "file:") return;
+      refreshTradeGatewayStatus();
+      tradeGatewayPollTimer = window.setInterval(refreshTradeGatewayStatus, 3000);
+    }
+
+    async function refreshTradeGatewayStatus() {
+      try {
+        const status = await tradeGatewayRequest("/api/trading/status");
+        tradeGatewayStatus = { ...tradeGatewayStatus, ...status, online: true, error: "" };
+        if (tradeSessionToken && status.armed !== true) {
+          tradeSessionToken = "";
+          tradePreview = null;
+        }
+      } catch (error) {
+        tradeGatewayStatus = {
+          ...tradeGatewayStatus,
+          online: false,
+          armed: false,
+          mode: "offline",
+          error: error.message || String(error)
+        };
+        tradeSessionToken = "";
+        tradePreview = null;
+      }
+      renderTradeGatewayStatus();
+      renderWhatIfPanel(config());
+    }
+
+    function renderTradeGatewayStatus() {
+      const target = $("tradeGatewayStatus");
+      const online = Boolean(tradeGatewayStatus.online);
+      const armed = Boolean(online && tradeGatewayStatus.armed && tradeSessionToken);
+      const mode = online ? txt(tradeGatewayStatus.mode).toLowerCase() : "offline";
+      const modeLabel = mode === "live" ? "LIVE" : mode === "paper" ? "PAPER" : "OFFLINE";
+      const badgeClass = `trade-mode-badge ${mode}${armed ? " armed" : ""}`;
+      const stateText = !online
+        ? "交易服务未启动"
+        : armed
+          ? `交易会话已解锁 · 单次发送后自动锁定`
+          : `交易服务在线 · 等待解锁`;
+      target.innerHTML = `<span class="${badgeClass}">${modeLabel}</span>${stateText}`;
+      target.title = tradeGatewayStatus.error || "独立交易服务只绑定 127.0.0.1";
+      $("tradeArm").disabled = !online || armed;
+      $("tradeDisarm").disabled = !armed;
+      $("tradeRefreshOrders").disabled = !armed;
+    }
+
+    async function armTradeGateway() {
+      const activationCode = $("tradeActivationCode").value;
+      if (!activationCode) {
+        $("tradeOrderResult").innerHTML = `<div class="warning">请输入本次交易服务终端显示的解锁码。</div>`;
+        return;
+      }
+      try {
+        const payload = await tradeGatewayRequest("/api/trading/arm", {
+          method: "POST",
+          payload: { activationCode },
+          useSession: false
+        });
+        tradeSessionToken = payload.sessionToken || "";
+        tradeGatewayStatus = { ...tradeGatewayStatus, ...payload, online: true, error: "" };
+        $("tradeActivationCode").value = "";
+        $("tradeOrderResult").innerHTML = `<div class="whatif-status pass"><strong>交易会话已解锁</strong><div>仅本页面内存持有会话；一次发送或撤单后自动锁定。</div></div>`;
+      } catch (error) {
+        $("tradeOrderResult").innerHTML = `<div class="whatif-status fail"><strong>解锁失败</strong><div>${esc(error.message || String(error))}</div></div>`;
+      }
+      renderTradeGatewayStatus();
+      renderWhatIfPanel(config());
+    }
+
+    async function disarmTradeGateway() {
+      try {
+        if (tradeSessionToken) {
+          await tradeGatewayRequest("/api/trading/disarm", { method: "POST", payload: {} });
+        }
+      } catch (_error) {
+        // Local state is still cleared; the short server-side TTL is the final backstop.
+      }
+      tradeSessionToken = "";
+      tradePreview = null;
+      tradeGatewayStatus = { ...tradeGatewayStatus, armed: false };
+      $("tradeConfirmationPhrase").value = "";
+      renderTradeGatewayStatus();
+      renderWhatIfPanel(config());
+    }
+
+    function discardTradePreview() {
+      tradePreview = null;
+      whatIfResponse = null;
+      $("tradeConfirmationPhrase").value = "";
+      renderWhatIfPanel(config());
+    }
+
+    function renderTradeConfirmation() {
+      const panel = $("tradeConfirmation");
+      const expected = tradePreview && tradePreview.confirmationPhrase ? String(tradePreview.confirmationPhrase) : "";
+      const armed = Boolean(tradeGatewayStatus.online && tradeGatewayStatus.armed && tradeSessionToken);
+      const submittable = Boolean(tradePreview && tradePreview.submittable === true);
+      panel.hidden = !(tradePreview && expected);
+      if (panel.hidden) {
+        $("tradeSubmit").disabled = true;
+        return;
+      }
+      const expires = tradePreview.expiresAt ? new Date(Number(tradePreview.expiresAt) * 1000).toLocaleTimeString() : "-";
+      $("tradeFingerprint").textContent = `订单指纹 ${tradePreview.fingerprintShort || String(tradePreview.fingerprint || "").slice(0, 12)} · 预览 ${tradePreview.previewId} · ${expires} 前有效`;
+      $("tradeConfirmationExpected").textContent = expected;
+      const typed = $("tradeConfirmationPhrase").value;
+      $("tradeSubmit").disabled = tradeSubmitBusy || !armed || !submittable || typed !== expected;
+      $("tradeSubmit").textContent = tradeSubmitBusy ? "正在最终复核并发送…" : "2. 复核并发送订单";
+    }
+
+    async function submitTradePreview() {
+      if (!tradePreview || !tradeSessionToken || tradeSubmitBusy) return;
+      const confirmationPhrase = $("tradeConfirmationPhrase").value;
+      if (confirmationPhrase !== tradePreview.confirmationPhrase) return;
+      tradeSubmitBusy = true;
+      renderTradeConfirmation();
+      try {
+        const payload = await tradeGatewayRequest("/api/trading/submit", {
+          method: "POST",
+          payload: {
+            previewId: tradePreview.previewId,
+            fingerprint: tradePreview.fingerprint,
+            confirmationPhrase
+          }
+        });
+        const order = payload.order || {};
+        $("tradeOrderResult").innerHTML = `<div class="whatif-status pass"><strong>订单请求已交给 IB</strong><div>orderId ${esc(order.orderId)} · permId ${esc(order.permId)} · 状态 ${esc(order.status || "未知")} · 指纹 ${esc(String(payload.fingerprint || "").slice(0, 12))}</div></div>`;
+        tradeSessionToken = "";
+        tradeGatewayStatus = { ...tradeGatewayStatus, armed: false };
+        tradePreview = null;
+        $("tradeConfirmationPhrase").value = "";
+      } catch (error) {
+        $("tradeOrderResult").innerHTML = `<div class="whatif-status fail"><strong>订单未确认成功</strong><div>${esc(error.message || String(error))}</div></div>`;
+        if (/结果不确定|未解锁|过期/.test(error.message || "")) {
+          tradeSessionToken = "";
+          tradeGatewayStatus = { ...tradeGatewayStatus, armed: false };
+          tradePreview = null;
+        }
+      } finally {
+        tradeSubmitBusy = false;
+        renderTradeGatewayStatus();
+        renderWhatIfPanel(config());
+      }
+    }
+
+    async function refreshTradeOrders() {
+      if (!tradeSessionToken) return;
+      try {
+        const payload = await tradeGatewayRequest("/api/trading/orders");
+        const orders = Array.isArray(payload.orders) ? payload.orders : [];
+        $("tradeOrderResult").innerHTML = orders.length
+          ? orders.map(order => `<div class="selected-item"><strong>${esc(order.localSymbol || `conId ${order.conId}`)} · ${esc(order.action)} ${num(order.quantity, 0)} @ ${num(order.limitPrice, 5)}</strong><span>orderId ${esc(order.orderId)} · ${esc(order.status)} · 已成交 ${num(order.filled, 0)} / 剩余 ${num(order.remaining, 0)}</span><button type="button" class="secondary" data-cancel-order="${esc(order.orderId)}">撤销该订单</button></div>`).join("")
+          : `<div class="note">当前没有由本 Dashboard client-id 提交的活动订单。</div>`;
+        $("tradeOrderResult").querySelectorAll("button[data-cancel-order]").forEach(button => {
+          button.addEventListener("click", () => cancelTradeOrder(Number(button.dataset.cancelOrder)));
+        });
+      } catch (error) {
+        $("tradeOrderResult").innerHTML = `<div class="warning">读取活动订单失败：${esc(error.message || String(error))}</div>`;
+      }
+    }
+
+    async function cancelTradeOrder(orderId) {
+      if (!tradeSessionToken || !(orderId > 0)) return;
+      const expected = `取消订单 ${orderId}`;
+      const typed = typeof window.prompt === "function"
+        ? window.prompt(`撤单后交易会话会自动锁定。请输入：${expected}`, "")
+        : "";
+      if (typed !== expected) return;
+      try {
+        const payload = await tradeGatewayRequest("/api/trading/cancel", {
+          method: "POST",
+          payload: { orderId, confirmationPhrase: typed }
+        });
+        const order = payload.order || {};
+        $("tradeOrderResult").innerHTML = `<div class="whatif-status pass"><strong>撤单请求已发送</strong><div>orderId ${esc(order.orderId)} · 状态 ${esc(order.status || "未知")}</div></div>`;
+      } catch (error) {
+        $("tradeOrderResult").innerHTML = `<div class="whatif-status fail"><strong>撤单失败</strong><div>${esc(error.message || String(error))}</div></div>`;
+      } finally {
+        tradeSessionToken = "";
+        tradeGatewayStatus = { ...tradeGatewayStatus, armed: false };
+        renderTradeGatewayStatus();
+        renderWhatIfPanel(config());
+      }
+    }
+
+    async function pollLivePositionSnapshot() {
+      if (livePositionPollBusy) return;
+      livePositionPollBusy = true;
+      try {
+        const response = await fetch(`${LIVE_POSITIONS_PATH}?t=${Date.now()}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        updatePortfolioQuoteStatus(payload, response.ok ? "" : (payload.error || `HTTP ${response.status}`));
+        if (!response.ok || !payload.connected || !Array.isArray(payload.positions) || !Array.isArray(payload.futures)) return;
+        positionRows = mergeLivePositionRows(positionRows, payload.positions);
+        futurePriceRows = mergeLiveFutureRows(futurePriceRows, payload.futures);
+        renderLivePositionViews();
+      } catch (error) {
+        updatePortfolioQuoteStatus({ connected: false, dataMode: "offline", sampledAt: lastLiveSampledAt }, error.message || String(error));
+      } finally {
+        livePositionPollBusy = false;
+      }
+    }
+
+    function mergeLivePositionRows(existingRows, liveRows) {
+      const byConId = new Map(existingRows.map(row => [String(row.conId || ""), row]));
+      return liveRows.map(liveRow => {
+        const prior = byConId.get(String(liveRow.conId || "")) || {};
+        const merged = { ...prior };
+        Object.entries(liveRow).forEach(([key, value]) => {
+          if (value === null || value === undefined || value === "") return;
+          merged[key] = value;
+        });
+        return merged;
+      });
+    }
+
+    function mergeLiveFutureRows(existingRows, liveRows) {
+      const liveKeys = new Set(liveRows.map(liveFutureKey));
+      const previousByKey = new Map(existingRows.map(row => [liveFutureKey(row), row]));
+      const mergedLive = liveRows.map(row => {
+        const prior = previousByKey.get(liveFutureKey(row)) || {};
+        const merged = { ...prior };
+        Object.entries(row).forEach(([key, value]) => {
+          if (value === null || value === undefined || value === "") return;
+          merged[key] = value;
+        });
+        return merged;
+      });
+      return mergedLive.concat(existingRows.filter(row => !liveKeys.has(liveFutureKey(row))));
+    }
+
+    function liveFutureKey(row) {
+      return `${txt(row.root || row.symbol).toUpperCase()}|${txt(row.month || row.contractMonth || row.expiry)}`;
+    }
+
+    function renderLivePositionViews() {
+      try {
+        const cfg = config();
+        const allShortPositions = parseShortPositions(positionRows, cfg, { respectInventoryDte: false })
+          .map(row => enrichPositionQuote(row, cfg));
+        shortPositions = parseShortPositions(positionRows, cfg)
+          .map(row => enrichPositionQuote(row, cfg));
+        futurePositions = parseFuturePositions(positionRows, cfg);
+        const inventory = aggregateInventory(shortPositions, cfg);
+        const pressure = targetPressure(shortPositions, cfg);
+        renderTargetSummary(pressure, shortPositions);
+        renderInventory(inventory, futurePositions, cfg);
+        renderProductOverview(cfg);
+        renderInventoryChain(allShortPositions, cfg);
+        renderBeforeAfter(shortPositions, candidates, cfg);
+        renderNodes(shortPositions, candidates, cfg);
+      } catch (error) {
+        console.warn("live position render failed", error);
+      }
+    }
+
+    function updatePortfolioQuoteStatus(payload = {}, error = "") {
+      const element = $("portfolioQuoteStatus");
+      if (!element) return;
+      const mode = txt(payload.dataMode || (payload.connected ? "connecting" : "offline")).toLowerCase();
+      const labels = {
+        live: "实时行情",
+        delayed: "延迟行情（约15–20分钟）",
+        mixed: "实时/延迟混合（延迟部分约15–20分钟）",
+        other: "其他行情",
+        connecting: "连接中",
+        offline: "已断开"
+      };
+      if (payload.sampledAt) lastLiveSampledAt = payload.sampledAt;
+      const timeText = formatLiveSampleTime(lastLiveSampledAt);
+      const label = labels[mode] || labels.other;
+      element.className = `portfolio-quote-status ${mode}`;
+      element.textContent = timeText ? `行情获取 ${timeText} · ${label}` : `行情${label}`;
+      const marketTypes = payload.marketDataTypes && typeof payload.marketDataTypes === "object"
+        ? Object.entries(payload.marketDataTypes).map(([type, count]) => `${type}:${count}`).join("，")
+        : "";
+      const accountText = payload.activeAccount
+        ? `当前账户 ${payload.activeAccount}${payload.accountFallback ? `（配置账户 ${payload.configuredAccount || "-"} 不可用，已自动切换）` : ""}`
+        : "尚未识别当前账户";
+      const delayText = ["delayed", "mixed"].includes(mode)
+        ? "上方时间是本机获取时间；IB 延迟报价通常来自约 15–20 分钟前，不能用减去一个固定值伪装成精确交易所时间"
+        : "";
+      element.title = [
+        accountText,
+        `持仓订阅 ${toNum(payload.positionSubscriptions) || 0} 条`,
+        `期货订阅 ${toNum(payload.futureSubscriptions) || 0} 条`,
+        marketTypes ? `IB marketDataType ${marketTypes}` : "",
+        delayText,
+        error || payload.error || ""
+      ].filter(Boolean).join("；");
+    }
+
+    function formatLiveSampleTime(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return "";
+      const part = number => String(number).padStart(2, "0");
+      return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}:${part(date.getSeconds())}`;
     }
 
     function uniquePaths(paths) {
@@ -2245,7 +3090,7 @@
       const mode = payload.effectiveMode || payload.mode || "";
       const modeText = mode === "full" ? "全量刷新" : (mode === "fast" ? "持仓快刷" : "刷新");
       const duration = refreshDurationSeconds(payload);
-      setRefreshDuration(duration);
+      setRefreshDuration(duration, refreshPhaseTimings(payload));
       setRefreshStatus(`${modeText}并读取完成。${dataRefreshTimeText()}`);
     }
 
@@ -2265,10 +3110,9 @@
       }
       const percent = payload.running === false && payload.ok === false ? "失败" : `${Math.round(refreshProgressValue)}%`;
       setRefreshProgress(refreshProgressValue, stage, percent);
-      setRefreshDuration(refreshDurationSeconds(payload));
-      if (payload.lines && payload.lines.length) {
-        setRefreshLog(payload.lines.slice(-24).join("\n"));
-      }
+      setRefreshDuration(refreshDurationSeconds(payload), refreshPhaseTimings(payload));
+      const rawLog = rawRefreshLog(payload);
+      if (rawLog) setRefreshLog(summarizeRefreshLog(rawLog), rawLog);
       if (payload.started) {
         setRefreshStatus(`${stage}。开始时间：${payload.started}`);
       }
@@ -2278,6 +3122,7 @@
       if (payload.manifest) {
         discoveredDefaultPaths = payload.manifest.products || {};
         discoveredFallbackPaths = payload.manifest.defaults || {};
+        applyMarginWhatIfCapability(payload.manifest.marginWhatIf);
         dataUpdatedAt = payload.finished || payload.manifest.dataUpdatedAt || dataUpdatedAt;
         return;
       }
@@ -2310,10 +3155,20 @@
       const manifest = await rows.json();
       discoveredDefaultPaths = manifest.products || {};
       discoveredFallbackPaths = manifest.defaults || {};
+      applyMarginWhatIfCapability(manifest.marginWhatIf);
       dataUpdatedAt = manifest.dataUpdatedAt || dataUpdatedAt;
       if (discoveredFallbackPaths.bars && !discoveredFallbackPaths.futurePrices) {
         discoveredFallbackPaths.futurePrices = "";
       }
+    }
+
+    function applyMarginWhatIfCapability(capability) {
+      if (!capability || typeof capability !== "object") return;
+      marginWhatIfCapability = {
+        ...marginWhatIfCapability,
+        ...capability,
+        enabled: capability.enabled === true
+      };
     }
 
     function dataRefreshTimeText() {
@@ -2326,7 +3181,9 @@
       refreshProgressValue = 4;
       refreshStartedAtMs = Date.now();
       lastRefreshDurationSeconds = 0;
-      setRefreshDuration(0);
+      lastRefreshPhaseTimings = { positionsSeconds: 0, optionsSeconds: 0, futuresSeconds: 0, otherSeconds: 0, totalSeconds: 0 };
+      lastRefreshHasPhaseTimings = true;
+      setRefreshDuration(0, lastRefreshPhaseTimings);
       setRefreshProgress(4, "提交刷新任务", "4%");
       setRefreshLog("");
       refreshProgressTimer = window.setInterval(() => {
@@ -2375,11 +3232,52 @@
     function refreshDurationSeconds(payload = {}) {
       const backend = Number(payload.durationSeconds);
       if (Number.isFinite(backend) && backend >= 0) {
-        lastRefreshDurationSeconds = Math.max(lastRefreshDurationSeconds, backend);
+        // Once the backend has an authoritative wall-clock duration, do not
+        // retain the browser polling/load delay accumulated by the local timer.
+        lastRefreshDurationSeconds = backend;
       } else if (refreshStartedAtMs) {
         lastRefreshDurationSeconds = Math.max(lastRefreshDurationSeconds, (Date.now() - refreshStartedAtMs) / 1000);
       }
       return lastRefreshDurationSeconds;
+    }
+
+    function refreshPhaseTimings(payload = {}) {
+      if (payload.phaseTimings && typeof payload.phaseTimings === "object") return payload.phaseTimings;
+      const raw = { positions: 0, futures: 0, options: 0, bars: 0, total: 0 };
+      const baseSeen = new Set();
+      const details = { positions: {}, futures: {}, options: {}, bars: {}, total: {} };
+      const text = Array.isArray(payload.lines) && payload.lines.length
+        ? payload.lines.join("\n")
+        : String(payload.stdout || "");
+      let found = false;
+      text.split(/\r?\n/).forEach(line => {
+        const match = line.trim().match(/^phase timing:\s*(positions|futures|options|bars|total)(?:\.([A-Za-z0-9_-]+))?=([0-9]+(?:\.[0-9]+)?)$/i);
+        if (!match) return;
+        const name = match[1].toLowerCase();
+        const detail = String(match[2] || "").toUpperCase();
+        const value = Math.max(Number(match[3]) || 0, 0);
+        if (detail) {
+          details[name][detail] = value;
+        } else {
+          raw[name] = value;
+          baseSeen.add(name);
+        }
+        found = true;
+      });
+      if (!found) return null;
+      Object.keys(details).forEach(name => {
+        if (!baseSeen.has(name)) raw[name] = Object.values(details[name]).reduce((sum, value) => sum + value, 0);
+      });
+      const optionsSeconds = raw.options;
+      const futuresSeconds = raw.futures + raw.bars;
+      const totalSeconds = Math.max(raw.total, Number(payload.durationSeconds) || 0);
+      return {
+        positionsSeconds: raw.positions,
+        optionsSeconds,
+        futuresSeconds,
+        otherSeconds: Math.max(totalSeconds - raw.positions - optionsSeconds - futuresSeconds, 0),
+        totalSeconds
+      };
     }
 
     function formatRefreshDuration(seconds) {
@@ -2390,15 +3288,143 @@
       return `${minutes}分${remainder}秒`;
     }
 
-    function setRefreshDuration(seconds) {
-      $("refreshDuration").textContent = `本次刷新用时：${formatRefreshDuration(seconds)}`;
+    function setRefreshDuration(seconds, phaseTimings) {
+      const totalSeconds = Math.max(Number(seconds) || 0, 0);
+      if (phaseTimings && typeof phaseTimings === "object") {
+        lastRefreshHasPhaseTimings = true;
+        lastRefreshPhaseTimings = {
+          positionsSeconds: Math.max(Number(phaseTimings.positionsSeconds) || 0, 0),
+          optionsSeconds: Math.max(Number(phaseTimings.optionsSeconds) || 0, 0),
+          futuresSeconds: Math.max(Number(phaseTimings.futuresSeconds) || 0, 0),
+          otherSeconds: Math.max(Number(phaseTimings.otherSeconds) || 0, 0),
+          totalSeconds: Math.max(Number(phaseTimings.totalSeconds) || totalSeconds, totalSeconds)
+        };
+      }
+      const timings = lastRefreshPhaseTimings;
+      const displayTotal = Math.max(timings.totalSeconds || 0, totalSeconds);
+      const accounted = timings.positionsSeconds + timings.optionsSeconds + timings.futuresSeconds;
+      const otherSeconds = Math.max(timings.otherSeconds, displayTotal - accounted, 0);
+      const denominator = displayTotal > 0 ? displayTotal : 1;
+      $("refreshPositionsDuration").textContent = lastRefreshHasPhaseTimings ? formatRefreshDuration(timings.positionsSeconds) : "--";
+      $("refreshOptionsDuration").textContent = lastRefreshHasPhaseTimings ? formatRefreshDuration(timings.optionsSeconds) : "--";
+      $("refreshFuturesDuration").textContent = lastRefreshHasPhaseTimings ? formatRefreshDuration(timings.futuresSeconds) : "--";
+      $("refreshOtherDuration").textContent = lastRefreshHasPhaseTimings ? formatRefreshDuration(otherSeconds) : "--";
+      $("refreshDuration").textContent = displayTotal > 0 || lastRefreshHasPhaseTimings ? formatRefreshDuration(displayTotal) : "--";
+      $("refreshPositionsBar").style.width = `${Math.min(timings.positionsSeconds / denominator * 100, 100)}%`;
+      $("refreshOptionsBar").style.width = `${Math.min(timings.optionsSeconds / denominator * 100, 100)}%`;
+      $("refreshFuturesBar").style.width = `${Math.min(timings.futuresSeconds / denominator * 100, 100)}%`;
+      $("refreshOtherBar").style.width = `${Math.min(otherSeconds / denominator * 100, 100)}%`;
     }
 
-    function setRefreshLog(message) {
+    function rawRefreshLog(payload = {}) {
+      const completeStdout = String(payload.stdout || "").trim();
+      const stdout = completeStdout || (Array.isArray(payload.lines) ? payload.lines.join("\n") : "");
+      const stderr = String(payload.stderr || "").trim();
+      if (!stderr || stdout.includes(stderr)) return stdout.trim();
+      return `${stdout.trim()}${stdout.trim() ? "\n" : ""}${stderr}`;
+    }
+
+    function summarizeRefreshLog(message) {
+      const rows = String(message || "").split(/\r?\n/);
+      const kept = [];
+      const seen = new Set();
+      const ibErrors = new Map();
+      const phaseNames = { positions: "持仓行情", options: "期权链", futures: "期货价格", bars: "期货K线", publish: "发布", total: "核心刷新" };
+      let expandedJsonDepth = 0;
+      for (const sourceLine of rows) {
+        const line = sourceLine.trim();
+        if (!line) continue;
+        if (expandedJsonDepth > 0) {
+          expandedJsonDepth += (line.match(/[\[{]/g) || []).length;
+          expandedJsonDepth -= (line.match(/[\]}]/g) || []).length;
+          continue;
+        }
+        if (line === "{" || line === "[") {
+          expandedJsonDepth = 1;
+          continue;
+        }
+        const ibError = line.match(/\bError\s+(\d+)\b/i);
+        if (ibError) {
+          const code = ibError[1];
+          ibErrors.set(code, (ibErrors.get(code) || 0) + 1);
+          continue;
+        }
+        const phase = line.match(/^phase timing:\s*(positions|futures|options|bars|publish|total)(?:\.([A-Za-z0-9_-]+))?=([0-9]+(?:\.[0-9]+)?)$/i);
+        if (phase) {
+          const detail = phase[2] ? ` ${phase[2].toUpperCase()}` : "";
+          const readable = `耗时 · ${phaseNames[phase[1].toLowerCase()]}${detail}：${Number(phase[3]).toFixed(1)}秒`;
+          if (!seen.has(readable)) {
+            seen.add(readable);
+            kept.push(readable);
+          }
+          continue;
+        }
+        if (/^[{}\[\],]+$/.test(line) || /^"[^"]+"\s*:/.test(line)) continue;
+        if (seen.has(line)) continue;
+        seen.add(line);
+        kept.push(line);
+      }
+      for (const [code, count] of ibErrors) {
+        const explanation = code === "10090"
+          ? "部分合约缺少指定实时行情权限，刷新继续使用其余可用/延迟行情"
+          : (code === "200" ? "部分合约定义未找到" : "IB 返回错误");
+        kept.push(`IB ${code} ×${count}：${explanation}`);
+      }
+      if (kept.length > 140) {
+        const omitted = kept.length - 140;
+        return `${kept.slice(0, 140).join("\n")}\n… 已折叠 ${omitted} 行；可点击“查看原始日志”查看全部`;
+      }
+      return kept.join("\n");
+    }
+
+    function setRefreshLog(summary, raw = summary) {
+      lastRefreshSummaryLog = String(summary || "");
+      lastRefreshRawLog = String(raw || "");
+      if (!lastRefreshRawLog) refreshLogRawMode = false;
+      renderRefreshLog();
+    }
+
+    function renderRefreshLog() {
+      const panel = $("refreshLogPanel");
       const log = $("refreshLog");
-      log.textContent = message || "";
-      log.classList.toggle("active", Boolean(message));
+      const message = refreshLogRawMode ? lastRefreshRawLog : lastRefreshSummaryLog;
+      const summaryLines = lastRefreshSummaryLog ? lastRefreshSummaryLog.split(/\r?\n/).length : 0;
+      const rawLines = lastRefreshRawLog ? lastRefreshRawLog.split(/\r?\n/).length : 0;
+      log.textContent = message;
+      panel.classList.toggle("active", Boolean(lastRefreshRawLog));
+      $("refreshLogMode").textContent = refreshLogRawMode
+        ? `原始日志 · ${rawLines}行`
+        : `日志摘要 · ${summaryLines}行（原始 ${rawLines}行）`;
+      $("refreshLogToggle").textContent = refreshLogRawMode ? "查看摘要" : "查看原始日志";
       if (message) log.scrollTop = log.scrollHeight;
+    }
+
+    async function copyRefreshLog() {
+      const message = refreshLogRawMode ? lastRefreshRawLog : lastRefreshSummaryLog;
+      if (!message) return;
+      let copied = false;
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(message);
+          copied = true;
+        }
+      } catch (_error) {
+        copied = false;
+      }
+      if (!copied) {
+        const selection = typeof window !== "undefined" && window.getSelection ? window.getSelection() : null;
+        const range = typeof document !== "undefined" && document.createRange ? document.createRange() : null;
+        if (selection && range) {
+          range.selectNodeContents($("refreshLog"));
+          selection.removeAllRanges();
+          selection.addRange(range);
+          copied = typeof document.execCommand === "function" && document.execCommand("copy");
+          selection.removeAllRanges();
+        }
+      }
+      const button = $("refreshLogCopy");
+      button.textContent = copied ? "已复制" : "请手动复制";
+      window.setTimeout(() => { button.textContent = "复制日志"; }, 1200);
     }
 
     function setRefreshStatus(message) {
@@ -2482,6 +3508,9 @@
         remainingDays: Math.max(numIn("remainingDays", 20), 1),
         manualFuturePrice: toNum($("manualFuturePrice").value),
         highDeltaPremiumThreshold: clamp(numIn("highDeltaPremiumThreshold", HIGH_DELTA_PREMIUM_THRESHOLD), 0, 1),
+        equivalentFutureDeltaThreshold: clamp(numIn("equivalentFutureDeltaThreshold", DEFAULT_EQUIVALENT_FUTURE_DELTA_THRESHOLD), 0, 1),
+        equivalentFutureMinIntrinsicTicks: Math.max(numIn("equivalentFutureMinIntrinsicTicks", DEFAULT_EQUIVALENT_FUTURE_MIN_INTRINSIC_TICKS), 0),
+        equivalentFutureMaxTimeValueTicks: Math.max(numIn("equivalentFutureMaxTimeValueTicks", DEFAULT_EQUIVALENT_FUTURE_MAX_TIME_VALUE_TICKS), 0),
         allowed: [underlying],
         putDeltaMax: selectedPutDelta.length ? Math.max(...selectedPutDelta) : 0.35,
         callDeltaMax: selectedCallDelta.length ? Math.max(...selectedCallDelta) : 0.20,
@@ -2527,6 +3556,14 @@
       button.setAttribute("aria-expanded", String(!collapsed));
     }
 
+    function setTradePanelCollapsed(collapsed) {
+      const section = $("tradePanel");
+      const button = $("toggleTradePanel");
+      section.hidden = Boolean(collapsed);
+      button.textContent = collapsed ? "展开" : "折叠";
+      button.setAttribute("aria-expanded", String(!collapsed));
+    }
+
     function syncInventoryChainViewControls() {
       const chainActive = inventoryChainView === "chain";
       const chainButton = $("inventoryViewChain");
@@ -2564,6 +3601,7 @@
         renderInventory(inventory, futurePositions, cfg);
         renderPriceChart(cfg, futurePositions);
         renderProductOverview(cfg);
+        renderWhatIfPanel(cfg);
         renderInventoryChain(allShortPositions, cfg);
         renderCandidates(candidates, cfg);
         renderBeforeAfter(shortPositions, candidates, cfg);
@@ -2719,20 +3757,23 @@
         const multiplier = multiplierFor(row, underlying, cfg);
         const bid = firstNum(row.bid);
         const ask = firstNum(row.ask);
-        let mid = firstNum(row.mid, row.price, row.last, row.markPrice, row.modelOptionPrice);
+        let mid = firstNonNegativeNum(row.mid, row.price, row.last, row.markPrice, row.delayedMid, row.close, row.modelOptionPrice);
         if (!Number.isFinite(mid) && Number.isFinite(bid) && Number.isFinite(ask)) mid = (bid + ask) / 2;
         const price = firstNum(mid, bid, ask, 0);
         const sourceMarketValue = toNum(row.marketValue);
-        const contractMultiplier = toNum(row.contractMultiplier);
-        const legacyZcEstimate = underlying === "ZC"
-          && /^estimated_from_/i.test(txt(row.valueSource))
-          && !Number.isFinite(contractMultiplier)
-          && firstNum(row.contractMultiplier, row.multiplier, 0) >= 1000;
-        const marketValue = legacyZcEstimate
-          ? position * price * multiplier
-          : sourceMarketValue;
+        const expectedMarketValue = position * price * multiplier;
+        const sourceRatio = Number.isFinite(sourceMarketValue) && Math.abs(expectedMarketValue) > EPS
+          ? Math.abs(sourceMarketValue / expectedMarketValue)
+          : NaN;
+        const hasQuote = Number.isFinite(mid) || Number.isFinite(bid) || Number.isFinite(ask);
+        const normalizeZcValue = underlying === "ZC"
+          && hasQuote
+          && (/^estimated_from_/i.test(txt(row.valueSource))
+            || !Number.isFinite(sourceMarketValue)
+            || (Number.isFinite(sourceRatio) && sourceRatio > 10));
+        const marketValue = normalizeZcValue ? expectedMarketValue : sourceMarketValue;
         const costBasis = firstNum(row.costBasis, position * toNum(row.avgCost));
-        const unrealizedPnL = legacyZcEstimate && Number.isFinite(costBasis)
+        const unrealizedPnL = normalizeZcValue && Number.isFinite(costBasis)
           ? marketValue - costBasis
           : firstNum(row.unrealizedPnL, 0);
         const remainingPremium = Number.isFinite(marketValue) && marketValue < 0
@@ -2819,7 +3860,7 @@
         const delta = firstNum(directSignedDelta(row, right), quote.delta);
         const bid = firstNum(row.bid, quote.bid);
         const ask = firstNum(row.ask, quote.ask);
-        let optionPrice = firstNum(row.mid, row.price, row.markPrice, row.modelOptionPrice, row.last, quote.mid);
+        let optionPrice = firstNonNegativeNum(row.mid, row.price, row.markPrice, row.modelOptionPrice, row.last, quote.mid);
         if (!Number.isFinite(optionPrice) && Number.isFinite(bid) && Number.isFinite(ask)) optionPrice = (bid + ask) / 2;
         const underlyingPrice = rowReferencePrice(row, underlying, fallbackPrice);
         const intrinsicValue = Number.isFinite(underlyingPrice)
@@ -2828,13 +3869,23 @@
         const timeValue = Number.isFinite(optionPrice) && Number.isFinite(intrinsicValue)
           ? Math.max(optionPrice - intrinsicValue, 0)
           : NaN;
-        const timeValueTolerance = firstNum((PRODUCT_PRESETS[underlying] || {}).optionTick, 0.015625);
-        const deepItm = Number.isFinite(delta)
-          && Math.abs(delta) + EPS >= DEEP_ITM_DELTA_THRESHOLD
-          && Number.isFinite(intrinsicValue)
-          && intrinsicValue > timeValueTolerance + EPS
-          && Number.isFinite(timeValue)
-          && timeValue <= timeValueTolerance + EPS;
+        const optionTick = firstNum((PRODUCT_PRESETS[underlying] || {}).optionTick, 0.015625);
+        const intrinsicTicks = Number.isFinite(intrinsicValue) && optionTick > 0 ? intrinsicValue / optionTick : NaN;
+        const timeValueTicks = Number.isFinite(timeValue) && optionTick > 0 ? timeValue / optionTick : NaN;
+        const deltaThreshold = clamp(firstNum(cfg.equivalentFutureDeltaThreshold, DEFAULT_EQUIVALENT_FUTURE_DELTA_THRESHOLD), 0, 1);
+        const minIntrinsicTicks = Math.max(firstNum(cfg.equivalentFutureMinIntrinsicTicks, DEFAULT_EQUIVALENT_FUTURE_MIN_INTRINSIC_TICKS), 0);
+        const maxTimeValueTicks = Math.max(firstNum(cfg.equivalentFutureMaxTimeValueTicks, DEFAULT_EQUIVALENT_FUTURE_MAX_TIME_VALUE_TICKS), 0);
+        const displayedAbsDelta = Number.isFinite(delta)
+          ? Math.round((Math.abs(delta) + EPS) * 100) / 100
+          : NaN;
+        const deepItmReasons = [];
+        if (!Number.isFinite(displayedAbsDelta)) deepItmReasons.push("Delta缺失");
+        else if (displayedAbsDelta + EPS < deltaThreshold) deepItmReasons.push(`|Delta| ${num(displayedAbsDelta, 2)} < ${num(deltaThreshold, 2)}`);
+        if (!Number.isFinite(intrinsicTicks) || intrinsicTicks <= EPS) deepItmReasons.push("未实值");
+        else if (intrinsicTicks + EPS < minIntrinsicTicks) deepItmReasons.push(`实值 ${num(intrinsicTicks, 1)}ticks < ${num(minIntrinsicTicks, 1)}ticks`);
+        if (!Number.isFinite(timeValueTicks)) deepItmReasons.push("时间价值缺失");
+        else if (timeValueTicks > maxTimeValueTicks + EPS) deepItmReasons.push(`时间价值 ${num(timeValueTicks, 1)}ticks > ${num(maxTimeValueTicks, 1)}ticks`);
+        const deepItm = deepItmReasons.length === 0;
         return {
           ...base,
           localSymbol: txt(row.localSymbol || row.optionName),
@@ -2844,7 +3895,11 @@
           optionPrice,
           underlyingPrice,
           intrinsicValue,
+          intrinsicTicks,
           timeValue,
+          timeValueTicks,
+          optionTick,
+          deepItmReasons,
           delta,
           deltaExposure: Number.isFinite(delta) ? position * delta : 0,
           deepItm,
@@ -2860,6 +3915,7 @@
         .reduce((acc, row) => acc + row.deltaExposure, 0);
       const futureDelta = futures.reduce((acc, row) => acc + row.position * firstNum(row.delta, 1), 0);
       const deepItmOptions = options.filter(row => row.deepItm && row.position > 0);
+      const rejectedDeepItmOptions = options.filter(row => row.position > 0 && Number.isFinite(row.intrinsicValue) && row.intrinsicValue > EPS && !row.deepItm);
       const deepItmFutureEquivalent = deepItmOptions.reduce((acc, row) => acc + row.equivalentFutureContracts, 0);
       const equivalentFutureDelta = futureDelta + deepItmFutureEquivalent;
       return {
@@ -2870,6 +3926,7 @@
         equivalentFutureDelta,
         portfolioDelta: shortOptionDelta + equivalentFutureDelta,
         deepItmOptions,
+        rejectedDeepItmOptions,
         deepItmContracts: deepItmOptions.reduce((acc, row) => acc + Math.abs(row.position), 0),
         deepItmFutureEquivalent
       };
@@ -2990,8 +4047,11 @@
         const finalScore = incomeScore * cfg.weights.income + distributionScore * cfg.weights.distribution + targetFitScore * 100 * cfg.weights.target - riskScore * cfg.weights.risk;
         const id = txt(row.conId) || `${underlying}-${right}-${strike}-${dte}-${index}`;
         return {
-          id, underlying, expiry, dte, bucket, dateBand,
+          id, conId: toNum(row.conId), underlying, expiry, dte, bucket, dateBand,
           right, strike, bid, ask, mid, estimatedCredit, delta, gamma, theta, vega,
+          secType: txt(row.secType || "FOP").toUpperCase() || "FOP",
+          exchange: txt(row.exchange),
+          currency: txt(row.currency),
           underlyingPrice: rowSpot,
           deltaEstimated: deltaInfo.estimated,
           deltaSource: deltaInfo.source,
@@ -3158,8 +4218,10 @@
         const deltaTone = portfolioExposure.portfolioDelta > 0.25 ? "positive" : portfolioExposure.portfolioDelta < -0.25 ? "negative" : "";
         const deltaSignal = portfolioExposure.portfolioDelta > 0.25 ? "组合Delta 偏多" : portfolioExposure.portfolioDelta < -0.25 ? "组合Delta 偏空" : "组合Delta 中性";
         const deepItmTitle = portfolioExposure.deepItmOptions.length
-          ? portfolioExposure.deepItmOptions.map(row => `${row.localSymbol || `${row.underlying} ${row.right}${num(row.strike, 3)}`} ${signedQty(row.position)}张；Delta ${num(row.delta, 2)}；时间价值 ${optPx(row.timeValue)}；等价 ${signedNum(row.equivalentFutureContracts, 2)}张期货`).join(" / ")
-          : `未识别到 |Delta|≥${num(DEEP_ITM_DELTA_THRESHOLD, 2)} 且时间价值不超过一个最小跳动的实值期权`;
+          ? portfolioExposure.deepItmOptions.map(row => `${row.localSymbol || `${row.underlying} ${row.right}${num(row.strike, 3)}`} ${signedQty(row.position)}张；Delta ${num(row.delta, 2)}；实值 ${num(row.intrinsicTicks, 1)}ticks；时间价值 ${num(row.timeValueTicks, 1)}ticks；等价 ${signedNum(row.equivalentFutureContracts, 2)}张期货`).join(" / ")
+          : portfolioExposure.rejectedDeepItmOptions.length
+            ? portfolioExposure.rejectedDeepItmOptions.map(row => `${row.localSymbol || `${row.underlying} ${row.right}${num(row.strike, 3)}`}：${row.deepItmReasons.join("、")}`).join(" / ")
+            : `未发现多头实值期权；参数：|Delta|≥${num(cfg.equivalentFutureDeltaThreshold, 2)}、实值≥${num(cfg.equivalentFutureMinIntrinsicTicks, 1)}ticks、时间价值≤${num(cfg.equivalentFutureMaxTimeValueTicks, 1)}ticks`;
         const deepItmTimeValue = portfolioExposure.deepItmOptions.length
           ? Math.max(...portfolioExposure.deepItmOptions.map(row => row.timeValue))
           : NaN;
@@ -3178,6 +4240,7 @@
             <span class="product-signal ${futuresTone}"><i aria-hidden="true">${futuresIcon}</i>${esc(futuresSignal)}</span>
             <span class="product-signal ${deltaTone}"><i aria-hidden="true">Δ</i>${esc(deltaSignal)}</span>
             ${portfolioExposure.deepItmOptions.length ? `<span class="product-signal synthetic" title="${esc(deepItmTitle)}"><i aria-hidden="true">≈</i>深度ITM ${num(portfolioExposure.deepItmContracts, 0)}张 ≈ ${signedNum(portfolioExposure.deepItmFutureEquivalent, 2)}期货 · 时间价值 ${optPx(deepItmTimeValue)}</span>` : ""}
+            ${!portfolioExposure.deepItmOptions.length && portfolioExposure.rejectedDeepItmOptions.length ? `<span class="product-signal warning" title="${esc(deepItmTitle)}"><i aria-hidden="true">≈</i>等效候选未通过参数</span>` : ""}
             <span class="product-signal data${hasData ? "" : " missing"}"><i aria-hidden="true"></i>${esc(status)}</span>
           </span>
           <span class="product-metrics">
@@ -3196,6 +4259,8 @@
         button.addEventListener("click", () => {
           $("activeUnderlying").value = button.dataset.underlying;
           proposed = {};
+          whatIfInstrument = null;
+          whatIfResponse = null;
           render();
         });
       });
@@ -3640,7 +4705,265 @@
           renderNodes(shortPositions, candidates, config());
         });
       });
+      $("candidateTable").querySelectorAll("button[data-whatif-id]").forEach(button => {
+        button.addEventListener("click", () => selectWhatIfCandidate(button.dataset.whatifId));
+      });
       if (matrixView) centerCandidateMatrixAxis();
+    }
+
+    function availableWhatIfFutures(underlying) {
+      const deduped = new Map();
+      futurePriceRows
+        .filter(row => txt(row.root || row.symbol).toUpperCase() === underlying)
+        .forEach(row => {
+          const conId = Math.trunc(toNum(row.conId));
+          if (!(conId > 0)) return;
+          deduped.set(conId, {
+            conId,
+            secType: "FUT",
+            exchange: txt(row.exchange) || "CBOT",
+            underlying,
+            localSymbol: txt(row.localSymbol),
+            month: txt(row.month),
+            price: normalizeFuturePrice(underlying, firstNum(row.price, row.marketPrice, row.mid, row.last, row.close)),
+            bid: normalizeFuturePrice(underlying, firstNum(row.bid)),
+            ask: normalizeFuturePrice(underlying, firstNum(row.ask))
+          });
+        });
+      return Array.from(deduped.values()).sort((a, b) => a.month.localeCompare(b.month));
+    }
+
+    function selectWhatIfFuture(rawConId) {
+      const conId = Math.trunc(toNum(rawConId));
+      if (!(conId > 0)) {
+        if (whatIfInstrument && whatIfInstrument.secType === "FUT") {
+          whatIfInstrument = null;
+          whatIfResponse = null;
+          renderWhatIfPanel(config());
+        }
+        return;
+      }
+      const row = availableWhatIfFutures(config().underlying).find(item => item.conId === conId);
+      if (!row) return;
+      whatIfInstrument = {
+        ...row,
+        label: `${row.underlying} ${row.localSymbol || row.month || `conId ${row.conId}`}`
+      };
+      whatIfDraft.action = "BUY";
+      whatIfDraft.orderType = "LMT";
+      whatIfDraft.limitPrice = firstNum(row.ask, row.price, row.bid);
+      whatIfResponse = null;
+      tradePreview = null;
+      renderWhatIfPanel(config());
+    }
+
+    function selectWhatIfCandidate(candidateId) {
+      const row = candidates.find(item => String(item.id) === String(candidateId));
+      if (!row || !(row.conId > 0)) {
+        whatIfResponse = { error: "该候选缺少有效 conId，请先全量刷新期权链后再测算。" };
+        renderWhatIfPanel(config());
+        return;
+      }
+      whatIfInstrument = {
+        conId: Math.trunc(row.conId),
+        secType: "FOP",
+        exchange: row.exchange || "CBOT",
+        underlying: row.underlying,
+        localSymbol: row.localSymbol,
+        expiry: row.expiry,
+        strike: row.strike,
+        right: row.right,
+        bid: row.bid,
+        ask: row.ask,
+        label: row.localSymbol || `${row.underlying} ${formatExpiryDate(row.expiry)} ${row.right} ${num(row.strike, 3)}`
+      };
+      whatIfDraft.action = "SELL";
+      whatIfDraft.orderType = "LMT";
+      whatIfDraft.limitPrice = firstNum(row.bid, row.mid, row.ask);
+      whatIfResponse = null;
+      tradePreview = null;
+      renderWhatIfPanel(config());
+      const selected = $("whatIfSelected");
+      if (selected && typeof selected.scrollIntoView === "function") selected.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function syncWhatIfDraftFromForm() {
+      whatIfDraft = {
+        action: $("whatIfAction").value,
+        quantity: Math.max(Math.trunc(toNum($("whatIfQuantity").value)), 1),
+        orderType: $("whatIfOrderType").value,
+        limitPrice: $("whatIfLimitPrice").value,
+        reserveFunds: Math.max(firstNum($("whatIfReserveFunds").value, 0), 0),
+        calculateCapacity: Boolean($("whatIfCalculateCapacity").checked),
+        maxSearchQuantity: Math.max(Math.trunc(firstNum($("whatIfMaxSearch").value, 100)), 1)
+      };
+      $("whatIfLimitPrice").disabled = whatIfDraft.orderType !== "LMT";
+      tradePreview = null;
+      whatIfResponse = null;
+      $("tradeConfirmationPhrase").value = "";
+      renderTradeConfirmation();
+      renderWhatIfResult();
+    }
+
+    function renderWhatIfPanel(cfg) {
+      const futures = availableWhatIfFutures(cfg.underlying);
+      const futureSelect = $("whatIfFutureContract");
+      futureSelect.innerHTML = `<option value="">选择 ${esc(cfg.underlying)} 期货…</option>` + futures.map(row => (
+        `<option value="${row.conId}">${esc(row.localSymbol || row.month || String(row.conId))} · ${num(row.price, 3)}</option>`
+      )).join("");
+      futureSelect.value = whatIfInstrument && whatIfInstrument.secType === "FUT" && whatIfInstrument.underlying === cfg.underlying
+        ? String(whatIfInstrument.conId)
+        : "";
+
+      const selected = whatIfInstrument;
+      $("whatIfSelected").innerHTML = selected
+        ? `<div><strong>${esc(selected.label)}</strong><span>${esc(selected.secType)} · conId ${esc(selected.conId)}${selected.exchange ? ` · ${esc(selected.exchange)}` : ""}</span></div><b>${selected.secType === "FUT" ? "期货" : "期权"}</b>`
+        : `<div><strong>尚未选择合约</strong><span>从期货下拉框选择，或点击候选期权卡片中的“选择预检”</span></div>`;
+
+      $("whatIfAction").value = whatIfDraft.action;
+      $("whatIfQuantity").value = whatIfDraft.quantity;
+      $("whatIfQuantity").max = tradeGatewayStatus.maxOrderQuantity || 10000;
+      $("whatIfOrderType").value = whatIfDraft.orderType;
+      $("whatIfLimitPrice").value = Number.isFinite(toNum(whatIfDraft.limitPrice)) ? whatIfDraft.limitPrice : "";
+      $("whatIfLimitPrice").disabled = whatIfDraft.orderType !== "LMT";
+      $("whatIfReserveFunds").value = whatIfDraft.reserveFunds;
+      $("whatIfReserveFunds").min = tradeGatewayStatus.minimumReserveFunds || 0;
+      $("whatIfCalculateCapacity").checked = whatIfDraft.calculateCapacity;
+      $("whatIfMaxSearch").value = whatIfDraft.maxSearchQuantity;
+      const tradeArmed = Boolean(tradeGatewayStatus.online && tradeGatewayStatus.armed && tradeSessionToken);
+      $("whatIfRun").disabled = !tradeArmed || whatIfBusy || !selected;
+      $("whatIfRun").textContent = !tradeGatewayStatus.online
+        ? "交易服务未启动"
+        : !tradeArmed
+          ? "请先解锁交易会话"
+          : "1. 生成保证金预览";
+      renderTradeGatewayStatus();
+      renderWhatIfResult();
+      renderTradeConfirmation();
+    }
+
+    function whatIfMoneyChange(value) {
+      if (!Number.isFinite(value)) return "-";
+      return `${value > EPS ? "+" : ""}${money(value)}`;
+    }
+
+    function renderWhatIfResult() {
+      const target = $("whatIfResult");
+      if (whatIfBusy) {
+        target.innerHTML = `<div class="whatif-status unknown"><strong>正在向 IBKR 请求账户级保证金测算…</strong><div class="note">容量搜索会执行多次 What-If 探测，通常比单笔预览稍慢。</div></div>`;
+        return;
+      }
+      if (whatIfResponse && whatIfResponse.error) {
+        target.innerHTML = `<div class="whatif-status fail"><strong>测算失败</strong><div>${esc(whatIfResponse.error)}</div></div>`;
+        return;
+      }
+      if (!whatIfResponse) {
+        if (!tradeGatewayStatus.online) {
+          target.innerHTML = `<div class="whatif-status unknown"><strong>独立交易服务未启动</strong><div class="note">Dashboard 行情仍保持只读。启动 127.0.0.1:8767 的 Paper/Live 交易服务后，才能执行 IB 原生保证金预览和双确认下单。</div></div>`;
+        } else if (!tradeGatewayStatus.armed || !tradeSessionToken) {
+          const modeLabel = tradeGatewayStatus.mode === "live" ? "LIVE 实盘" : "PAPER 模拟盘";
+          target.innerHTML = `<div class="whatif-status unknown"><strong>${modeLabel}交易服务在线但未解锁</strong><div class="note">输入本次进程解锁码。会话最多保持 ${num((tradeGatewayStatus.armTtlSeconds || 600) / 60, 0)} 分钟，一次发送或撤单后立即自动锁定。</div></div>`;
+        } else {
+          target.innerHTML = `<div class="whatif-status pass"><strong>交易会话已解锁，等待订单草稿</strong><div class="note">先选择合约并生成保证金预览；任何方向、数量或价格变化都会使旧预览和订单指纹失效。</div></div>`;
+        }
+        return;
+      }
+      const result = whatIfResponse;
+      const requested = result.requested || {};
+      const supported = result.supported;
+      const statusClass = supported === true ? "pass" : supported === false ? "fail" : "unknown";
+      const statusText = supported === true ? "当前数量通过保证金预检" : supported === false ? "当前数量不满足资金缓冲" : "IB 返回字段不足，无法判定";
+      const maxText = Number.isFinite(result.max_quantity)
+        ? `${result.max_quantity_is_search_cap ? "≥ " : ""}${num(result.max_quantity, 0)} 张`
+        : "未判定";
+      const binding = result.binding_constraint === "available_funds" ? "可用资金" : result.binding_constraint === "excess_liquidity" ? "流动性缓冲" : "未知";
+      const capacityText = Number.isFinite(result.max_quantity)
+        ? (result.max_quantity_is_search_cap
+          ? `IB 已验证到搜索上限 ${num(result.max_quantity, 0)} 张，实际容量可能更高。`
+          : `边界已复核：${num(result.max_quantity, 0)} 张通过${result.first_unsupported_result ? `，${num(result.first_unsupported_result.quantity, 0)} 张不通过` : ""}。`)
+        : "没有形成可靠的容量边界；请缩小范围或只检查目标数量。";
+      const warning = requested.warning_text
+        ? `<div class="warning" style="margin-top:8px;"><strong>IB 风险提示：</strong> ${esc(requested.warning_text)}</div>`
+        : "";
+      const brokerQuote = result.broker_quote && typeof result.broker_quote === "object" ? result.broker_quote : null;
+      const brokerQuoteHtml = brokerQuote
+        ? `<div class="whatif-metric"><span>交易服务实时行情</span><strong>${optPx(brokerQuote.bid)} / ${optPx(brokerQuote.ask)}</strong><small>Last ${optPx(brokerQuote.last)} · marketDataType ${esc(brokerQuote.marketDataType || "-")} · ${esc(brokerQuote.sampledAt || "")}</small></div>`
+        : "";
+      target.innerHTML = `
+        <div class="whatif-status ${statusClass}"><strong>${statusText}</strong><div>${esc(requested.contract_label || "合约")} · ${esc(requested.action || "")} ${num(requested.quantity, 0)} 张 · 预留 ${money(result.reserve_funds)}</div></div>
+        <div class="whatif-metrics">
+          <div class="whatif-metric"><span>初始保证金</span><strong>${money(requested.initial_margin_after)}</strong><small>${money(requested.initial_margin_before)} → ${money(requested.initial_margin_after)}（${whatIfMoneyChange(requested.initial_margin_change)}）</small></div>
+          <div class="whatif-metric"><span>维持保证金</span><strong>${money(requested.maintenance_margin_after)}</strong><small>${money(requested.maintenance_margin_before)} → ${money(requested.maintenance_margin_after)}（${whatIfMoneyChange(requested.maintenance_margin_change)}）</small></div>
+          <div class="whatif-metric"><span>预估成交后可用资金</span><strong>${money(requested.estimated_available_funds_after)}</strong><small>${money(requested.available_funds_before)} → ${money(requested.estimated_available_funds_after)}；余量 ${money(result.available_headroom_after)}</small></div>
+          <div class="whatif-metric"><span>预估成交后流动性缓冲</span><strong>${money(requested.estimated_excess_liquidity_after)}</strong><small>${money(requested.excess_liquidity_before)} → ${money(requested.estimated_excess_liquidity_after)}；余量 ${money(result.excess_headroom_after)}</small></div>
+          <div class="whatif-metric"><span>最多可做</span><strong>${maxText}</strong><small>${capacityText}</small></div>
+          <div class="whatif-metric"><span>判定约束</span><strong>${binding}</strong><small>${num(result.probe_count, 0)} 次 IB What-If 探测 · ${esc(requested.requested_at || "")}</small></div>
+          ${brokerQuoteHtml}
+        </div>
+        ${warning}
+        <p class="note" style="margin-top:8px;">这是下单前检查，不是额度承诺。确认发送时，独立交易服务会对完全相同的订单指纹重新执行一次 What-If；复核失败、IB 警告或预览过期都会阻止发送。</p>`;
+    }
+
+    async function runDashboardMarginWhatIf() {
+      syncWhatIfDraftFromForm();
+      if (!tradeGatewayStatus.online || !tradeGatewayStatus.armed || !tradeSessionToken) {
+        whatIfResponse = { error: "请先启动并解锁独立交易服务。" };
+        renderWhatIfResult();
+        return;
+      }
+      if (!whatIfInstrument) {
+        whatIfResponse = { error: "请先选择一个期货或候选期权合约。" };
+        renderWhatIfResult();
+        return;
+      }
+      if (window.location.protocol === "file:") {
+        whatIfResponse = { error: "IBKR What-If 需要通过本地 planner server 打开页面。" };
+        renderWhatIfResult();
+        return;
+      }
+      const quantity = Math.trunc(toNum(whatIfDraft.quantity));
+      const limitPrice = toNum(whatIfDraft.limitPrice);
+      if (!(quantity >= 1)) {
+        whatIfResponse = { error: "数量必须是大于等于 1 的整数。" };
+        renderWhatIfResult();
+        return;
+      }
+      if (whatIfDraft.orderType === "LMT" && !(limitPrice > 0)) {
+        whatIfResponse = { error: "限价单必须填写大于 0 的限价。" };
+        renderWhatIfResult();
+        return;
+      }
+      const maxSearchQuantity = Math.max(whatIfDraft.maxSearchQuantity, quantity);
+      whatIfDraft.maxSearchQuantity = maxSearchQuantity;
+      whatIfBusy = true;
+      renderWhatIfPanel(config());
+      try {
+        const payload = await tradeGatewayRequest("/api/trading/preview", {
+          method: "POST",
+          payload: {
+            conId: whatIfInstrument.conId,
+            secType: whatIfInstrument.secType,
+            exchange: whatIfInstrument.exchange || "",
+            action: whatIfDraft.action,
+            quantity,
+            orderType: whatIfDraft.orderType,
+            limitPrice: whatIfDraft.orderType === "LMT" ? limitPrice : null,
+            reserveFunds: whatIfDraft.reserveFunds,
+            calculateCapacity: whatIfDraft.calculateCapacity,
+            maxPreviewQuantity: maxSearchQuantity,
+            tif: "DAY"
+          }
+        });
+        tradePreview = payload;
+        whatIfResponse = payload.margin || { error: payload.blockedReason || "交易服务未返回保证金结果" };
+        $("tradeConfirmationPhrase").value = "";
+      } catch (error) {
+        tradePreview = null;
+        whatIfResponse = { error: error.message || String(error) };
+      } finally {
+        whatIfBusy = false;
+        renderWhatIfPanel(config());
+      }
     }
 
     function centerCandidateMatrixAxis() {
@@ -3651,12 +4974,20 @@
       centerMatrixAxis("inventoryChain", ".inventory-matrix-wrap");
     }
 
+    function centerInventoryChainStrike() {
+      centerScrollableAxis("inventoryChain", ".expiry-sketch", ".chain-map-head.center");
+    }
+
     function centerMatrixAxis(containerId, wrapSelector) {
+      centerScrollableAxis(containerId, wrapSelector, ".inventory-matrix-center-head");
+    }
+
+    function centerScrollableAxis(containerId, wrapSelector, axisSelector) {
       const container = $(containerId);
       if (typeof window === "undefined" || !container || !container.querySelector) return;
       const center = () => {
         const wrap = container.querySelector(wrapSelector);
-        const axis = container.querySelector(".inventory-matrix-center-head");
+        const axis = container.querySelector(axisSelector);
         if (!wrap || !axis) return;
         const wrapRect = wrap.getBoundingClientRect();
         const axisRect = axis.getBoundingClientRect();
@@ -3750,6 +5081,7 @@
         ? inventoryStrikeDteHtml(inventoryRows, cfg, options)
         : optionChainHtml(inventoryRows, cfg, options);
       if (matrixView) centerInventoryMatrixAxis();
+      else centerInventoryChainStrike();
     }
 
     function optionChainHtml(rows, cfg, options) {
@@ -3921,7 +5253,7 @@
       const deltaLabel = row.deltaEstimated ? "Delta≈" : "Delta";
       const riskBadge = isItm ? `<span class="matrix-risk-badge itm">ITM</span>` : "";
       const qtyInput = `<input class="qty" data-id="${esc(row.id)}" type="number" min="0" step="1" value="${qty}" />`;
-      return `<div class="inventory-matrix-position candidate-matrix-position ${side}${current > 0 ? " has-position" : ""}${isItm ? " itm" : ""}"><strong><span class="matrix-side-badge">${sideLabel}</span>${current > 0 ? `当前${num(current, 0)}张` : "可开仓"}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><div class="matrix-position-meta"><span>${deltaLabel} ${num(row.delta, 2)}</span><span>评分 ${num(row.finalScore, 1)}</span>${riskBadge}</div><div class="matrix-position-meta"><span>保证金 ${money(row.marginEstimate)}</span></div><div class="matrix-position-quote"><span>${quoteLabel}</span><span>${quote}</span></div><label class="candidate-matrix-qty"><span>${current > 0 ? `当前 ${num(current, 0)}张 · ` : ""}目标张数</span>${qtyInput}</label></div>`;
+      return `<div class="inventory-matrix-position candidate-matrix-position ${side}${current > 0 ? " has-position" : ""}${isItm ? " itm" : ""}"><strong><span class="matrix-side-badge">${sideLabel}</span>${current > 0 ? `当前${num(current, 0)}张` : "可开仓"}<span class="title-income">+${money(creditIncome(row))}/张</span></strong><div class="matrix-position-meta"><span>${deltaLabel} ${num(row.delta, 2)}</span><span>评分 ${num(row.finalScore, 1)}</span>${riskBadge}</div><div class="matrix-position-meta"><span>本地估算保证金 ${money(row.marginEstimate)}</span></div><div class="matrix-position-quote"><span>${quoteLabel}</span><span>${quote}</span></div><label class="candidate-matrix-qty"><span>${current > 0 ? `当前 ${num(current, 0)}张 · ` : ""}目标张数</span>${qtyInput}</label><button class="whatif-pick" data-whatif-id="${esc(row.id)}" type="button">选择预检</button></div>`;
     }
 
     function matrixDteDateLabel(dte, dteDates) {
@@ -4066,7 +5398,7 @@
       const badge = current > 0 ? `<span>当前 ${num(current, 0)}张 · 目标张数</span>` : `<span>目标张数</span>`;
       const itmBadge = isItm ? `<span class="itm-badge">ITM 实值</span>` : "";
       const deltaLabel = row.deltaEstimated ? "Delta≈" : "Delta ";
-      return `<div class="chain-map-cell ${side} editable${positionClass}${isItm ? " itm" : ""}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span>${itmBadge}</strong><span>${quoteLabel} ${quote}</span><span>${deltaLabel}${num(row.delta, 2)} · 保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}</div>`;
+      return `<div class="chain-map-cell ${side} editable${positionClass}${isItm ? " itm" : ""}"><strong>${esc(compactOptionName(row))}<span class="title-income">+${money(creditIncome(row))}/张</span>${itmBadge}</strong><span>${quoteLabel} ${quote}</span><span>${deltaLabel}${num(row.delta, 2)} · 本地估算保证金 ${money(row.marginEstimate)}</span><span>分 ${num(row.finalScore, 1)}</span>${badge}${qtyInput}<button class="whatif-pick" data-whatif-id="${esc(row.id)}" type="button">选择预检</button></div>`;
     }
 
     function creditIncome(row, quantity = 1) {
@@ -4739,6 +6071,14 @@
       return NaN;
     }
 
+    function firstNonNegativeNum(...values) {
+      for (const value of values) {
+        const number = toNum(value);
+        if (Number.isFinite(number) && number >= 0) return number;
+      }
+      return NaN;
+    }
+
     function sum(rows, field) {
       return rows.reduce((acc, row) => acc + (Number.isFinite(row[field]) ? row[field] : 0), 0);
     }
@@ -4919,7 +6259,9 @@
       if (typeof window === "undefined" || window.location.protocol === "file:") return;
       startLatestRefreshPolling();
       watchLatestRefreshIfRunning();
+      startTradeGatewayPolling();
       await loadDefaultData();
+      startLivePositionPolling();
     }
 
     initialize();

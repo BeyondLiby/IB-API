@@ -16,8 +16,12 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pandas as pd
+from treasury_fop_chain import get_future_prices_for_specs
+from treasury_fop_chain import snapshot_in_batches
+from treasury_fop_chain import StreamStats
 
 from target_treasury_monitor_clean import cli as clean_cli
+from target_treasury_monitor_clean.cli import _effective_option_batch_size
 from target_treasury_monitor_clean.cli import _product_filter_widths
 from refresh_inventory_data import run_scheduled_refresh
 from refresh_inventory_data import chain_eastern_dates_by_product
@@ -37,7 +41,10 @@ from target_treasury_monitor_clean.inventory_planner_server import inventory_pla
 from target_treasury_monitor_clean.inventory_planner_server import normalize_refresh_contract_months
 from target_treasury_monitor_clean.inventory_planner_server import read_latest_refresh_status
 from target_treasury_monitor_clean.inventory_planner_server import refresh_progress_from_output
+from target_treasury_monitor_clean.inventory_planner_server import refresh_phase_timings_from_output
 from target_treasury_monitor_clean.inventory_planner_server import refresh_status_http_code
+from target_treasury_monitor_clean.inventory_market_stream import InventoryMarketStream
+from target_treasury_monitor_clean.inventory_market_stream import normalize_stream_future_months
 from target_treasury_monitor_clean.settings import IBSettings
 from target_treasury_monitor_clean.settings import StaticChainSettings
 
@@ -45,6 +52,162 @@ from target_treasury_monitor_clean.settings import StaticChainSettings
 class DummyProcess:
     def poll(self) -> None:
         return None
+
+
+class FutureBatchSubscriptionTests(unittest.TestCase):
+    class Ticker:
+        def __init__(self) -> None:
+            self.bid = float("nan")
+            self.ask = float("nan")
+            self.last = float("nan")
+            self.close = float("nan")
+
+        def marketPrice(self) -> float:
+            return float("nan")
+
+    class IB:
+        def __init__(self) -> None:
+            self.qualified: list[list[object]] = []
+            self.requested: list[object] = []
+            self.cancelled: list[object] = []
+            self.tickers: list[FutureBatchSubscriptionTests.Ticker] = []
+            self.sleep_calls: list[float] = []
+
+        def qualifyContracts(self, *contracts: object) -> list[object]:
+            self.qualified.append(list(contracts))
+            for index, contract in enumerate(contracts, start=1):
+                contract.conId = index
+                contract.localSymbol = f"{contract.symbol}-{contract.lastTradeDateOrContractMonth}"
+            return list(contracts)
+
+        def reqMktData(self, contract: object, **_kwargs: object) -> object:
+            self.requested.append(contract)
+            ticker = FutureBatchSubscriptionTests.Ticker()
+            self.tickers.append(ticker)
+            return ticker
+
+        def sleep(self, seconds: float) -> None:
+            self.sleep_calls.append(seconds)
+            for index, ticker in enumerate(self.tickers):
+                ticker.bid = 100.0 + index
+                ticker.ask = 100.25 + index
+
+        def cancelMktData(self, contract: object) -> None:
+            self.cancelled.append(contract)
+
+    def test_only_selected_months_are_subscribed_with_one_shared_wait(self) -> None:
+        ib = self.IB()
+
+        prices = get_future_prices_for_specs(
+            ib,
+            {"ZF": "202609", "ZN": "202609", "ZC": "202609"},
+            wait_seconds=2.0,
+        )
+
+        self.assertEqual(len(ib.qualified), 1)
+        self.assertEqual(len(ib.qualified[0]), 3)
+        self.assertEqual(len(ib.requested), 3)
+        self.assertEqual(len(ib.cancelled), 3)
+        self.assertEqual(len(ib.sleep_calls), 1)
+        self.assertEqual(set(prices["month"].astype(str)), {"202609"})
+        self.assertNotIn("202612", {contract.lastTradeDateOrContractMonth for contract in ib.requested})
+        self.assertTrue(prices["price"].notna().all())
+
+
+class OptionBatchPauseTests(unittest.TestCase):
+    def test_successful_batch_uses_normal_pause_not_empty_retry_pause(self) -> None:
+        cancel_waits: list[float] = []
+
+        class Streamer:
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                self.contracts: list[object] = []
+
+            def subscribe(self, contracts: list[object]) -> list[object]:
+                self.contracts = list(contracts)
+                return self.contracts
+
+            def wait_until_stable(self, **_kwargs: object) -> StreamStats:
+                return StreamStats(
+                    requested=len(self.contracts),
+                    quote_ready=len(self.contracts),
+                    greek_ready=len(self.contracts),
+                    oi_ready=0,
+                    volume_ready=0,
+                    elapsed_seconds=1.0,
+                )
+
+            def snapshot(self) -> pd.DataFrame:
+                return pd.DataFrame({"conId": list(range(len(self.contracts)))})
+
+            def cancel(self, *, wait_seconds: float = 0.5) -> None:
+                cancel_waits.append(wait_seconds)
+
+        with patch("treasury_fop_chain.FOPMarketDataStreamer", Streamer):
+            snapshot = snapshot_in_batches(
+                object(),
+                [object(), object(), object()],
+                batch_size=2,
+                inter_batch_pause_seconds=0.5,
+                empty_batch_retries=1,
+                empty_batch_retry_pause_seconds=5.0,
+            )
+
+        self.assertEqual(len(snapshot), 3)
+        self.assertEqual(cancel_waits, [0.5, 0.5])
+
+
+class InventoryMarketStreamAccountTests(unittest.TestCase):
+    @staticmethod
+    def position(account: str, con_id: int, symbol: str = "ZN") -> SimpleNamespace:
+        return SimpleNamespace(
+            account=account,
+            position=-1,
+            contract=SimpleNamespace(
+                conId=con_id,
+                symbol=symbol,
+                secType="FOP",
+                localSymbol=f"{symbol} option",
+                tradingClass=symbol,
+            ),
+        )
+
+    class IB:
+        def __init__(self, managed: list[str], positions: list[SimpleNamespace]) -> None:
+            self._managed = managed
+            self._positions = positions
+
+        def managedAccounts(self) -> list[str]:
+            return self._managed
+
+        def positions(self) -> list[SimpleNamespace]:
+            return self._positions
+
+    def test_configured_account_is_kept_when_gateway_still_manages_it(self) -> None:
+        stream = InventoryMarketStream(IBSettings(account="PRIMARY"))
+        ib = self.IB(
+            ["PRIMARY", "SECONDARY"],
+            [self.position("SECONDARY", 2), self.position("PRIMARY", 1)],
+        )
+
+        self.assertEqual(stream._resolve_active_account(ib), "PRIMARY")
+
+    def test_missing_configured_account_falls_back_to_logged_in_position_account(self) -> None:
+        stream = InventoryMarketStream(IBSettings(account="OLD"))
+        ib = self.IB(
+            ["NEW", "EMPTY"],
+            [self.position("NEW", 1), self.position("NEW", 2), self.position("EMPTY", 3, "ES")],
+        )
+
+        active = stream._resolve_active_account(ib)
+        positions = stream._current_positions(ib, active_account=active)
+
+        self.assertEqual(active, "NEW")
+        self.assertEqual(set(positions), {1, 2})
+
+    def test_account_without_positions_still_falls_back_to_managed_account(self) -> None:
+        stream = InventoryMarketStream(IBSettings(account="OLD"))
+
+        self.assertEqual(stream._resolve_active_account(self.IB(["NEW"], [])), "NEW")
 
 
 class QuietStaticHandler(SimpleHTTPRequestHandler):
@@ -70,11 +233,43 @@ class PlannerServerReadinessTests(unittest.TestCase):
 
         wait_for_planner_server(self.args_for(server.server_address[1]), DummyProcess(), timeout=1.0)
 
+    def test_live_positions_endpoint_exposes_stream_snapshot(self) -> None:
+        class FakeStream:
+            def snapshot(self) -> dict[str, object]:
+                return {
+                    "ok": True,
+                    "connected": True,
+                    "sampledAt": "2026-07-16T12:34:56+00:00",
+                    "dataMode": "live",
+                    "positions": [{"conId": 123, "symbol": "ZN", "position": -1}],
+                    "futures": [{"root": "ZN", "month": "202609", "price": 109.125}],
+                }
+
+        handler = inventory_planner_handler(Path.cwd(), market_stream=FakeStream())
+        server = self.start_server(handler)
+
+        with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/live-positions", timeout=1.0) as response:
+            payload = json.load(response)
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["dataMode"], "live")
+        self.assertEqual(payload["positions"][0]["conId"], 123)
+        self.assertEqual(payload["futures"][0]["month"], "202609")
+
+    def test_stream_future_months_only_keep_explicit_selected_contracts(self) -> None:
+        self.assertEqual(
+            normalize_stream_future_months({"ZF": "202609", "ZN": "2026-09", "ZC": "202609,202609"}),
+            {"ZF": ("202609",), "ZN": ("202609",), "ZC": ("202609",)},
+        )
+
     def test_manifest_includes_data_updated_at(self) -> None:
         manifest = inventory_planner_manifest(Path.cwd())
 
         self.assertIn("dataUpdatedAt", manifest)
         self.assertRegex(str(manifest["dataUpdatedAt"]), r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$|^$")
+        self.assertFalse(manifest["marginWhatIf"]["enabled"])
+        self.assertEqual(manifest["marginWhatIf"]["mode"], "read_only")
+        self.assertTrue(manifest["marginWhatIf"]["requiresOrderChannel"])
 
     def test_manifest_exposes_product_future_prices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,7 +295,16 @@ class PlannerServerReadinessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             script = directory / "refresh_inventory_data.py"
-            script.write_text("import sys\nprint('fake refresh', ' '.join(sys.argv[1:]))\nsys.exit(1)\n", encoding="utf-8")
+            script.write_text(
+                "import sys\n"
+                "print('fake refresh', ' '.join(sys.argv[1:]))\n"
+                "print('phase timing: positions=5.000')\n"
+                "print('phase timing: futures=3.000')\n"
+                "print('phase timing: options=7.000')\n"
+                "print('phase timing: total=16.000')\n"
+                "sys.exit(1)\n",
+                encoding="utf-8",
+            )
             handler = inventory_planner_handler(directory)
             server = self.start_server(handler)
             url = f"http://127.0.0.1:{server.server_address[1]}/api/refresh-inventory-data"
@@ -129,8 +333,37 @@ class PlannerServerReadinessTests(unittest.TestCase):
             self.assertIn("fake refresh", payload["stdout"])
             self.assertIn("--refresh-mode full", payload["stdout"])
             self.assertGreaterEqual(payload["durationSeconds"], 0)
+            self.assertEqual(payload["phaseTimings"]["positionsSeconds"], 5.0)
+            self.assertEqual(payload["phaseTimings"]["optionsSeconds"], 7.0)
+            self.assertEqual(payload["phaseTimings"]["futuresSeconds"], 3.0)
+            self.assertEqual(payload["phaseTimings"]["otherSeconds"], 1.0)
+            self.assertEqual(payload["phaseTimings"]["totalSeconds"], 16.0)
             self.assertEqual(payload["requestedMode"], "full")
             self.assertEqual(payload["effectiveMode"], "full")
+
+    def test_margin_whatif_post_is_blocked_before_any_ib_request(self) -> None:
+        handler = inventory_planner_handler(Path.cwd())
+        server = self.start_server(handler)
+        url = f"http://127.0.0.1:{server.server_address[1]}/api/margin-whatif"
+        body = json.dumps({
+            "conId": 123,
+            "secType": "FOP",
+            "exchange": "CBOT",
+            "action": "SELL",
+            "quantity": 1,
+        }).encode("utf-8")
+
+        with self.assertRaises(HTTPError) as raised:
+            urlopen(
+                Request(url, data=body, method="POST", headers={"Content-Type": "application/json"}),
+                timeout=5,
+            )
+        self.assertEqual(raised.exception.code, 403)
+        payload = json.loads(raised.exception.read().decode("utf-8"))
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["mode"], "read_only")
+        self.assertTrue(payload["requiresOrderChannel"])
+        self.assertIn("已停用", payload["error"])
 
     def test_inventory_refresh_post_reuses_running_latest_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -271,6 +504,42 @@ class PlannerServerReadinessTests(unittest.TestCase):
 
         self.assertEqual(progress, 74)
         self.assertEqual(stage, "刷新ZC期权行情")
+
+    def test_refresh_phase_timings_aggregate_positions_options_futures_and_bars(self) -> None:
+        timings = refresh_phase_timings_from_output(
+            [
+                "phase timing: positions=5.250",
+                "phase timing: futures.ZF=1.500",
+                "phase timing: options.ZF=8.750",
+                "phase timing: futures.ZN=2.250",
+                "phase timing: bars=3.000",
+                "phase timing: publish=0.500",
+                "phase timing: total=21.500",
+            ],
+            total_seconds=19.5,
+        )
+
+        self.assertEqual(timings["positionsSeconds"], 5.25)
+        self.assertEqual(timings["optionsSeconds"], 8.75)
+        self.assertEqual(timings["futuresSeconds"], 6.75)
+        self.assertEqual(timings["otherSeconds"], 0.75)
+        self.assertEqual(timings["totalSeconds"], 21.5)
+
+    def test_refresh_phase_timings_keep_legacy_cumulative_markers_compatible(self) -> None:
+        timings = refresh_phase_timings_from_output(
+            [
+                "phase timing: positions=4.000",
+                "phase timing: futures=3.000",
+                "phase timing: futures=6.000",
+                "phase timing: futures=9.000",
+                "phase timing: total=14.000",
+            ]
+        )
+
+        self.assertEqual(timings["positionsSeconds"], 4.0)
+        self.assertEqual(timings["optionsSeconds"], 0.0)
+        self.assertEqual(timings["futuresSeconds"], 9.0)
+        self.assertEqual(timings["otherSeconds"], 1.0)
 
     def test_wait_for_planner_server_rejects_plain_static_server(self) -> None:
         server = self.start_server(QuietStaticHandler)
@@ -468,6 +737,34 @@ class IbClientLockTests(unittest.TestCase):
 
 
 class FastRefreshSelectionTests(unittest.TestCase):
+    def test_option_batch_is_capped_by_persistent_line_budget(self) -> None:
+        positions = {
+            "ZF": set(range(22)),
+            "ZN": set(range(100, 114)),
+            "ZC": set(range(200, 203)),
+        }
+        batch, position_lines, future_lines = _effective_option_batch_size(
+            50,
+            positions,
+            {"ZF": "202609", "ZN": "202609", "ZC": "202609"},
+        )
+
+        self.assertEqual((position_lines, future_lines), (39, 3))
+        self.assertEqual(batch, 50)
+        with_future_position, position_lines, _ = _effective_option_batch_size(
+            50,
+            positions,
+            {"ZF": "202609", "ZN": "202609", "ZC": "202609"},
+            position_line_floor=40,
+        )
+        self.assertEqual((with_future_position, position_lines), (50, 40))
+        crowded, _, _ = _effective_option_batch_size(
+            50,
+            {"ZF": set(range(50))},
+            {"ZF": "202609", "ZN": "202609", "ZC": "202609"},
+        )
+        self.assertEqual(crowded, 42)
+
     def test_fast_filter_widths_are_product_aware(self) -> None:
         self.assertEqual(_product_filter_widths("ZF", 1.0, 3.0, fast_refresh=True), (1.0, 3.0))
         self.assertEqual(_product_filter_widths("ZN", 1.0, 3.0, fast_refresh=True), (1.5, 3.0))
@@ -696,8 +993,10 @@ class RefreshCarryHtmlFallbackTests(unittest.TestCase):
                 patch.object(clean_cli, "ib_connection", return_value=nullcontext(object())),
                 patch.object(
                     clean_cli,
-                    "refresh_future_prices_sidecar",
-                    return_value=(pd.DataFrame(), "missing", "", directory / "future_prices.csv"),
+                    "refresh_future_prices_sidecars",
+                    return_value={
+                        "ZF": (pd.DataFrame(), "missing", "", directory / "future_prices.csv")
+                    },
                 ),
                 patch.object(
                     clean_cli,

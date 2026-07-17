@@ -225,6 +225,29 @@ class InventoryPlannerTests(unittest.TestCase):
         self.assertEqual(parsed[0].remaining_premium, 31.25)
         self.assertAlmostEqual(parsed[0].unrealized_pnl, 3.23)
 
+    def test_zc_portfolio_value_with_contract_multiplier_is_rescaled(self) -> None:
+        rows = [
+            {
+                "symbol": "ZC",
+                "secType": "FOP",
+                "position": "-1",
+                "expiry": "20260717",
+                "strike": "4.25",
+                "right": "P",
+                "price": "0.625",
+                "marketValue": "-3125",
+                "valueSource": "portfolio",
+                "contractMultiplier": "5000",
+                "multiplier": "50",
+                "costBasis": "-34.48",
+            }
+        ]
+
+        parsed = parse_short_positions(rows, PlannerConfig(), as_of="20260714")
+
+        self.assertEqual(parsed[0].remaining_premium, 31.25)
+        self.assertAlmostEqual(parsed[0].unrealized_pnl, 3.23)
+
     def test_dte_bucket_assignment_does_not_make_0dte_special_risk(self) -> None:
         self.assertEqual(dte_bucket(0), "0DTE")
         self.assertEqual(dte_bucket(2), "1-2DTE")

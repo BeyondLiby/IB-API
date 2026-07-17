@@ -272,19 +272,25 @@ def parse_short_positions(rows: Iterable[dict[str, Any]], config: PlannerConfig,
         if right == "C" and not (config.call_dte_min <= dte <= config.call_dte_max):
             continue
         multiplier = multiplier_for(row, underlying, config)
-        price = first_finite(row, ["mid", "price", "last", "bid", "ask"], 0.0)
+        price = first_finite(row, ["mid", "price", "last", "markPrice", "modelOptionPrice", "delayedMid", "close", "bid", "ask"], 0.0)
         source_market_value = to_float(row.get("marketValue"), 0.0)
-        contract_multiplier_value = to_float(row.get("contractMultiplier"))
-        raw_multiplier = first_finite(row, ["contractMultiplier", "multiplier"], 0.0)
-        legacy_zc_estimate = (
-            underlying == "ZC"
-            and text(row.get("valueSource")).lower().startswith("estimated_from_")
-            and not math.isfinite(contract_multiplier_value)
-            and raw_multiplier >= 1000.0
+        expected_market_value = position * price * multiplier
+        source_ratio = (
+            abs(source_market_value / expected_market_value)
+            if abs(expected_market_value) > 1e-9
+            else math.nan
         )
-        market_value = position * price * multiplier if legacy_zc_estimate else source_market_value
+        normalize_zc_value = (
+            underlying == "ZC"
+            and (
+                text(row.get("valueSource")).lower().startswith("estimated_from_")
+                or not math.isfinite(to_float(row.get("marketValue")))
+                or (math.isfinite(source_ratio) and source_ratio > 10.0)
+            )
+        )
+        market_value = expected_market_value if normalize_zc_value else source_market_value
         cost_basis = first_finite(row, ["costBasis"], position * to_float(row.get("avgCost"), 0.0))
-        unrealized_pnl = market_value - cost_basis if legacy_zc_estimate else to_float(row.get("unrealizedPnL"), 0.0)
+        unrealized_pnl = market_value - cost_basis if normalize_zc_value else to_float(row.get("unrealizedPnL"), 0.0)
         remaining_premium = -market_value if market_value < 0 else abs(position) * abs(price) * multiplier
         out.append(
             ShortPosition(

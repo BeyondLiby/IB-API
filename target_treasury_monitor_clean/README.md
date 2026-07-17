@@ -55,14 +55,16 @@ python -m target_treasury_monitor_clean.cli batch-chain --market-data-type delay
 行情批量参数建议从稳妥值开始：
 
 ```text
-batch_size=100-150
+batch_size=50（请求值；运行时按常驻订阅和 100-line 预算自动缩小）
 request_interval=0.02-0.03
-wait_max_seconds=8-12
-wait_stable_seconds=1-2
-inter_batch_pause_seconds=1-2
+wait_max_seconds=5
+wait_stable_seconds=0.75
+inter_batch_pause_seconds=0.5
 ```
 
-IB 没有提供“1830 个期权一次性返回一张行情表”的接口；这里的批量是代码逐个 `reqMktData` 订阅、等待、读取、取消，再进入下一批。`request_interval` 太小或 `batch_size` 太大时，后续批次可能被 pacing 或订阅线路释放延迟影响，出现整批 quote/Greeks 为空。
+单独运行 `batch-chain` 且没有其他行情订阅时可按账户 line 配额适当放大；planner server 会长期占用“当前持仓数 + 指定期货数”的行情线，因此 full refresh 请求值默认 50，实际使用 `min(请求值, 100 - 持仓线 - 期货线 - 5条预留)`，不会为提速暂停持仓流。
+
+IB 没有提供“1830 个期权一次性返回一张行情表”的接口；这里的批量是代码逐个 `reqMktData` 订阅、等待、读取、取消，再进入下一批。full 只请求标准报价/option computations，并用报价和 model Greeks 判断一批是否稳定；planner 页面未使用的 OI/成交量 generic ticks 不再请求，避免部分权限账户产生逐合约 `10090`。`request_interval` 太小或 `batch_size` 太大时，后续批次仍可能被 pacing 或订阅线路释放延迟影响，出现整批 quote/Greeks 为空。
 
 默认在订阅行情前会过滤有效合约池：
 
@@ -223,7 +225,7 @@ chain_view         : standard_chain 标准且新鲜；stale_chain 过期链；pa
 
 ## 卖方期权库存规划器
 
-`sell_side_inventory_planner.html` 是一个新的独立 dashboard，暂时不和旧 `carry_risk_dashboard.html` 合并。它的定位不是自动给交易建议，也不会自动下单，而是把当前卖方期权库存、候选链、目标压力、节点集中度和手动 what-if 放在一个中文看板里。
+`sell_side_inventory_planner.html` 是一个新的独立 dashboard，暂时不和旧 `carry_risk_dashboard.html` 合并。它把当前卖方期权库存、候选链、目标压力、节点集中度、保证金预检和人工双确认交易放在一个中文看板里；交易能力来自另行显式启动的 loopback trade gateway，不由日常 planner server 自动开启。
 
 默认读取：
 
@@ -254,6 +256,11 @@ http://127.0.0.1:8766/sell_side_inventory_planner.html
 - Put / Call 分开看，并按用户配置的 DTE 窗口、支撑区/压力区、Delta 区间扫描候选。
 - 候选排序使用收益、分布平衡、风险、目标贴合的综合分；不会只按最高权利金排序。
 - 手动填写候选数量后，页面会即时重算 Before / Added / After、压力场景和节点集中度。
+- 候选期权卡片和当前品种期货合约可进入订单草稿；候选卡保留本地估算保证金，实时行情由 planner 的独立订阅流更新。
+- 日常 planner 的 `/api/margin-whatif` 继续固定返回 403。另行启动的 8767 trade gateway 才能调用 IB 原生 What-If 和订单接口，并且默认 Paper、仅 loopback、随机解锁码、短时会话和一次性发送。
+- 第一版只允许 CBOT FUT/FOP 的 DAY 限价单；提交前必须通过账户级保证金缓冲、订单指纹、动态确认词和最终同指纹 What-If 复核。市价单、普通 OPT、组合单和自动下单均未开放。
+- Live 模式必须由交易服务为所选合约取得 `marketDataType=1` 的有效实时 bid/ask/last；延迟、冻结或缺失行情会 fail closed。
+- 交易服务对重复 preview-id、过期预览、IB warning 和不确定网络结果使用 fail-closed；发送或撤单后自动锁定。只管理带 `IBDASH:` orderRef 的本 Dashboard 订单。
 - 节点集中度只给提示，不会禁止用户覆盖。
 - Put / Call 候选热力图按“行权价 x DTE 桶”展示；选中的手动计划可导出 JSON、CSV 和 Markdown。
 

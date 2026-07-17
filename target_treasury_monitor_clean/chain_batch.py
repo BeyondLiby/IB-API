@@ -14,7 +14,7 @@ from target_treasury_account_monitor.static_option_chain import (
     fetch_static_fop_chain_snapshot,
     save_static_chain_result,
 )
-from treasury_fop_chain import get_future_prices_for_months, load_universe, snapshot_in_batches
+from treasury_fop_chain import get_future_prices_for_months, get_future_prices_for_specs, load_universe, snapshot_in_batches
 
 from .settings import StaticChainSettings
 
@@ -164,21 +164,86 @@ def refresh_future_prices_sidecar(
     settings: StaticChainSettings,
 ) -> tuple[pd.DataFrame, str, str, Path]:
     """Refresh and save the futures price sidecar independently of option-chain refresh."""
-    preferred_contract_cache_path = _contract_cache_path(settings)
-    compatible_contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
-    future_prices_path = _sidecar_path(preferred_contract_cache_path, "_future_prices.csv")
-    compatible_future_prices_path = _sidecar_path(compatible_contract_cache_path, "_future_prices.csv")
-    cache_path = future_prices_path if future_prices_path.exists() else compatible_future_prices_path
-    future_prices, source, error = _fresh_or_cached_future_prices(
-        ib,
-        settings,
-        normalize_months(settings.future_months),
-        cache_path,
-    )
-    if source == "fresh" and not future_prices.empty:
-        future_prices_path.parent.mkdir(parents=True, exist_ok=True)
-        future_prices.to_csv(future_prices_path, index=False, encoding="utf-8-sig")
-    return future_prices, source, error, future_prices_path
+    return refresh_future_prices_sidecars(ib, {settings.root.upper(): settings})[settings.root.upper()]
+
+
+def refresh_future_prices_sidecars(
+    ib: IB,
+    settings_by_root: dict[str, StaticChainSettings],
+) -> dict[str, tuple[pd.DataFrame, str, str, Path]]:
+    """Refresh every pre-filtered product/month pair using one shared stream wait."""
+    if not settings_by_root:
+        return {}
+
+    normalized_settings = {str(root).upper(): settings for root, settings in settings_by_root.items()}
+    request_specs = {
+        root: normalize_months(settings.future_months)
+        for root, settings in normalized_settings.items()
+    }
+    wait_seconds = max(float(settings.future_price_wait_seconds) for settings in normalized_settings.values())
+    fresh_error = ""
+    try:
+        fresh_prices = get_future_prices_for_specs(
+            ib,
+            request_specs,
+            market_data_type=None,
+            wait_seconds=wait_seconds,
+            raise_on_missing=False,
+        )
+    except Exception as exc:
+        fresh_prices = pd.DataFrame()
+        fresh_error = f"{type(exc).__name__}: {exc}"
+
+    results: dict[str, tuple[pd.DataFrame, str, str, Path]] = {}
+    for root, settings in normalized_settings.items():
+        months = request_specs[root]
+        preferred_contract_cache_path = _contract_cache_path(settings)
+        compatible_contract_cache_path = _find_existing_contract_cache(settings, preferred_contract_cache_path)
+        future_prices_path = _sidecar_path(preferred_contract_cache_path, "_future_prices.csv")
+        compatible_future_prices_path = _sidecar_path(compatible_contract_cache_path, "_future_prices.csv")
+        cache_path = future_prices_path if future_prices_path.exists() else compatible_future_prices_path
+
+        if fresh_prices.empty or "root" not in fresh_prices.columns:
+            root_prices = pd.DataFrame()
+        else:
+            root_prices = fresh_prices[
+                fresh_prices["root"].astype(str).str.upper().eq(root)
+            ].copy().reset_index(drop=True)
+        root_prices = _limit_future_prices_to_months(root_prices, months)
+        if root == "ZC" and "price" in root_prices.columns:
+            price = pd.to_numeric(root_prices["price"], errors="coerce")
+            root_prices["price"] = price.where(price.abs() >= 20, price * 100)
+
+        valid = (
+            pd.to_numeric(root_prices.get("price"), errors="coerce").notna().sum()
+            if not root_prices.empty and "price" in root_prices.columns
+            else 0
+        )
+        row_errors: list[str] = []
+        if not root_prices.empty and "error" in root_prices.columns:
+            row_errors = [str(value).strip() for value in root_prices["error"].dropna() if str(value).strip()]
+        error = "; ".join(dict.fromkeys([fresh_error, *row_errors]))
+
+        if valid:
+            source = "fresh"
+            future_prices = root_prices
+            future_prices_path.parent.mkdir(parents=True, exist_ok=True)
+            future_prices.to_csv(future_prices_path, index=False, encoding="utf-8-sig")
+        else:
+            future_prices = _read_csv_or_empty(cache_path) if cache_path.exists() else pd.DataFrame()
+            if root == "ZC" and "price" in future_prices.columns:
+                price = pd.to_numeric(future_prices["price"], errors="coerce")
+                future_prices["price"] = price.where(price.abs() >= 20, price * 100)
+            future_prices = _limit_future_prices_to_months(future_prices, months)
+            if not future_prices.empty:
+                source = "cache"
+                error = error or "fresh future price request returned no valid price"
+            else:
+                source = "missing"
+                error = error or "fresh future price request returned no valid price"
+
+        results[root] = (future_prices, source, error, future_prices_path)
+    return results
 
 
 def _filter_cached_universe_to_months(
@@ -346,6 +411,11 @@ def _load_cached_chain(
             wait_max_seconds=float(settings.wait_max_seconds),
             wait_stable_seconds=float(settings.wait_stable_seconds),
             request_interval=float(settings.request_interval),
+            # The planner does not consume option volume/open-interest generic
+            # ticks. Standard top-of-book plus option computations provide the
+            # bid/ask and Greeks used by filtering without one 10090 warning per
+            # contract on partially entitled/delayed accounts.
+            generic_ticks="",
             inter_batch_pause_seconds=float(settings.inter_batch_pause_seconds),
             empty_batch_retries=int(settings.empty_batch_retries),
             empty_batch_retry_pause_seconds=float(settings.empty_batch_retry_pause_seconds),
@@ -463,6 +533,7 @@ def refresh_static_chain(
                 wait_max_seconds=float(settings.wait_max_seconds),
                 wait_stable_seconds=float(settings.wait_stable_seconds),
                 request_interval=float(settings.request_interval),
+                generic_ticks="",
                 inter_batch_pause_seconds=float(settings.inter_batch_pause_seconds),
                 empty_batch_retries=int(settings.empty_batch_retries),
                 empty_batch_retry_pause_seconds=float(settings.empty_batch_retry_pause_seconds),
