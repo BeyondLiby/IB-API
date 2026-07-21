@@ -539,13 +539,14 @@
 
     .premium-overview-layout {
       display: grid;
-      grid-template-columns: minmax(300px, 0.78fr) minmax(560px, 1.22fr);
+      grid-template-columns: minmax(320px, 0.82fr) minmax(520px, 1.14fr) minmax(390px, 1.04fr);
       gap: 14px;
-      align-items: start;
+      align-items: stretch;
     }
 
     .premium-overview-summary,
-    .premium-overview-expiry {
+    .premium-overview-expiry,
+    .premium-overview-chart {
       min-width: 0;
     }
 
@@ -553,8 +554,176 @@
       margin-bottom: 0;
     }
 
-    .premium-overview-expiry h3 {
+    .premium-overview-expiry h3,
+    .premium-overview-chart h3 {
       margin: 0 0 8px;
+    }
+
+    .premium-overview-chart {
+      display: flex;
+      flex-direction: column;
+      min-height: 230px;
+      padding: 11px 12px 8px;
+      overflow: hidden;
+      border: 1px solid #e4e7ec;
+      border-radius: 9px;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(105, 56, 239, 0.09), transparent 42%),
+        linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+    }
+
+    .premium-chart-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 3px;
+    }
+
+    .premium-chart-copy {
+      min-width: 0;
+    }
+
+    .premium-chart-copy .note {
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    .premium-chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .premium-chart-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 7px;
+      border: 1px solid #eaecf0;
+      border-radius: 999px;
+      color: #475467;
+      background: rgba(255, 255, 255, 0.86);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .premium-chart-legend i {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #6938ef;
+      box-shadow: 0 0 0 3px rgba(105, 56, 239, 0.10);
+    }
+
+    .premium-chart-legend .weighted i {
+      background: #087443;
+      box-shadow: 0 0 0 3px rgba(8, 116, 67, 0.10);
+    }
+
+    .premium-chart-legend strong {
+      color: #101828;
+      font-size: 13px;
+    }
+
+    .premium-curve-chart {
+      display: block;
+      width: 100%;
+      height: 190px;
+    }
+
+    .premium-curve-stage {
+      position: relative;
+      width: 100%;
+      min-height: 190px;
+      margin-top: auto;
+    }
+
+    .premium-curve-tooltip {
+      position: absolute;
+      z-index: 3;
+      width: max-content;
+      min-width: 220px;
+      max-width: min(280px, calc(100% - 8px));
+      padding: 10px 11px;
+      pointer-events: none;
+      border: 1px solid rgba(52, 64, 84, 0.16);
+      border-radius: 9px;
+      color: #344054;
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 10px 28px rgba(16, 24, 40, 0.16);
+      backdrop-filter: blur(8px);
+      font-size: 12px;
+    }
+
+    .premium-curve-tooltip[hidden] {
+      display: none;
+    }
+
+    .premium-tooltip-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 7px;
+      color: #101828;
+    }
+
+    .premium-tooltip-title strong {
+      font-size: 13px;
+    }
+
+    .premium-tooltip-title span {
+      color: #667085;
+      white-space: nowrap;
+    }
+
+    .premium-tooltip-grid {
+      display: grid;
+      grid-template-columns: minmax(72px, 1fr) repeat(2, minmax(58px, auto));
+      gap: 5px 10px;
+      align-items: center;
+    }
+
+    .premium-tooltip-grid .head {
+      color: #98a2b3;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .premium-tooltip-grid .series {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .premium-tooltip-grid .series::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 999px;
+      background: #6938ef;
+    }
+
+    .premium-tooltip-grid .series.weighted::before {
+      background: #087443;
+    }
+
+    .premium-tooltip-grid .value {
+      color: #101828;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .premium-tooltip-footer {
+      margin-top: 8px;
+      padding-top: 7px;
+      border-top: 1px solid #eaecf0;
+      color: #667085;
+      text-align: right;
     }
 
     .stack {
@@ -1564,6 +1733,93 @@
       min-height: 118px;
     }
 
+    .candidate-sparse-matrix {
+      display: grid;
+      min-width: 760px;
+      gap: 6px;
+    }
+
+    .candidate-sparse-head,
+    .candidate-sparse-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr);
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .candidate-sparse-head-side {
+      display: flex;
+      min-height: 46px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 10px;
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .candidate-sparse-head-side.call {
+      justify-content: flex-end;
+      border-color: #fedf89;
+      background: #fffcf5;
+      color: #b54708;
+    }
+
+    .candidate-sparse-head-side.put {
+      border-color: #b2ddff;
+      background: #f5faff;
+      color: #175cd3;
+    }
+
+    .candidate-sparse-side {
+      display: flex;
+      min-width: 0;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 6px;
+    }
+
+    .candidate-sparse-side.call {
+      justify-content: flex-end;
+    }
+
+    .candidate-strike-card {
+      display: grid;
+      width: 176px;
+      gap: 4px;
+    }
+
+    .candidate-strike-card .inventory-matrix-strike {
+      min-height: 42px;
+    }
+
+    .candidate-sparse-empty {
+      display: grid;
+      min-height: 84px;
+      flex: 1 1 176px;
+      place-items: center;
+      border: 1px dashed #d0d5dd;
+      border-radius: 7px;
+      padding: 10px;
+      background: #f9fafb;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .candidate-sparse-empty.call {
+      border-color: #fedf89;
+      background: #fffcf5;
+    }
+
+    .candidate-sparse-empty.put {
+      border-color: #b2ddff;
+      background: #f5faff;
+    }
+
     .candidate-matrix-position {
       display: grid;
       align-content: start;
@@ -2052,6 +2308,16 @@
       }
     }
 
+    @media (max-width: 1500px) {
+      .premium-overview-layout {
+        grid-template-columns: minmax(300px, 0.8fr) minmax(520px, 1.2fr);
+      }
+
+      .premium-overview-chart {
+        grid-column: 1 / -1;
+      }
+    }
+
     @media (max-width: 1100px) {
       .config-grid, .grid-5, .grid-2, .heatmaps, .compact-grid, .top-layout, .target-grid, .premium-overview-layout, .chart-toolbar, .future-price-prompt, .combo-grid, .candidate-filters, .price-chart-grid, .whatif-panel {
         grid-template-columns: 1fr;
@@ -2079,6 +2345,14 @@
 
       .product-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .premium-chart-heading {
+        flex-direction: column;
+      }
+
+      .premium-chart-legend {
+        justify-content: flex-start;
       }
     }
   </style>
@@ -2194,6 +2468,22 @@
       <div class="premium-overview-expiry">
         <h3>按到期日的权利金总览</h3>
         <div id="premiumExpiryTable" class="table-wrap"></div>
+      </div>
+      <div class="premium-overview-chart">
+        <div class="premium-chart-heading">
+          <div class="premium-chart-copy">
+            <h3>按到期日累计权利金</h3>
+            <p id="premiumCurveNote" class="note">按实际 DTE 间隔累计当前卖方库存</p>
+          </div>
+          <div class="premium-chart-legend" aria-label="累计权利金曲线图例">
+            <span><i></i>原权利金 <strong id="premiumCurveRawTotal">-</strong></span>
+            <span class="weighted"><i></i>Delta 加权 <strong id="premiumCurveWeightedTotal">-</strong></span>
+          </div>
+        </div>
+        <div class="premium-curve-stage">
+          <canvas id="premiumCurveChart" class="premium-curve-chart" width="520" height="190" aria-label="按到期日累计的原权利金与 Delta 加权权利金曲线"></canvas>
+          <div id="premiumCurveTooltip" class="premium-curve-tooltip" role="tooltip" hidden></div>
+        </div>
       </div>
     </section>
 
@@ -2433,6 +2723,7 @@
     let barsRows = [];
     let accountRows = [];
     let candidates = [];
+    let candidateEligibleCount = 0;
     let shortPositions = [];
     let futurePositions = [];
     let proposed = {};
@@ -2455,7 +2746,12 @@
     let lastHandledRefreshFinished = "";
     let livePositionPollTimer = null;
     let livePositionPollBusy = false;
+    let lastLivePositionSignature = "";
     let lastLiveSampledAt = "";
+    let renderInputTimer = null;
+    let globexTradeDateCache = new Map();
+    let chainQuoteIndexSource = null;
+    let chainQuoteIndex = null;
     let chartView = { range: "1M", zoom: 1, offset: 0 };
     let chartDrag = null;
     let inventoryChainView = "matrix";
@@ -2493,12 +2789,13 @@
     };
 
     const $ = id => document.getElementById(id);
-    const controls = [
-      "activeUnderlying", "capital", "targetReturn", "realizedPnl", "remainingDays", "manualFuturePrice",
+    const numericControls = [
+      "capital", "targetReturn", "realizedPnl", "remainingDays", "manualFuturePrice",
       "highDeltaPremiumThreshold", "equivalentFutureDeltaThreshold", "equivalentFutureMinIntrinsicTicks", "equivalentFutureMaxTimeValueTicks",
-      "inventoryDtePreset", "putStrikeMin", "callStrikeMax", "creditSource", "candidateLimit", "heatMetric"
+      "putStrikeMin", "callStrikeMax", "candidateLimit"
     ];
-    controls.forEach(id => $(id).addEventListener("input", render));
+    numericControls.forEach(id => $(id).addEventListener("input", scheduleRender));
+    ["inventoryDtePreset", "creditSource", "heatMetric"].forEach(id => $(id).addEventListener("change", render));
     ["putDeltaChoices", "callDeltaChoices", "candidateDteChoices"].forEach(id => $(id).addEventListener("change", () => {
       choiceUserTouched[id] = true;
       render();
@@ -2825,6 +3122,9 @@
         const payload = await response.json().catch(() => ({}));
         updatePortfolioQuoteStatus(payload, response.ok ? "" : (payload.error || `HTTP ${response.status}`));
         if (!response.ok || !payload.connected || !Array.isArray(payload.positions) || !Array.isArray(payload.futures)) return;
+        const signature = livePositionSnapshotSignature(payload);
+        if (signature === lastLivePositionSignature) return;
+        lastLivePositionSignature = signature;
         positionRows = mergeLivePositionRows(positionRows, payload.positions);
         futurePriceRows = mergeLiveFutureRows(futurePriceRows, payload.futures);
         renderLivePositionViews();
@@ -2833,6 +3133,18 @@
       } finally {
         livePositionPollBusy = false;
       }
+    }
+
+    function livePositionSnapshotSignature(payload = {}) {
+      const positionFields = ["conId", "position", "marketPrice", "marketValue", "unrealizedPnL", "bid", "ask", "mid", "delta", "gamma", "theta", "vega", "underlyingPrice"];
+      const futureFields = ["conId", "root", "symbol", "month", "position", "price", "marketPrice", "bid", "ask", "mid", "last"];
+      const compact = (rows, fields) => (rows || [])
+        .map(row => fields.map(field => row && row[field] !== undefined ? row[field] : null))
+        .sort((a, b) => String(a[0] || "").localeCompare(String(b[0] || "")));
+      return JSON.stringify({
+        positions: compact(payload.positions, positionFields),
+        futures: compact(payload.futures, futureFields)
+      });
     }
 
     function mergeLivePositionRows(existingRows, liveRows) {
@@ -3584,6 +3896,18 @@
       matrixButton.setAttribute("aria-pressed", String(!chainActive));
     }
 
+    function scheduleRender() {
+      if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
+        render();
+        return;
+      }
+      if (renderInputTimer) window.clearTimeout(renderInputTimer);
+      renderInputTimer = window.setTimeout(() => {
+        renderInputTimer = null;
+        render();
+      }, 100);
+    }
+
     function render() {
       try {
         syncFilterChoices();
@@ -3596,6 +3920,7 @@
         const inventory = aggregateInventory(shortPositions, cfg);
         const pressure = targetPressure(shortPositions, cfg);
         const scoredCandidates = scanCandidates(chainRows, shortPositions, cfg, pressure, inventory);
+        candidateEligibleCount = scoredCandidates.length;
         candidates = buildCandidateDisplayRows(candidateRowsWithInventory(scoredCandidates, allShortPositions, cfg), cfg);
         renderTargetSummary(pressure, shortPositions);
         renderInventory(inventory, futurePositions, cfg);
@@ -3787,7 +4112,7 @@
           expiry: txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth),
           dte,
           bucket: dteLabel(dte),
-          dateBand: dateBandFor(row.expiry || row.expiration || row.lastTradeDateOrContractMonth, dte),
+          dateBand: dateBandFor(row.expiry || row.expiration || row.lastTradeDateOrContractMonth, dte, underlying),
           right,
           strike,
           position,
@@ -4004,6 +4329,7 @@
       const ref = referencePriceFor(cfg.underlying, rows, positions, cfg, futurePositions);
       const spot = ref.price;
       const latestSnapshot = latestProductSnapshotMs(rows, cfg.underlying);
+      const deltaContext = buildCandidateDeltaContext(rows, cfg.underlying);
       return rows.map((row, index) => {
         const underlying = productOf(row);
         const right = normRight(row.right || row.direction);
@@ -4016,7 +4342,7 @@
         if (!Number.isFinite(strike)) return null;
         const rowSpot = rowReferencePrice(row, underlying, spot);
         if (!strikeWithinOpenWindow(strike, right, rowSpot, cfg)) return null;
-        const deltaInfo = candidateDeltaInfo(row, right, rows);
+        const deltaInfo = candidateDeltaInfo(row, right, rows, deltaContext);
         const delta = deltaInfo.value;
         const absDelta = Math.abs(delta);
         const maxDelta = right === "P" ? cfg.putDeltaMax : cfg.callDeltaMax;
@@ -4033,7 +4359,7 @@
         const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
         const current = currentInventoryFor(positions, { underlying, right, strike, expiry, dte });
         const bucket = dteLabel(dte);
-        const dateBand = dateBandFor(expiry, dte);
+        const dateBand = dateBandFor(expiry, dte, underlying);
         const node = `${underlying}-${right}-${num(strike, 3)}`;
         const gamma = firstNum(row.gamma, row.modelGreeks_gamma, row.bidGreeks_gamma, row.askGreeks_gamma, 0);
         const theta = firstNum(row.theta, row.modelGreeks_theta, row.bidGreeks_theta, row.askGreeks_theta, 0);
@@ -4109,10 +4435,13 @@
     }
 
     function buildCandidateDisplayRows(scoredRows, cfg) {
+      const limit = Math.max(Math.floor(firstNum(cfg.candidateLimit, 80)), 10);
       return scoredRows
         .filter(row => row.underlying === cfg.underlying)
         .filter(row => Number.isFinite(row.bid) && row.bid > 0)
         .filter(row => Number.isFinite(row.finalScore))
+        .sort((a, b) => b.finalScore - a.finalScore)
+        .slice(0, limit)
         .sort((a, b) => Math.max(0, Math.round(a.dte)) - Math.max(0, Math.round(b.dte)) || b.finalScore - a.finalScore);
     }
 
@@ -4302,6 +4631,286 @@
       renderTable("premiumExpiryTable", expiryRows, ["expiry", "dte", "products", "contracts", "remainingPremium", "weightedPremium"], {
         expiry: "到期日", dte: "DTE", products: "品种", contracts: "张数", remainingPremium: "剩余权利金", weightedPremium: "Delta 加权期权金"
       });
+      renderPremiumCurve(premiumCumulativeRows(expiryRows));
+    }
+
+    function premiumCumulativeRows(rows) {
+      let remainingPremium = 0;
+      let weightedPremium = 0;
+      return rows.slice()
+        .sort((a, b) => a.dte - b.dte || a.expiry.localeCompare(b.expiry))
+        .map(row => {
+          const raw = Math.max(Number(row.remainingPremium) || 0, 0);
+          const weighted = Math.min(Math.max(Number(row.weightedPremium) || 0, 0), raw);
+          remainingPremium += raw;
+          weightedPremium += weighted;
+          return { ...row, cumulativePremium: remainingPremium, cumulativeWeightedPremium: weightedPremium };
+        });
+    }
+
+    function renderPremiumCurve(rows) {
+      const last = rows[rows.length - 1];
+      const totalPremium = last ? last.cumulativePremium : 0;
+      const weightedPremium = last ? last.cumulativeWeightedPremium : 0;
+      $("premiumCurveRawTotal").textContent = money(totalPremium);
+      $("premiumCurveWeightedTotal").textContent = money(weightedPremium);
+      $("premiumCurveNote").textContent = rows.length
+        ? `${rows.length} 个到期日 · 横轴按实际 DTE 间隔 · 阴影为风险折减 ${money(Math.max(totalPremium - weightedPremium, 0))}`
+        : "暂无卖方库存，刷新持仓后显示累计曲线";
+      $("premiumCurveTooltip").hidden = true;
+      const canvas = $("premiumCurveChart");
+      drawPremiumCurve(canvas, rows);
+      bindPremiumCurveTooltip(canvas);
+    }
+
+    function drawPremiumCurve(canvas, rows, hoverIndex = -1) {
+      const ctx = canvas && canvas.getContext && canvas.getContext("2d");
+      if (!ctx) return;
+      const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { width: 520, height: 190 };
+      const scale = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+      const width = Math.max(Math.floor(rect.width || 520), 300);
+      const height = Math.max(Math.floor(rect.height || 190), 175);
+      canvas.width = Math.floor(width * scale);
+      canvas.height = Math.floor(height * scale);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      canvas._premiumCurveState = { rows, points: [], width, height, hoverIndex };
+      if (!rows.length) {
+        ctx.fillStyle = "#667085";
+        ctx.font = "13px Segoe UI, Arial";
+        ctx.fillText("暂无可绘制的权利金数据", 14, 34);
+        return;
+      }
+
+      const pad = { left: 49, right: 18, top: 14, bottom: 40 };
+      const plotWidth = width - pad.left - pad.right;
+      const plotHeight = height - pad.top - pad.bottom;
+      const minDte = Math.min(...rows.map(row => row.dte));
+      const maxDte = Math.max(...rows.map(row => row.dte));
+      const dteSpan = Math.max(maxDte - minDte, 1);
+      const maxPremium = Math.max(...rows.map(row => row.cumulativePremium), 1);
+      const x = row => rows.length === 1
+        ? pad.left + plotWidth / 2
+        : pad.left + (row.dte - minDte) / dteSpan * plotWidth;
+      const y = value => pad.top + (maxPremium - value) / maxPremium * plotHeight;
+      const plotBottom = pad.top + plotHeight;
+      canvas._premiumCurveState.points = rows.map((row, index) => ({
+        index,
+        row,
+        x: x(row),
+        rawY: y(row.cumulativePremium),
+        weightedY: y(row.cumulativeWeightedPremium)
+      }));
+
+      ctx.strokeStyle = "#e4e7ec";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "#667085";
+      ctx.font = "11px Segoe UI, Arial";
+      ctx.textAlign = "right";
+      for (let index = 0; index < 4; index++) {
+        const value = maxPremium * (3 - index) / 3;
+        const yy = pad.top + plotHeight * index / 3;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yy);
+        ctx.lineTo(width - pad.right, yy);
+        ctx.stroke();
+        ctx.fillText(compactPremiumTick(value), pad.left - 7, yy + 3);
+      }
+
+      const tickIndexes = chartTickIndexes(rows.length);
+      ctx.setLineDash([3, 5]);
+      ctx.strokeStyle = "#eaecf0";
+      tickIndexes.forEach(index => {
+        const xx = x(rows[index]);
+        ctx.beginPath();
+        ctx.moveTo(xx, pad.top);
+        ctx.lineTo(xx, plotBottom);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+
+      const premiumArea = ctx.createLinearGradient(0, pad.top, 0, plotBottom);
+      premiumArea.addColorStop(0, "rgba(105, 56, 239, 0.18)");
+      premiumArea.addColorStop(1, "rgba(105, 56, 239, 0.015)");
+      ctx.beginPath();
+      rows.forEach((row, index) => {
+        const xx = x(row);
+        const yy = y(row.cumulativePremium);
+        if (index === 0) ctx.moveTo(xx, yy);
+        else ctx.lineTo(xx, yy);
+      });
+      ctx.lineTo(x(rows[rows.length - 1]), plotBottom);
+      ctx.lineTo(x(rows[0]), plotBottom);
+      ctx.closePath();
+      ctx.fillStyle = premiumArea;
+      ctx.fill();
+
+      ctx.beginPath();
+      rows.forEach((row, index) => {
+        const xx = x(row);
+        const yy = y(row.cumulativePremium);
+        if (index === 0) ctx.moveTo(xx, yy);
+        else ctx.lineTo(xx, yy);
+      });
+      rows.slice().reverse().forEach(row => ctx.lineTo(x(row), y(row.cumulativeWeightedPremium)));
+      ctx.closePath();
+      ctx.fillStyle = "rgba(217, 45, 32, 0.085)";
+      ctx.fill();
+
+      const strokeSeries = (field, color) => {
+        ctx.beginPath();
+        rows.forEach((row, index) => {
+          const xx = x(row);
+          const yy = y(row[field]);
+          if (index === 0) ctx.moveTo(xx, yy);
+          else ctx.lineTo(xx, yy);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
+      };
+      strokeSeries("cumulativePremium", "#6938ef");
+      strokeSeries("cumulativeWeightedPremium", "#087443");
+
+      const pointIndexes = rows.length <= 14 ? rows.map((_, index) => index) : tickIndexes;
+      pointIndexes.forEach(index => {
+        const row = rows[index];
+        [["cumulativePremium", "#6938ef"], ["cumulativeWeightedPremium", "#087443"]].forEach(([field, color]) => {
+          ctx.beginPath();
+          ctx.arc(x(row), y(row[field]), 3.2, 0, Math.PI * 2);
+          ctx.fillStyle = "#ffffff";
+          ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+      });
+
+      if (hoverIndex >= 0 && rows[hoverIndex]) {
+        const row = rows[hoverIndex];
+        const xx = x(row);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pad.left, pad.top, plotWidth, plotHeight);
+        ctx.clip();
+        ctx.setLineDash([3, 4]);
+        ctx.strokeStyle = "rgba(71, 84, 103, 0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(xx, pad.top);
+        ctx.lineTo(xx, plotBottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        [["cumulativePremium", "#6938ef"], ["cumulativeWeightedPremium", "#087443"]].forEach(([field, color]) => {
+          ctx.beginPath();
+          ctx.arc(xx, y(row[field]), 5.2, 0, Math.PI * 2);
+          ctx.fillStyle = "#ffffff";
+          ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
+      ctx.textAlign = "center";
+      ctx.font = "11px Segoe UI, Arial";
+      tickIndexes.forEach(index => {
+        const row = rows[index];
+        const xx = x(row);
+        ctx.fillStyle = "#344054";
+        ctx.fillText(row.dte === 0 ? "今天" : `${row.dte}D`, xx, height - 19);
+        ctx.fillStyle = "#98a2b3";
+        ctx.fillText(String(row.expiry || "").slice(5), xx, height - 6);
+      });
+      ctx.textAlign = "left";
+    }
+
+    function bindPremiumCurveTooltip(canvas) {
+      if (!canvas || !canvas.addEventListener || canvas.dataset.premiumTooltipBound === "true") return;
+      canvas.dataset.premiumTooltipBound = "true";
+      const show = event => {
+        const state = canvas._premiumCurveState;
+        const tooltip = $("premiumCurveTooltip");
+        if (!state || !state.points.length || !tooltip || !canvas.getBoundingClientRect) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = Number.isFinite(event.clientX)
+          ? event.clientX
+          : event.touches && event.touches[0] ? event.touches[0].clientX : NaN;
+        if (!Number.isFinite(clientX) || !rect.width) return;
+        const localX = (clientX - rect.left) * state.width / rect.width;
+        const closest = state.points.reduce((best, point) =>
+          Math.abs(point.x - localX) < Math.abs(best.x - localX) ? point : best
+        );
+        const distance = Math.abs(closest.x - localX) * rect.width / state.width;
+        const tolerance = event.pointerType === "touch" ? 38 : 24;
+        if (distance > tolerance) {
+          hidePremiumCurveTooltip(canvas);
+          return;
+        }
+        if (state.hoverIndex !== closest.index) drawPremiumCurve(canvas, state.rows, closest.index);
+        tooltip.innerHTML = premiumCurveTooltipHtml(closest.row);
+        tooltip.hidden = false;
+        canvas.style.cursor = "crosshair";
+
+        const stage = tooltip.parentElement;
+        if (!stage || !stage.getBoundingClientRect) return;
+        const stageRect = stage.getBoundingClientRect();
+        const pointX = rect.left - stageRect.left + closest.x * rect.width / state.width;
+        const pointY = rect.top - stageRect.top + Math.min(closest.rawY, closest.weightedY) * rect.height / state.height;
+        const tooltipWidth = tooltip.offsetWidth || 220;
+        const tooltipHeight = tooltip.offsetHeight || 118;
+        let left = pointX + 12;
+        if (left + tooltipWidth > stageRect.width - 4) left = pointX - tooltipWidth - 12;
+        left = Math.max(4, Math.min(left, stageRect.width - tooltipWidth - 4));
+        let top = pointY - tooltipHeight - 10;
+        if (top < 4) top = pointY + 12;
+        top = Math.max(4, Math.min(top, stageRect.height - tooltipHeight - 4));
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
+      canvas.addEventListener("pointermove", show);
+      canvas.addEventListener("pointerdown", show);
+      canvas.addEventListener("pointerleave", () => hidePremiumCurveTooltip(canvas));
+    }
+
+    function hidePremiumCurveTooltip(canvas) {
+      const tooltip = $("premiumCurveTooltip");
+      if (tooltip) tooltip.hidden = true;
+      if (!canvas) return;
+      canvas.style.cursor = "default";
+      const state = canvas._premiumCurveState;
+      if (state && state.hoverIndex >= 0) drawPremiumCurve(canvas, state.rows);
+    }
+
+    function premiumCurveTooltipHtml(row) {
+      const cumulativeReduction = Math.max(row.cumulativePremium - row.cumulativeWeightedPremium, 0);
+      return `
+        <div class="premium-tooltip-title">
+          <strong>${premiumTooltipEscape(row.expiry)}</strong>
+          <span>${num(row.dte, 0)}DTE · ${premiumTooltipEscape(row.products || "全部品种")}</span>
+        </div>
+        <div class="premium-tooltip-grid">
+          <span></span><span class="head">该到期日</span><span class="head">累计</span>
+          <span class="series">原权利金</span><span class="value">${money(row.remainingPremium)}</span><span class="value">${money(row.cumulativePremium)}</span>
+          <span class="series weighted">Delta 加权</span><span class="value">${money(row.weightedPremium)}</span><span class="value">${money(row.cumulativeWeightedPremium)}</span>
+        </div>
+        <div class="premium-tooltip-footer">累计风险折减 <strong>${money(cumulativeReduction)}</strong></div>`;
+    }
+
+    function premiumTooltipEscape(value) {
+      return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[character]));
+    }
+
+    function compactPremiumTick(value) {
+      const absolute = Math.abs(value);
+      if (absolute >= 1000000) return `$${num(value / 1000000, 1)}m`;
+      if (absolute >= 1000) return `$${num(value / 1000, 1)}k`;
+      return `$${num(value, 0)}`;
     }
 
     function configForUnderlying(baseCfg, underlying) {
@@ -4685,8 +5294,11 @@
         ? `；另有 ${staleQuoteCount} 条报价落后该品种最新快照超过 ${MAX_CANDIDATE_SNAPSHOT_LAG_HOURS} 小时，已排除，避免新旧报价混用`
         : "";
       const matrixView = candidateChainView === "matrix";
-      const viewNote = matrixView ? "矩阵以 DTE/现价为中轴并按 Strike 高低分左右；ITM 当前持仓会跨轴归位" : "期权链视角按中间 Strike、两侧 DTE 展开";
-      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；DTE：${dteText}；${viewNote}；只显示满足 Delta、OTM、Strike、bid>0 且快照一致的可交易候选：Call Delta ≤ ${num(cfg.callDeltaMax, 2)}、Strike ≤ ${num(cfg.callStrikeMax, 3)}；Put Delta ≤ ${num(cfg.putDeltaMax, 2)}、Strike ≥ ${num(cfg.putStrikeMin, 3)}${estimatedDeltaNote}${staleNote}。空白格表示该 Strike/DTE 没有合约，或报价/筛选条件不满足；当前持仓请在上方“当前库存行权节点”查看。`;
+      const viewNote = matrixView ? "按 DTE 分行，只渲染真实合格候选；没有候选的一侧会明确标注原因" : "期权链视角按中间 Strike、两侧 DTE 展开";
+      const candidateCountNote = candidateEligibleCount > rows.length
+        ? `合格候选 ${candidateEligibleCount} 个，按综合评分显示前 ${rows.length} 个`
+        : `合格候选 ${rows.length} 个，已全部显示`;
+      $("candidateNote").textContent = `当前品种 ${cfg.underlying}；${candidateCountNote}；DTE：${dteText}；${viewNote}；筛选条件：Call Delta ≤ ${num(cfg.callDeltaMax, 2)}、OTM 且 Strike ≤ ${num(cfg.callStrikeMax, 3)}；Put Delta ≤ ${num(cfg.putDeltaMax, 2)}、OTM 且 Strike ≥ ${num(cfg.putStrikeMin, 3)}；同时要求 bid>0 且快照一致${estimatedDeltaNote}${staleNote}。当前持仓请在上方“当前库存行权节点”查看。`;
       syncCandidateChainViewControls();
       const options = {
         editable: true,
@@ -5016,26 +5628,49 @@
       };
     }
 
+    function ensureChainQuoteIndex() {
+      if (chainQuoteIndexSource === chainRows && chainQuoteIndex) return chainQuoteIndex;
+      const byConId = new Map();
+      const byExpiryStrike = new Map();
+      const byDteStrike = new Map();
+      const append = (map, key, row) => {
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(row);
+      };
+      chainRows.forEach(row => {
+        const underlying = productOf(row);
+        const right = normRight(row.right || row.direction);
+        const strike = strikeOf(row, underlying);
+        if (!underlying || (right !== "C" && right !== "P") || !Number.isFinite(strike)) return;
+        const conId = toNum(row.conId);
+        const expiry = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth);
+        const dte = Math.max(0, Math.round(dteFromRow(row)));
+        if (Number.isFinite(conId)) append(byConId, `${underlying}|${right}|${Math.trunc(conId)}`, row);
+        if (expiry) append(byExpiryStrike, `${underlying}|${right}|${strike.toFixed(4)}|${expiry}`, row);
+        if (Number.isFinite(dte)) append(byDteStrike, `${underlying}|${right}|${strike.toFixed(4)}|${dte}`, row);
+      });
+      chainQuoteIndexSource = chainRows;
+      chainQuoteIndex = { byConId, byExpiryStrike, byDteStrike };
+      return chainQuoteIndex;
+    }
+
     function quoteForPosition(row, cfg) {
       const right = normRight(row.right);
       const strike = toNum(row.strike);
       const expiry = txt(row.expiry);
       const dte = Math.max(0, Math.round(row.dte));
       const rowConId = toNum(row.conId);
-      const productRows = chainRows
-        .filter(candidate => productOf(candidate) === cfg.underlying)
-        .filter(candidate => normRight(candidate.right || candidate.direction) === right);
+      const index = ensureChainQuoteIndex();
+      const strikeKey = Number.isFinite(strike) ? strike.toFixed(4) : "";
       const exactConIdRows = Number.isFinite(rowConId)
-        ? productRows.filter(candidate => toNum(candidate.conId) === rowConId)
+        ? (index.byConId.get(`${cfg.underlying}|${right}|${Math.trunc(rowConId)}`) || [])
         : [];
-      const sameStrikeRows = productRows
-        .filter(candidate => Math.abs(strikeOf(candidate, cfg.underlying) - strike) < 0.0001);
-      const exactExpiryRows = sameStrikeRows.filter(candidate => (
-        txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth) === expiry
-      ));
-      const sameDteRows = sameStrikeRows.filter(candidate => (
-        Math.max(0, Math.round(dteFromRow(candidate))) === dte
-      ));
+      const exactExpiryRows = expiry && strikeKey
+        ? (index.byExpiryStrike.get(`${cfg.underlying}|${right}|${strikeKey}|${expiry}`) || [])
+        : [];
+      const sameDteRows = strikeKey
+        ? (index.byDteStrike.get(`${cfg.underlying}|${right}|${strikeKey}|${dte}`) || [])
+        : [];
       const matchingRows = exactConIdRows.length
         ? exactConIdRows
         : (exactExpiryRows.length ? exactExpiryRows : sameDteRows);
@@ -5200,36 +5835,49 @@
 
     function candidateStrikeDteHtml(rows, cfg, options = {}) {
       const productRows = rows.filter(row => row.underlying === cfg.underlying);
-      if (!productRows.length) return `<div class="note">当前品种暂无可展示期权链。</div>`;
+      if (!productRows.length) return `<div class="note">当前筛选条件下没有合格候选。可放宽 Delta、Strike 或 DTE 条件，并确认报价 bid&gt;0。</div>`;
       const ref = referencePriceFor(cfg.underlying, chainRows, shortPositions, cfg, options.futures || []);
       const spot = ref.price;
       const dtes = unifiedDtes(productRows, options.displayDtes);
       const dteDates = dteDateLabels(options.dteRows || productRows);
-      const axis = matrixAxisEntries(productRows, spot);
-      const nearestLeft = nearestMatrixEntry(axis.left, spot);
-      const nearestRight = nearestMatrixEntry(axis.right, spot);
-      const colTemplate = `${axis.left.map(() => "176px").join(" ")} 116px ${axis.right.map(() => "176px").join(" ")}`.trim();
       const cells = [
-        ...axis.left.map(entry => matrixStrikeHeader(entry, nearestLeft)),
-        `<div class="inventory-matrix-center-head"><strong>DTE ↓</strong><small>高 Strike ← · → 低 Strike</small>${Number.isFinite(spot) ? `<small>当前期货价 ${num(spot, 3)}</small>` : ""}</div>`,
-        ...axis.right.map(entry => matrixStrikeHeader(entry, nearestRight))
+        `<div class="candidate-sparse-head"><div class="candidate-sparse-head-side call">Call · 高 Strike → 近现价</div><div class="inventory-matrix-center-head"><strong>DTE ↓</strong><small>高 Strike ← · → 低 Strike</small>${Number.isFinite(spot) ? `<small>当前期货价 ${num(spot, 3)}</small>` : ""}</div><div class="candidate-sparse-head-side put">Put · 近现价 → 低 Strike</div></div>`
       ];
       dtes.forEach(dte => {
-        axis.left.forEach(entry => {
-          const matchingRows = matrixRowsAt(productRows, entry, dte);
-          const nearSpot = matrixEntryMatches(entry, nearestLeft);
-          const side = entry.right === "C" ? "call" : "put";
-          cells.push(candidateMatrixCell(matchingRows, entry.strike, spot, nearSpot, side));
-        });
-        cells.push(`<div class="inventory-matrix-dte">${dte}DTE${matrixDteDateLabel(dte, dteDates)}</div>`);
-        axis.right.forEach(entry => {
-          const matchingRows = matrixRowsAt(productRows, entry, dte);
-          const nearSpot = matrixEntryMatches(entry, nearestRight);
-          const side = entry.right === "C" ? "call" : "put";
-          cells.push(candidateMatrixCell(matchingRows, entry.strike, spot, nearSpot, side));
-        });
+        const dteRows = productRows.filter(row => Math.max(0, Math.round(row.dte)) === dte);
+        const callGroups = candidateStrikeGroups(dteRows, "C");
+        const putGroups = candidateStrikeGroups(dteRows, "P");
+        cells.push(`<div class="candidate-sparse-row"><div class="candidate-sparse-side call">${candidateSparseSideHtml(callGroups, spot, "call")}</div><div class="inventory-matrix-dte">${dte}DTE${matrixDteDateLabel(dte, dteDates)}</div><div class="candidate-sparse-side put">${candidateSparseSideHtml(putGroups, spot, "put")}</div></div>`);
       });
-      return `<div class="inventory-matrix-wrap candidate-matrix-wrap"><div class="inventory-matrix candidate-matrix" style="grid-template-columns:${colTemplate}">${cells.join("")}</div></div>`;
+      return `<div class="inventory-matrix-wrap candidate-matrix-wrap"><div class="candidate-matrix candidate-sparse-matrix">${cells.join("")}</div></div>`;
+    }
+
+    function candidateStrikeGroups(rows, right) {
+      const groups = new Map();
+      rows.filter(row => row.right === right && Number.isFinite(row.strike)).forEach(row => {
+        const key = row.strike.toFixed(6);
+        if (!groups.has(key)) groups.set(key, { right, strike: row.strike, rows: [] });
+        groups.get(key).rows.push(row);
+      });
+      return Array.from(groups.values())
+        .map(group => ({ ...group, rows: group.rows.sort((a, b) => b.finalScore - a.finalScore) }))
+        .sort((a, b) => b.strike - a.strike);
+    }
+
+    function candidateSparseSideHtml(groups, spot, side) {
+      if (!groups.length) {
+        const label = side === "call" ? "Call" : "Put";
+        return `<div class="candidate-sparse-empty ${side}">该 DTE 当前未显示 ${label}：没有合格候选，或综合评分未进入显示数量范围</div>`;
+      }
+      const nearest = groups.reduce((best, group) => (
+        !best || Math.abs(group.strike - spot) < Math.abs(best.strike - spot) ? group : best
+      ), null);
+      return groups.map(group => {
+        const entry = { right: group.right, strike: group.strike, itm: false };
+        const header = matrixStrikeHeader(entry, nearest);
+        const positions = candidateMatrixCell(group.rows, group.strike, spot, matrixEntryMatches(group, nearest), side);
+        return `<div class="candidate-strike-card">${header}${positions}</div>`;
+      }).join("");
     }
 
     function candidateMatrixCell(rows, strike, spot, nearSpot, side) {
@@ -5806,41 +6454,56 @@
 
     function dteFromRow(row) {
       const raw = txt(row.expiry || row.expiration || row.lastTradeDateOrContractMonth).slice(0, 10).replace(/-/g, "");
-      const fromExpiry = dteFromExpiry(raw);
+      const fromExpiry = dteFromExpiry(raw, productOf(row));
       if (Number.isFinite(fromExpiry)) return fromExpiry;
       const explicit = toNum(row.DTE ?? row.dte);
       if (Number.isFinite(explicit)) return Math.round(explicit);
       return 999;
     }
 
-    function dteFromExpiry(value) {
+    function dteFromExpiry(value, underlying = "", now = new Date()) {
       const raw = txt(value).slice(0, 10).replace(/-/g, "");
       if (!/^\d{8}$/.test(raw)) return NaN;
       const expiry = utcDateFromYmd(raw);
-      const todayParts = easternTodayParts();
-      const today = Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day);
-      return Math.round((expiry - today) / 86400000);
+      const tradeDate = globexTradeDateParts(now, underlying);
+      const tradeDateUtc = Date.UTC(tradeDate.year, tradeDate.month - 1, tradeDate.day);
+      return Math.round((expiry - tradeDateUtc) / 86400000);
     }
 
     function utcDateFromYmd(raw) {
       return Date.UTC(Number(raw.slice(0, 4)), Number(raw.slice(4, 6)) - 1, Number(raw.slice(6, 8)));
     }
 
-    function easternTodayParts(now = new Date()) {
+    function globexTradeDateParts(now = new Date(), underlying = "") {
+      const product = txt(underlying).toUpperCase();
+      const rolloverHour = product === "ZC" ? 19 : 17;
+      const hour = Math.floor(now.getTime() / 3600000);
+      const cacheKey = `${hour}|${rolloverHour}`;
+      if (globexTradeDateCache.has(cacheKey)) return globexTradeDateCache.get(cacheKey);
       const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
+        timeZone: "America/Chicago",
         year: "numeric",
         month: "2-digit",
-        day: "2-digit"
+        day: "2-digit",
+        hour: "2-digit",
+        hourCycle: "h23"
       }).formatToParts(now).reduce((acc, part) => {
         acc[part.type] = part.value;
         return acc;
       }, {});
-      return {
-        year: Number(parts.year),
-        month: Number(parts.month),
-        day: Number(parts.day)
+      let tradeDateUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+      const weekday = new Date(tradeDateUtc).getUTCDay();
+      const sessionRollsForward = (weekday === 0 || (weekday >= 1 && weekday <= 4))
+        && Number(parts.hour) >= rolloverHour;
+      if (sessionRollsForward) tradeDateUtc += 86400000;
+      const tradeDate = new Date(tradeDateUtc);
+      const value = {
+        year: tradeDate.getUTCFullYear(),
+        month: tradeDate.getUTCMonth() + 1,
+        day: tradeDate.getUTCDate()
       };
+      globexTradeDateCache.set(cacheKey, value);
+      return value;
     }
 
     function dteLabel(dte) {
@@ -5849,8 +6512,8 @@
       return `${Math.round(dte)}DTE`;
     }
 
-    function expiryLabelFromExpiry(expiry) {
-      return dteLabel(dteFromExpiry(expiry));
+    function expiryLabelFromExpiry(expiry, underlying = "") {
+      return dteLabel(dteFromExpiry(expiry, underlying));
     }
 
     function dteFromLabel(label) {
@@ -5858,12 +6521,12 @@
       return match ? Number(match[1]) : 999;
     }
 
-    function dateBandFor(expiry, dte) {
+    function dateBandFor(expiry, dte, underlying = "") {
       const raw = txt(expiry).slice(0, 10).replace(/-/g, "");
       if (/^\d{8}$/.test(raw)) {
         const expiryDate = new Date(utcDateFromYmd(raw));
-        const todayParts = easternTodayParts();
-        const today = new Date(Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day));
+        const tradeDate = globexTradeDateParts(new Date(), underlying);
+        const today = new Date(Date.UTC(tradeDate.year, tradeDate.month - 1, tradeDate.day));
         const day = today.getUTCDay();
         const daysToSunday = day === 0 ? 0 : 7 - day;
         const thisWeekEnd = new Date(today);
@@ -5998,7 +6661,41 @@
       return lagHours <= MAX_CANDIDATE_SNAPSHOT_LAG_HOURS + EPS;
     }
 
-    function candidateDeltaInfo(row, right, peers = chainRows) {
+    function buildCandidateDeltaContext(peers, underlying) {
+      const pairs = new Map();
+      (peers || []).forEach(candidate => {
+        if (productOf(candidate) !== underlying) return;
+        const right = normRight(candidate.right || candidate.direction);
+        if (right !== "C" && right !== "P") return;
+        const expiry = txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth);
+        const strike = strikeOf(candidate, underlying);
+        if (!expiry || !Number.isFinite(strike)) return;
+        const key = `${expiry}|${strike.toFixed(4)}`;
+        if (!pairs.has(key)) pairs.set(key, {});
+        const pair = pairs.get(key);
+        pair[right] = candidate;
+      });
+      const parityValues = new Map();
+      pairs.forEach((pair, key) => {
+        if (!pair.C || !pair.P) return;
+        const callDelta = directSignedDelta(pair.C, "C");
+        const putDelta = directSignedDelta(pair.P, "P");
+        const factor = callDelta - putDelta;
+        if (!Number.isFinite(factor) || factor < 0.8 || factor > 1.05) return;
+        const expiry = key.slice(0, key.indexOf("|"));
+        if (!parityValues.has(expiry)) parityValues.set(expiry, []);
+        parityValues.get(expiry).push(factor);
+      });
+      const parityByExpiry = new Map();
+      parityValues.forEach((values, expiry) => {
+        values.sort((a, b) => a - b);
+        const middle = Math.floor(values.length / 2);
+        parityByExpiry.set(expiry, values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2);
+      });
+      return { underlying, pairs, parityByExpiry };
+    }
+
+    function candidateDeltaInfo(row, right, peers = chainRows, context = null) {
       const direct = directSignedDelta(row, right);
       if (Number.isFinite(direct) && Math.abs(direct) > EPS) {
         return { value: direct, estimated: false, source: "direct" };
@@ -6008,18 +6705,23 @@
       const underlying = productOf(row);
       const strike = strikeOf(row, underlying);
       const oppositeRight = right === "P" ? "C" : "P";
-      const opposite = peers.find(candidate => (
-        productOf(candidate) === underlying
-        && txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth) === expiry
-        && normRight(candidate.right || candidate.direction) === oppositeRight
-        && Math.abs(strikeOf(candidate, underlying) - strike) < 0.0001
-      ));
+      const indexedPair = context && context.underlying === underlying && Number.isFinite(strike)
+        ? context.pairs.get(`${expiry}|${strike.toFixed(4)}`)
+        : null;
+      const opposite = indexedPair ? indexedPair[oppositeRight] : peers.find(candidate => (
+          productOf(candidate) === underlying
+          && txt(candidate.expiry || candidate.expiration || candidate.lastTradeDateOrContractMonth) === expiry
+          && normRight(candidate.right || candidate.direction) === oppositeRight
+          && Math.abs(strikeOf(candidate, underlying) - strike) < 0.0001
+        ));
       const oppositeDelta = opposite ? directSignedDelta(opposite, oppositeRight) : NaN;
       if (!Number.isFinite(oppositeDelta)) {
         return { value: NaN, estimated: false, source: "missing" };
       }
 
-      const parityFactor = putCallDeltaParityFactor(row, peers);
+      const parityFactor = context && context.underlying === underlying
+        ? firstNum(context.parityByExpiry.get(expiry), 1)
+        : putCallDeltaParityFactor(row, peers);
       const estimated = right === "P"
         ? oppositeDelta - parityFactor
         : oppositeDelta + parityFactor;

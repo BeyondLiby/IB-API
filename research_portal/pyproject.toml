@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sell-side-research-portal"
+version = "0.1.0"
+description = "Authorized JPMorgan Markets and Goldman Sachs Marquee research collector"
+requires-python = ">=3.10"
+dependencies = [
+  "playwright>=1.49,<2",
+]
+
+[project.scripts]
+research-portal = "portal_crawler.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["portal_crawler*"]
+

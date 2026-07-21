@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: sell-side-research-portal
+Version: 0.1.0
+Summary: Authorized JPMorgan Markets and Goldman Sachs Marquee research collector
+Requires-Python: >=3.10
+Requires-Dist: playwright<2,>=1.49

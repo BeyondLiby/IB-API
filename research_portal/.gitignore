@@ -1,0 +1,10 @@
+.venv/
+.local/
+data/
+*.db
+*.sqlite
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+

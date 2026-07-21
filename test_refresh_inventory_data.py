@@ -24,8 +24,12 @@ from target_treasury_monitor_clean import cli as clean_cli
 from target_treasury_monitor_clean.cli import _effective_option_batch_size
 from target_treasury_monitor_clean.cli import _product_filter_widths
 from refresh_inventory_data import run_scheduled_refresh
+from refresh_inventory_data import build_refresh_command
+from refresh_inventory_data import chain_coverage_issues_by_product
 from refresh_inventory_data import chain_eastern_dates_by_product
+from refresh_inventory_data import globex_trade_date
 from refresh_inventory_data import select_effective_refresh_mode
+from refresh_inventory_data import should_rebuild_contract_cache
 from refresh_inventory_data import wait_for_planner_server
 from refresh_inventory_data import write_refresh_status
 from target_treasury_monitor_clean.chain_batch import _contract_cache_path
@@ -592,6 +596,68 @@ class CachedPositionsTests(unittest.TestCase):
 
 
 class ScheduledRefreshTests(unittest.TestCase):
+    @staticmethod
+    def refresh_command_args() -> SimpleNamespace:
+        return SimpleNamespace(
+            python="python",
+            refresh_mode="fast",
+            ib_host="127.0.0.1",
+            ib_port=4001,
+            client_id=7316,
+            market_data_type="delayed",
+            chain_specs="ZF=202609;ZN=202609",
+            zc_chain_specs="ZC=202609",
+            working_dir="debug",
+            html_data_dir="data",
+            batch_size=50,
+            wait_seconds=5.0,
+            stable_seconds=0.75,
+            request_interval=0.025,
+            inter_batch_pause_seconds=0.5,
+            timeout=45.0,
+            bar_size="30 mins",
+            duration="1 M",
+            what_to_show="TRADES",
+            positions_timeout=30.0,
+            future_price_wait_seconds=6.0,
+            market_data_max_dte=0,
+            account="U123",
+            positions_csv="",
+            bars_contracts="",
+            min_expiration="",
+            max_expiration="",
+            infer_spreads=False,
+            no_market_data_filter=False,
+            no_contract_cache=False,
+            rebuild_contract_cache=False,
+            strict_chain=False,
+            strict_positions=False,
+            skip_bars=False,
+            strict_bars=False,
+            prefer_local_symbol_bars=False,
+            require_ready=False,
+            extra_refresh_arg=None,
+        )
+
+    def test_full_refresh_rebuilds_contract_cache_while_fast_refresh_reuses_it(self) -> None:
+        args = SimpleNamespace(no_contract_cache=False, rebuild_contract_cache=False)
+        self.assertTrue(should_rebuild_contract_cache(args, "full"))
+        self.assertFalse(should_rebuild_contract_cache(args, "fast"))
+
+        explicitly_rebuilt = SimpleNamespace(no_contract_cache=False, rebuild_contract_cache=True)
+        self.assertTrue(should_rebuild_contract_cache(explicitly_rebuilt, "fast"))
+
+        cache_disabled = SimpleNamespace(no_contract_cache=True, rebuild_contract_cache=True)
+        self.assertFalse(should_rebuild_contract_cache(cache_disabled, "full"))
+
+        command_args = self.refresh_command_args()
+        full_command = build_refresh_command(command_args, refresh_mode="full")
+        fast_command = build_refresh_command(command_args, refresh_mode="fast")
+        self.assertEqual(full_command.count("--rebuild-contract-cache"), 1)
+        self.assertNotIn("--fast-refresh", full_command)
+        self.assertNotIn("--rebuild-contract-cache", fast_command)
+        self.assertIn("--fast-refresh", fast_command)
+
     def test_scheduled_mode_uses_fast_only_when_every_product_is_current_in_us_eastern(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             planner = Path(tmp)
@@ -646,6 +712,62 @@ class ScheduledRefreshTests(unittest.TestCase):
 
             self.assertEqual(mode, "full")
             self.assertIn("ZC=2026-07-15", decision)
+
+    def test_scheduled_mode_rebuilds_current_zc_chain_when_strikes_do_not_cover_underlying(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp)
+            (planner / "carry_dashboard_chain.csv").write_text(
+                "symbol,snapshotTimeUtc,expiration,dte,strike,undPrice\n"
+                "ZF,2026-07-20T16:00:00+00:00,,,,\n"
+                "ZN,2026-07-20T16:01:00+00:00,,,,\n"
+                "ZC,2026-07-20T16:02:00+00:00,20260720,0,428,4.475\n"
+                "ZC,2026-07-20T16:02:00+00:00,20260722,2,430,4.475\n"
+                "ZC,2026-07-20T16:02:00+00:00,20260724,4,433,4.475\n",
+                encoding="utf-8",
+            )
+            args = SimpleNamespace(
+                refresh_mode="scheduled",
+                html_data_dir=planner,
+                chain_specs="ZF=202609;ZN=202609",
+                zc_chain_specs="ZC=202609",
+            )
+
+            issues = chain_coverage_issues_by_product(
+                planner,
+                ["ZF", "ZN", "ZC"],
+                trade_date=datetime(2026, 7, 20).date(),
+            )
+            mode, decision = select_effective_refresh_mode(
+                args,
+                now=datetime(2026, 7, 20, 20, 0, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual(
+                issues,
+                {"ZC": "ZC strike coverage 428-433 does not bracket underlying 447.5"},
+            )
+            self.assertEqual(mode, "full")
+            self.assertIn("coverage requires rebuild", decision)
+            self.assertIn("ZC strike coverage 428-433", decision)
+
+    def test_zc_coverage_check_accepts_normalized_strikes_that_bracket_underlying(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = Path(tmp)
+            (planner / "carry_dashboard_chain.csv").write_text(
+                "symbol,expiration,dte,strike,undPrice\n"
+                "ZC,20260720,0,428,4.475\n"
+                "ZC,20260722,2,448,4.475\n"
+                "ZC,20260724,4,468,4.475\n",
+                encoding="utf-8",
+            )
+
+            issues = chain_coverage_issues_by_product(
+                planner,
+                ["ZC"],
+                trade_date=datetime(2026, 7, 20).date(),
+            )
+
+            self.assertEqual(issues, {})
 
     def test_us_eastern_date_gate_does_not_use_local_asia_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

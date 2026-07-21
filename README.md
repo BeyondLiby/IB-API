@@ -11,7 +11,7 @@
 
 ## 推荐启动与停止脚本
 
-日常使用请只选一种启动方式。两个脚本都会启动 planner，并默认每 1 分钟执行一次“智能刷新”：按美国东部日期检查 ZF、ZN、ZC 的候选链，任一品种不是当天数据时先全量刷新；全部为当天数据时只刷新持仓期权和底层期货价。页面地址是：
+日常使用请只选一种启动方式。两个脚本都会启动 planner，并默认每 1 分钟执行一次“智能刷新”：按美国东部日期和 Strike 覆盖范围检查 ZF、ZN、ZC 的候选链；任一品种不是当天数据，或旧缓存已经无法覆盖当前期货价时先全量重建，健康时只刷新持仓期权和底层期货价。页面地址是：
 
 ```text
 http://127.0.0.1:8766/sell_side_inventory_planner.html
@@ -66,7 +66,7 @@ macOS 的脚本默认使用当前激活 Conda 环境中的 Python；若未激活
 PLANNER_PYTHON=/path/to/python ./open_inventory_planner.sh
 ```
 
-Windows 脚本固定使用仓库内的 `.venv\Scripts\python.exe`。
+Windows 脚本优先使用 `PLANNER_PYTHON` 或当前 Conda 环境，其次使用仓库内的 `.venv\Scripts\python.exe`；所选环境必须同时安装 `pandas` 和 `ib_async`。
 
 ## 手动启动方式
 
@@ -164,7 +164,8 @@ planner-port: 8766
 
 用于盘前、缓存不可信、或者需要重建更完整期权链时。特点：
 
-- 刷新配置月份内、经过 DTE/Strike/价内外等既有 filter 选中的全部候选期权。
+- 先从 IB 重新发现并验证配置月份的完整合约池，不复用旧的合约缓存。
+- 再刷新经过 DTE/Strike/价内外等既有 filter 选中的全部候选期权。
 - 同时刷新账户持仓与底层期货价。
 - 会按配置刷新 bars，除非你显式传 `--skip-bars`。
 - 耗时明显更长。
@@ -186,8 +187,8 @@ planner-port: 8766
 适合常驻启动：
 
 - 以 `America/New_York` 的当前日期作为“当天”，不使用北京时间判断。
-- 分别读取 ZF、ZN、ZC 候选链行中的最新 `snapshotTimeUtc`；三个品种都为当天才执行 fast。
-- 任一品种缺失或日期落后，执行一次 full；如果某个品种全量刷新失败、日期仍旧，下一轮会继续尝试 full。
+- 分别读取 ZF、ZN、ZC 候选链行中的最新 `snapshotTimeUtc`，并检查近端 Strike 是否仍能包围当前底层期货价。
+- 任一品种缺失、日期落后或 Strike 覆盖失效，执行一次 full 并重建合约池；如果全量刷新失败，下一轮会继续尝试 full。
 - fast 虽然会重新发布缓存链，但不会用文件修改时间冒充数据日期。
 
 命令：
@@ -259,8 +260,8 @@ sleeping 1800s; press Ctrl+C to stop
 
 - `读取默认CSV`：只重新读取 `data/planner/` 下的 CSV，不连接 IB。
 - `持仓快刷`：刷新持仓期权的流式订阅行情和底层期货价，不扫描候选链。
-- `全量刷新`：后端执行 `refresh_inventory_data.py --refresh-mode full`。
-- `智能刷新`：按美国东部日期自动选择 fast 或 full。
+- `全量刷新`：后端执行 `refresh_inventory_data.py --refresh-mode full`，并强制重建合约池。
+- `智能刷新`：按美国东部日期和 Strike 覆盖范围自动选择 fast 或 full。
 - `刷新合约月份`：分别选择 ZF、ZN、ZC 要刷新的底层期货月份；默认三者都只刷新 `202609`，也可切换到 `202612` 或同时刷新9月和12月。
 - `加载样例`：加载页面内置样例，不依赖 IB。
 - `导出JSON / CSV / Markdown`：导出当前手动规划结果。
@@ -289,6 +290,20 @@ sleeping 1800s; press Ctrl+C to stop
 IB_ACCOUNT=你的Paper账户 ./open_trade_gateway.sh paper
 ```
 
+Windows PowerShell：
+
+```powershell
+$env:IB_ACCOUNT = "你的Paper账户"
+.\open_trade_gateway.ps1 paper
+```
+
+如果系统执行策略禁止直接运行 `.ps1`，可只为本次 PowerShell 进程临时放行：
+
+```powershell
+$env:IB_ACCOUNT = "你的Paper账户"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\open_trade_gateway.ps1 paper
+```
+
 脚本会要求再次输入 `PAPER <账户>`，随后在前台显示本次进程解锁码。把该码粘贴到 Dashboard，完成“生成保证金预览 → 核对指纹/保证金 → 逐字输入动态确认词 → 复核并发送”。Paper 账户是模拟环境，保证金或成交行为可能与 Live 不完全一致。
 
 Live 模式必须显式配置正数资金缓冲，并再次输入 `LIVE <账户>`：
@@ -299,6 +314,17 @@ IB_MINIMUM_RESERVE_FUNDS=10000 \
 IB_MAX_ORDER_QUANTITY=5 \
 ./open_trade_gateway.sh live
 ```
+
+Windows PowerShell：
+
+```powershell
+$env:IB_ACCOUNT = "你的Live账户"
+$env:IB_MINIMUM_RESERVE_FUNDS = "10000"
+$env:IB_MAX_ORDER_QUANTITY = "5"
+.\open_trade_gateway.ps1 live
+```
+
+macOS 和 Windows 启动器都会在前台运行交易进程，关闭终端或按 `Ctrl+C` 即停止；不要把交易网关注册为后台常驻服务。
 
 Live trade gateway 需要 Gateway/TWS 允许 API 订单。`ib_async.connect(readonly=True)` 只影响连接初始化时的订单同步，不是权限控制；Gateway 的 Read-Only 复选框才是全局硬阻断。关闭它以后，同一个 Gateway 端口上的所有 API client 都失去这层硬阻断。更强的生产隔离方式是为行情和交易使用不同 IB 用户/会话与不同端口，并只给交易用户必要的产品权限。不要把 trade gateway 作为 launchd 常驻任务，也不要将 8767 暴露到局域网或公网。
 

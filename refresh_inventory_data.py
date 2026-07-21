@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -24,6 +25,8 @@ STATUS_REPLACE_RETRY_SECONDS = 0.05
 STATUS_LOG_TAIL_LINES = 160
 STATUS_UPDATE_MIN_INTERVAL = 0.5
 US_EASTERN = ZoneInfo("America/New_York")
+US_CENTRAL = ZoneInfo("America/Chicago")
+GLOBEX_ROLLOVER_HOUR_CT = {"ZC": 19}
 
 
 def split_extra_args(values: list[str] | None) -> list[str]:
@@ -33,6 +36,18 @@ def split_extra_args(values: list[str] | None) -> list[str]:
     for value in values:
         out.extend(part for part in value.split() if part)
     return out
+
+
+def should_rebuild_contract_cache(args: argparse.Namespace, refresh_mode: str) -> bool:
+    """Make a full refresh rebuild the qualified contract universe.
+
+    Reusing a filtered or stale universe can leave new expirations and strikes
+    permanently absent even though their quotes are refreshed.  Fast refreshes
+    deliberately keep using the existing candidate chain.
+    """
+    if bool(getattr(args, "no_contract_cache", False)):
+        return False
+    return str(refresh_mode) == "full" or bool(getattr(args, "rebuild_contract_cache", False))
 
 
 def build_refresh_command(args: argparse.Namespace, *, refresh_mode: str | None = None) -> list[str]:
@@ -104,7 +119,7 @@ def build_refresh_command(args: argparse.Namespace, *, refresh_mode: str | None 
         command.append("--no-market-data-filter")
     if args.no_contract_cache:
         command.append("--no-contract-cache")
-    if args.rebuild_contract_cache:
+    if should_rebuild_contract_cache(args, refresh_mode):
         command.append("--rebuild-contract-cache")
     if args.strict_chain:
         command.append("--strict-chain")
@@ -122,15 +137,35 @@ def build_refresh_command(args: argparse.Namespace, *, refresh_mode: str | None 
     return command
 
 
-def eastern_trade_date(now: datetime | None = None) -> date:
-    """Return the current calendar date in the US/Eastern market timezone."""
+def globex_trade_date(now: datetime | None = None, product: str = "") -> date:
+    """Return the active CME Globex trade date for a supported product.
+
+    Treasury sessions roll at 17:00 CT on Sunday through Thursday.  Corn's
+    evening session starts at 19:00 CT.  Friday night and Saturday do not roll
+    into a nonexistent weekend session.
+    """
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
-    return current.astimezone(US_EASTERN).date()
+    central = current.astimezone(US_CENTRAL)
+    rollover_hour = GLOBEX_ROLLOVER_HOUR_CT.get(str(product).upper(), 17)
+    trade_date = central.date()
+    if central.weekday() in {0, 1, 2, 3, 6} and central.hour >= rollover_hour:
+        trade_date += timedelta(days=1)
+    return trade_date
 
 
-def _timestamp_eastern_date(value: object, *, utc_hint: bool = False) -> date | None:
+def eastern_trade_date(now: datetime | None = None) -> date:
+    """Backward-compatible alias for the Treasury Globex trade date."""
+    return globex_trade_date(now)
+
+
+def _timestamp_eastern_date(
+    value: object,
+    *,
+    product: str = "",
+    utc_hint: bool = False,
+) -> date | None:
     text = str(value or "").strip()
     if not text:
         return None
@@ -140,7 +175,7 @@ def _timestamp_eastern_date(value: object, *, utc_hint: bool = False) -> date | 
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc if utc_hint else US_EASTERN)
-    return parsed.astimezone(US_EASTERN).date()
+    return globex_trade_date(parsed, product)
 
 
 def chain_eastern_dates_by_product(html_data_dir: Path | str) -> dict[str, date]:
@@ -163,8 +198,8 @@ def chain_eastern_dates_by_product(html_data_dir: Path | str) -> dict[str, date]
                 if not product:
                     continue
                 snapshot_date = (
-                    _timestamp_eastern_date(row.get("snapshotTimeUtc"), utc_hint=True)
-                    or _timestamp_eastern_date(row.get("snapshotTime"))
+                    _timestamp_eastern_date(row.get("snapshotTimeUtc"), product=product, utc_hint=True)
+                    or _timestamp_eastern_date(row.get("snapshotTime"), product=product)
                 )
                 if snapshot_date is not None and (
                     product not in newest or snapshot_date > newest[product]
@@ -173,6 +208,108 @@ def chain_eastern_dates_by_product(html_data_dir: Path | str) -> dict[str, date]
     except OSError:
         return {}
     return newest
+
+
+def _finite_float(value: object) -> float | None:
+    try:
+        number = float(str(value or "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _normalized_chain_number(product: str, value: object) -> float | None:
+    number = _finite_float(value)
+    if number is not None and product.upper() == "ZC" and 0 < abs(number) < 20:
+        number *= 100
+    return number
+
+
+def _chain_row_dte(row: dict[str, str], trade_date: date) -> int | None:
+    direct = _finite_float(row.get("dte"))
+    if direct is not None:
+        return int(round(direct))
+    expiration = str(row.get("expiration") or row.get("expiry") or "")[:8]
+    try:
+        return (datetime.strptime(expiration, "%Y%m%d").date() - trade_date).days
+    except ValueError:
+        return None
+
+
+def chain_coverage_issues_by_product(
+    html_data_dir: Path | str,
+    products: tuple[str, ...] | list[str],
+    *,
+    trade_date: date | dict[str, date],
+    near_dte_days: int = 10,
+) -> dict[str, str]:
+    """Detect a current-looking chain whose cached strikes no longer cover spot.
+
+    Missing diagnostic columns are treated as unknown rather than unhealthy so
+    older/minimal exports can still use the timestamp freshness gate.
+    """
+    path = Path(html_data_dir) / "carry_dashboard_chain.csv"
+    if not path.exists():
+        return {}
+    wanted = {str(product).upper() for product in products}
+    rows_by_product: dict[str, list[dict[str, str]]] = {product: [] for product in wanted}
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                product = str(
+                    row.get("symbol") or row.get("underlying") or row.get("root") or ""
+                ).strip().upper()
+                if product in rows_by_product:
+                    rows_by_product[product].append(row)
+    except OSError:
+        return {}
+
+    issues: dict[str, str] = {}
+    for product in sorted(wanted):
+        product_trade_date = (
+            trade_date.get(product, datetime.now(timezone.utc).date())
+            if isinstance(trade_date, dict)
+            else trade_date
+        )
+        rows = rows_by_product.get(product, [])
+        observations: list[tuple[float, float]] = []
+        diagnostics_present = False
+        for row in rows:
+            strike = _normalized_chain_number(product, row.get("strike"))
+            reference = next((
+                value for value in (
+                    _normalized_chain_number(product, row.get("undPrice")),
+                    _normalized_chain_number(product, row.get("underlyingPrice")),
+                    _normalized_chain_number(product, row.get("referencePrice")),
+                )
+                if value is not None
+            ), None)
+            if strike is None or reference is None:
+                continue
+            diagnostics_present = True
+            dte = _chain_row_dte(row, product_trade_date)
+            if dte is not None and 0 <= dte <= int(near_dte_days):
+                observations.append((strike, reference))
+        if not diagnostics_present:
+            continue
+        if not observations:
+            issues[product] = f"{product} has no 0-{near_dte_days}DTE strike coverage"
+            continue
+
+        strikes = sorted({strike for strike, _reference in observations})
+        references = sorted(reference for _strike, reference in observations)
+        reference = references[len(references) // 2]
+        if len(strikes) < 3:
+            issues[product] = f"{product} has only {len(strikes)} near-DTE strike(s) around {reference:g}"
+            continue
+        steps = [right - left for left, right in zip(strikes, strikes[1:]) if right > left]
+        tolerance = (min(steps) if steps else 0.0) * 1.05
+        if reference < strikes[0] - tolerance or reference > strikes[-1] + tolerance:
+            issues[product] = (
+                f"{product} strike coverage {strikes[0]:g}-{strikes[-1]:g} "
+                f"does not bracket underlying {reference:g}"
+            )
+    return issues
 
 
 def latest_chain_eastern_date(html_data_dir: Path | str) -> date | None:
@@ -203,25 +340,33 @@ def select_effective_refresh_mode(
     requested_mode = str(args.refresh_mode)
     if requested_mode != "scheduled":
         return requested_mode, f"explicit {requested_mode} refresh"
-    current_date = eastern_trade_date(now)
     dates = chain_eastern_dates_by_product(args.html_data_dir)
     products = _configured_products(args)
+    current_dates = {root: globex_trade_date(now, root) for root in products}
+    coverage_issues = chain_coverage_issues_by_product(
+        args.html_data_dir,
+        products,
+        trade_date=current_dates,
+    )
     stale = [
         root for root in products
-        if dates.get(root) != current_date
+        if dates.get(root) != current_dates[root]
     ]
-    if products and not stale:
+    if products and not stale and not coverage_issues:
         detail = ", ".join(f"{root}={dates[root].isoformat()}" for root in products)
         return "fast", (
-            f"candidate chains are current for US/Eastern {current_date.isoformat()} "
+            "candidate chains are current for CME Globex trade dates "
             f"({detail})"
         )
+    if coverage_issues:
+        issue_detail = "; ".join(coverage_issues[root] for root in sorted(coverage_issues))
+        return "full", f"candidate chain coverage requires rebuild ({issue_detail})"
     stale_detail = ", ".join(
-        f"{root}={dates[root].isoformat() if root in dates else 'missing'}"
+        f"{root}=snapshot:{dates[root].isoformat() if root in dates else 'missing'},expected:{current_dates.get(root, globex_trade_date(now, root)).isoformat()}"
         for root in (stale or products or ("chain",))
     )
     return "full", (
-        f"candidate chain date mismatch for US/Eastern {current_date.isoformat()} "
+        "candidate chain date mismatch for CME Globex trade dates "
         f"({stale_detail})"
     )
 
@@ -525,7 +670,7 @@ def print_refresh_request_summary(
     mode_note = (
         "fast: refresh positions through streaming subscriptions, futures prices, and preserve candidate chain/bars"
         if effective_mode == "fast"
-        else "full: refresh every option selected by the configured filter and refresh bars unless skipped"
+        else "full: rebuild the qualified contract universe, refresh selected options, and refresh bars unless skipped"
     )
     print("refresh request:", flush=True)
     print(f"  requested_mode: {args.refresh_mode}", flush=True)
@@ -553,7 +698,7 @@ def print_refresh_request_summary(
     print(
         f"  filters/cache: market_data_max_dte={args.market_data_max_dte or 'auto'}, "
         f"contract_cache={'off' if args.no_contract_cache else 'on'}, "
-        f"rebuild_cache={bool(args.rebuild_contract_cache)}, strict_chain={bool(args.strict_chain)}",
+        f"rebuild_cache={should_rebuild_contract_cache(args, effective_mode)}, strict_chain={bool(args.strict_chain)}",
         flush=True,
     )
     print(
@@ -584,7 +729,7 @@ def main() -> None:
         "--refresh-mode",
         choices=("fast", "full", "scheduled"),
         default="fast",
-        help="fast refreshes held positions only; full refreshes the filtered candidate chain; scheduled runs full once per US/Eastern date, otherwise fast.",
+        help="fast refreshes held positions only; full rebuilds and refreshes the filtered candidate chain; scheduled runs full once per US/Eastern date or when strike coverage is stale, otherwise fast.",
     )
     parser.add_argument("--full-refresh", dest="refresh_mode", action="store_const", const="full", help="Shortcut for --refresh-mode full.")
     parser.add_argument("--positions-timeout", type=float, default=30.0)

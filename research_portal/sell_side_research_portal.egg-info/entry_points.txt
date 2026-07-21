@@ -1,0 +1,2 @@
+[console_scripts]
+research-portal = portal_crawler.cli:main

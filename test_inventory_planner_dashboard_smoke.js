@@ -43,7 +43,11 @@ assert(html.includes('const LIVE_POSITIONS_PATH = "/api/live-positions"'), "live
 assert(html.includes("深度ITM"), "deep-ITM future-equivalent identification missing");
 assert(html.includes('id="portfolioPremiumSummary"'), "portfolio premium summary missing");
 assert(html.includes('id="premiumExpiryTable"'), "premium by-expiry table missing");
-assert(html.includes('class="panel premium-overview-layout"'), "premium summary and expiry overview should share a compact two-column panel");
+assert(html.includes('id="premiumCurveChart"'), "cumulative premium chart missing");
+assert(html.includes('id="premiumCurveRawTotal"'), "raw premium curve legend total missing");
+assert(html.includes('id="premiumCurveWeightedTotal"'), "weighted premium curve legend total missing");
+assert(html.includes('id="premiumCurveTooltip"'), "interactive premium curve tooltip missing");
+assert(html.includes('class="panel premium-overview-layout"'), "premium summary, expiry overview, and cumulative chart should share one responsive panel");
 assert(html.includes('id="highDeltaPremiumThreshold"'), "configurable delta-weighted premium threshold missing");
 assert(/id="highDeltaPremiumThreshold"[^>]*value="0\.40"/.test(html), "delta-weighted premium threshold should default to 0.40");
 assert(html.includes('<section class="planner-state" hidden aria-hidden="true">'), "planner defaults should remain available as hidden internal state");
@@ -460,6 +464,23 @@ const normalizedZcPremium = JSON.parse(normalizedZcPremiumResult);
 assert.strictEqual(normalizedZcPremium.remainingPremium, 31.25, "ZC raw-contract-multiplier portfolio value should be normalized to $50 per quoted cent");
 assert(Math.abs(normalizedZcPremium.unrealizedPnL - 3.23) < 1e-9, "ZC normalized unrealized PnL is wrong");
 
+const cumulativePremiumRows = JSON.parse(new vm.Script(`JSON.stringify(premiumCumulativeRows([
+  { expiry: "2026-07-24", dte: 4, remainingPremium: 250, weightedPremium: 200 },
+  { expiry: "2026-07-20", dte: 0, remainingPremium: 100, weightedPremium: 90 },
+  { expiry: "2026-07-21", dte: 1, remainingPremium: 200, weightedPremium: 180 }
+]))`).runInContext(context));
+assert.deepStrictEqual(cumulativePremiumRows.map(row => row.dte), [0, 1, 4], "premium curve should sort expiries by DTE");
+assert.deepStrictEqual(cumulativePremiumRows.map(row => row.cumulativePremium), [100, 300, 550], "raw premium curve should accumulate by expiry");
+assert.deepStrictEqual(cumulativePremiumRows.map(row => row.cumulativeWeightedPremium), [90, 270, 470], "weighted premium curve should accumulate by expiry");
+const premiumTooltipHtml = new vm.Script(`premiumCurveTooltipHtml(premiumCumulativeRows([
+  { expiry: "2026-07-20", dte: 0, products: "ZF / ZN", remainingPremium: 100, weightedPremium: 90 },
+  { expiry: "2026-07-24", dte: 4, products: "ZC", remainingPremium: 250, weightedPremium: 200 }
+])[1])`).runInContext(context);
+assert(premiumTooltipHtml.includes("该到期日"), "premium tooltip should label per-expiry values");
+assert(premiumTooltipHtml.includes("累计"), "premium tooltip should label cumulative values");
+assert(premiumTooltipHtml.includes("$250") && premiumTooltipHtml.includes("$350"), "premium tooltip should show raw per-expiry and cumulative values");
+assert(premiumTooltipHtml.includes("$200") && premiumTooltipHtml.includes("$290"), "premium tooltip should show weighted per-expiry and cumulative values");
+
 assert(elements.get("targetSummary").innerHTML.includes("本月目标"), "target summary missing");
 assert(elements.get("targetSummary").innerHTML.includes("本月已完成"), "completed PnL summary missing");
 assert(elements.get("inventoryBars").innerHTML.includes("按方向"), "inventory distribution missing");
@@ -486,6 +507,10 @@ assert(elements.get("portfolioPremiumSummary").innerHTML.includes("Delta 加权�
 assert(elements.get("premiumExpiryTable").innerHTML.includes("到期日"), "premium expiry overview missing expiry column");
 assert(elements.get("premiumExpiryTable").innerHTML.includes("剩余权利金"), "premium expiry overview missing raw premium");
 assert(elements.get("premiumExpiryTable").innerHTML.includes("Delta 加权期权金"), "premium expiry overview missing weighted premium");
+assert(elements.get("premiumCurveNote").textContent.includes("个到期日"), "premium curve note should describe its expiry coverage");
+assert(elements.get("premiumCurveNote").textContent.includes("风险折减"), "premium curve note should explain the shaded gap");
+assert(elements.get("premiumCurveRawTotal").textContent.startsWith("$"), "raw premium curve total should render as money");
+assert(elements.get("premiumCurveWeightedTotal").textContent.startsWith("$"), "weighted premium curve total should render as money");
 assert(elements.get("priceChartNote").textContent.includes("ZF"), "price chart should follow the selected product");
 assert(elements.get("priceChartNote").textContent.includes("范围"), "price chart note should include interactive range state");
 assert(elements.get("priceChartNote").textContent.includes("日线"), "price chart note should include daily chart coverage");
@@ -630,6 +655,9 @@ const liveResult = new vm.Script(`
     creditSource: document.getElementById("creditSource").value,
     inventoryHtml: document.getElementById("inventoryChain").innerHTML,
     candidateHtml: document.getElementById("candidateTable").innerHTML,
+    candidateCount: candidates.length,
+    candidateLimit: config().candidateLimit,
+    emptyCandidateCells: (document.getElementById("candidateTable").innerHTML.match(/candidate-matrix-cell[^\"]* empty/g) || []).length,
     nodeHtml: document.getElementById("nodeTable").innerHTML,
     candidateDisplayDtes: unifiedDtes(candidates, config().selectedCandidateDtes),
     candidateCallDeltas: candidates
@@ -672,6 +700,9 @@ assert(/\d+\.\d+\s\/\s\d+\.\d+/.test(live.inventoryHtml), "inventory chain shoul
 assert(/-\d+ 张 zf \d/.test(live.inventoryHtml), "inventory chain should use compact signed position names");
 assert(live.inventoryHtml.includes("chain-map"), "inventory chain should render as a horizontal option-chain map");
 assert(live.candidateHtml.includes("candidate-matrix"), "candidate chain should render as a centered Strike by DTE matrix");
+assert(live.candidateHtml.includes("candidate-sparse-matrix"), "candidate matrix should render only sparse eligible rows");
+assert(live.candidateCount <= live.candidateLimit, "candidate display count must honor the configured limit");
+assert.strictEqual(live.emptyCandidateCells, 0, "candidate matrix should not generate blank Strike by DTE Cartesian cells");
 assert(live.nodeHtml.includes("chain-map"), "adjusted node view should render as a horizontal option-chain map");
 assert(live.inventoryHtml.includes("DTE Call") && live.inventoryHtml.includes("DTE Put"), "inventory map should separate call and put sides by DTE");
 assert(live.candidateHtml.includes("高 Strike ← · → 低 Strike"), "candidate matrix should place high and low strikes around the DTE axis");
@@ -684,6 +715,58 @@ assert(!live.candidateHtml.includes("Bid/Ask - /"), "candidate map should exclud
 assert(live.candidateStrikeWindowOk, "openable candidate rows should respect the strike-distance window");
 assert(!live.inventoryHtml.includes("strike-meta"), "inventory strike cells should not repeat DTE");
 assert(!live.candidateHtml.includes("strike-meta"), "candidate strike cells should not repeat DTE");
+
+const candidateLimitResult = JSON.parse(new vm.Script(`
+  (() => {
+    const rows = Array.from({ length: 25 }, (_, index) => ({
+      underlying: "ZF", bid: 0.1, finalScore: 100 - index, dte: index % 3,
+      right: index % 2 ? "P" : "C", strike: 100 + index
+    }));
+    const limited = buildCandidateDisplayRows(rows, { ...config(), underlying: "ZF", candidateLimit: 10 });
+    const sparse = candidateStrikeDteHtml([{
+      id: "only-call", underlying: "ZF", right: "C", strike: 108, dte: 0, expiry: "20260709",
+      bid: 0.1, ask: 0.2, estimatedCredit: 0.1, delta: 0.1, multiplier: 1000,
+      marginEstimate: 100, finalScore: 1, currentContracts: 0, underlyingPrice: 107
+    }], { ...config(), underlying: "ZF", selectedCandidateDtes: [0, 1] }, { displayDtes: [0, 1], dteRows: [] });
+    return JSON.stringify({ count: limited.length, bestScore: Math.max(...limited.map(row => row.finalScore)), sparse });
+  })()
+`).runInContext(context));
+assert.strictEqual(candidateLimitResult.count, 10, "candidate limit should cap the ranked display rows");
+assert.strictEqual(candidateLimitResult.bestScore, 100, "candidate limit should retain the highest-ranked rows");
+assert(candidateLimitResult.sparse.includes("该 DTE 当前未显示 Put：没有合格候选，或综合评分未进入显示数量范围"), "an empty candidate side should explain why no data is shown");
+assert(candidateLimitResult.sparse.includes("该 DTE 当前未显示 Call：没有合格候选，或综合评分未进入显示数量范围"), "an entirely empty requested DTE should explain the missing candidates");
+
+const liveSignatureResult = new vm.Script(`
+  (() => {
+    const base = { connected: true, sampledAt: "one", positions: [{ conId: 1, marketPrice: 2 }], futures: [] };
+    return JSON.stringify({
+      sameData: livePositionSnapshotSignature(base) === livePositionSnapshotSignature({ ...base, sampledAt: "two" }),
+      changedPrice: livePositionSnapshotSignature(base) !== livePositionSnapshotSignature({ ...base, positions: [{ conId: 1, marketPrice: 3 }] })
+    });
+  })()
+`).runInContext(context);
+const liveSignature = JSON.parse(liveSignatureResult);
+assert.strictEqual(liveSignature.sameData, true, "live polling should not redraw when only the sample timestamp changes");
+assert.strictEqual(liveSignature.changedPrice, true, "live polling must redraw when a quote changes");
+
+const globexDteResult = JSON.parse(new vm.Script(`
+  (() => {
+    const beijingMorning = new Date("2026-07-21T02:31:23.000Z");
+    const betweenTreasuryAndCornOpen = new Date("2026-07-20T23:30:00.000Z");
+    return JSON.stringify({
+      zfAtBeijingMorning: dteFromExpiry("20260721", "ZF", beijingMorning),
+      znAtBeijingMorning: dteFromExpiry("20260721", "ZN", beijingMorning),
+      zcAtBeijingMorning: dteFromExpiry("20260721", "ZC", beijingMorning),
+      zfAfterTreasuryOpen: dteFromExpiry("20260721", "ZF", betweenTreasuryAndCornOpen),
+      zcBeforeCornOpen: dteFromExpiry("20260721", "ZC", betweenTreasuryAndCornOpen)
+    });
+  })()
+`).runInContext(context));
+assert.strictEqual(globexDteResult.zfAtBeijingMorning, 0, "ZF expiry should be 0DTE after the prior-evening Globex session opens");
+assert.strictEqual(globexDteResult.znAtBeijingMorning, 0, "ZN expiry should be 0DTE after the prior-evening Globex session opens");
+assert.strictEqual(globexDteResult.zcAtBeijingMorning, 0, "ZC expiry should be 0DTE after the corn night session opens");
+assert.strictEqual(globexDteResult.zfAfterTreasuryOpen, 0, "Treasury trade date should roll at 17:00 CT");
+assert.strictEqual(globexDteResult.zcBeforeCornOpen, 1, "Corn trade date should remain on the civil date before 19:00 CT");
 
 const dteRecalculationResult = new vm.Script(`
   const savedChainRows = chainRows;

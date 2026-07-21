@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+portal_crawler/__init__.py
+portal_crawler/__main__.py
+portal_crawler/browser.py
+portal_crawler/cli.py
+portal_crawler/config.py
+portal_crawler/diagnostics.py
+portal_crawler/snapshot.py
+sell_side_research_portal.egg-info/PKG-INFO
+sell_side_research_portal.egg-info/SOURCES.txt
+sell_side_research_portal.egg-info/dependency_links.txt
+sell_side_research_portal.egg-info/entry_points.txt
+sell_side_research_portal.egg-info/requires.txt
+sell_side_research_portal.egg-info/top_level.txt
