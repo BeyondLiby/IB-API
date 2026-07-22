@@ -2463,7 +2463,7 @@
     <section class="panel premium-overview-layout">
       <div class="premium-overview-summary">
         <div id="portfolioPremiumSummary" class="target-grid"></div>
-        <p class="note">“Delta 加权期权金”默认对 |Delta| 按两位小数显示后达到 0.40 的卖方期权，按 <code>权利金 × (1 - 实际 |Delta|)</code> 折算；其余仓位按原权利金计入。该指标是风险调整后的观察值，不代表真实胜率或最终收益。</p>
+        <p class="note">已实值（ITM）的卖方期权不计入任何权利金统计；其余 OTM 卖方期权中，|Delta| 按两位小数显示后达到 0.40 的，按 <code>权利金 × (1 - 实际 |Delta|)</code> 折算，未达到阈值的按原权利金计入。该指标是风险调整后的观察值，不代表真实胜率或最终收益。</p>
       </div>
       <div class="premium-overview-expiry">
         <h3>按到期日的权利金总览</h3>
@@ -4066,6 +4066,19 @@
 
     function parseShortPositions(rows, cfg, { respectInventoryDte = true } = {}) {
       const allowed = new Set(cfg.allowed);
+      const referencePrices = new Map();
+      const referencePrice = underlying => {
+        if (!referencePrices.has(underlying)) {
+          const productCfg = { ...cfg, underlying, allowed: [underlying] };
+          const futures = parseFuturePositions(rows, productCfg);
+          const automatic = referencePriceFor(underlying, chainRows, rows, { ...productCfg, manualFuturePrice: NaN }, futures).price;
+          const manual = underlying === ($("activeUnderlying").value || "ZF")
+            ? normalizeFuturePrice(underlying, productCfg.manualFuturePrice)
+            : NaN;
+          referencePrices.set(underlying, Number.isFinite(automatic) ? automatic : manual);
+        }
+        return referencePrices.get(underlying);
+      };
       return rows.map(row => {
         const position = toNum(row.position);
         const right = normRight(row.right || row.direction);
@@ -4101,11 +4114,14 @@
         const unrealizedPnL = normalizeZcValue && Number.isFinite(costBasis)
           ? marketValue - costBasis
           : firstNum(row.unrealizedPnL, 0);
-        const remainingPremium = Number.isFinite(marketValue) && marketValue < 0
+        const grossRemainingPremium = Number.isFinite(marketValue) && marketValue < 0
           ? -marketValue
           : Math.abs(position * price * multiplier);
         const observedDelta = directSignedDelta(row, right);
         const delta = Number.isFinite(observedDelta) ? observedDelta : 0;
+        const underlyingPrice = rowReferencePrice(row, underlying, referencePrice(underlying));
+        const premiumExcludedItm = optionIsItm(right, strike, underlyingPrice);
+        const remainingPremium = premiumExcludedItm ? 0 : grossRemainingPremium;
         return {
           conId: toNum(row.conId),
           underlying,
@@ -4118,10 +4134,12 @@
           position,
           contracts: Math.abs(position),
           marketValue,
+          grossRemainingPremium,
           remainingPremium,
           weightedPremium: deltaWeightedPremium(remainingPremium, delta, cfg.highDeltaPremiumThreshold),
+          premiumExcludedItm,
           unrealizedPnL,
-          underlyingPrice: normalizeFuturePrice(underlying, firstNum(row.underlyingPrice, row.undPrice, row.referencePrice)),
+          underlyingPrice,
           bid,
           ask,
           mid,
@@ -4575,8 +4593,8 @@
           <span class="product-metrics">
             ${metricHtml("▣", "合约", num(inventory.totalContracts, 0), "blue")}
             ${metricHtml("⇄", "等效期货", signedNum(equivalentFutures, 2), "cyan", `实际期货 ${signedNum(portfolioExposure.futureDelta, 2)} + 深度ITM多头 ${signedNum(portfolioExposure.deepItmFutureEquivalent, 2)}；实际持仓：${futuresLabel}`)}
-            ${metricHtml("$", "权利金", money(inventory.remainingPremium), "green")}
-            ${metricHtml("◈", "期权金指标", money(inventory.weightedPremium), "violet", `|Delta|按两位小数达到${num(cfg.highDeltaPremiumThreshold, 2)}时，按1-实际|Delta|折算`)}
+            ${metricHtml("$", "权利金", money(inventory.remainingPremium), "green", `只统计非ITM卖方期权；已剔除 ${num(sum(positions.filter(row => row.premiumExcludedItm), "contracts"), 0)} 张ITM`)}
+            ${metricHtml("◈", "期权金指标", money(inventory.weightedPremium), "violet", `ITM卖方不计入；其余OTM期权的|Delta|按两位小数达到${num(cfg.highDeltaPremiumThreshold, 2)}时，按1-实际|Delta|折算`)}
             ${metricHtml("Δ", "期权Delta", num(inventory.deltaExposure, 2), inventory.deltaExposure < -0.25 ? "red" : "cyan", "卖方期权库存，不含多头期权和期货")}
             ${metricHtml("ΣΔ", "组合Delta", signedNum(portfolioExposure.portfolioDelta, 2), deltaTone === "negative" ? "red" : "cyan", `short期权 ${signedNum(portfolioExposure.shortOptionDelta, 2)} + 等效期货 ${signedNum(portfolioExposure.equivalentFutureDelta, 2)}；其他多头期权不计入`)}
             ${metricHtml("Γ", "Gamma", num(inventory.gammaExposure, 2), "amber")}
@@ -4602,20 +4620,24 @@
         return parseShortPositions(positionRows, cfg, { respectInventoryDte: false })
           .map(row => enrichPositionQuote(row, cfg));
       });
-      const totalPremium = sum(positions, "remainingPremium");
-      const weightedPremium = sum(positions, "weightedPremium");
+      const premiumPositions = positions.filter(row => !row.premiumExcludedItm);
+      const excludedItmPositions = positions.filter(row => row.premiumExcludedItm);
+      const excludedItmContracts = sum(excludedItmPositions, "contracts");
+      const exclusionText = excludedItmContracts > 0 ? ` · 已剔除 ${num(excludedItmContracts, 0)} 张ITM` : "";
+      const totalPremium = sum(premiumPositions, "remainingPremium");
+      const weightedPremium = sum(premiumPositions, "weightedPremium");
       const threshold = baseCfg.highDeltaPremiumThreshold;
-      const highDeltaRows = positions.filter(row => isHighDeltaPremium(row.delta, threshold));
+      const highDeltaRows = premiumPositions.filter(row => isHighDeltaPremium(row.delta, threshold));
       const highDeltaPremium = sum(highDeltaRows, "remainingPremium");
       $("portfolioPremiumSummary").innerHTML = [
-        metric("全部剩余权利金", money(totalPremium), `${num(sum(positions, "contracts"), 0)} 张卖方期权`, "violet"),
-        metric("Delta 加权期权金", money(weightedPremium), `|Delta|≈${num(threshold, 2)}+ 按 1-|Delta| 折算`, "green"),
-        metric("高 Delta 原权利金", money(highDeltaPremium), `${num(sum(highDeltaRows, "contracts"), 0)} 张 |Delta|≈${num(threshold, 2)}+`, "amber"),
+        metric("全部剩余权利金", money(totalPremium), `${num(sum(premiumPositions, "contracts"), 0)} 张非ITM卖方期权${exclusionText}`, "violet"),
+        metric("Delta 加权期权金", money(weightedPremium), `仅OTM；|Delta|≈${num(threshold, 2)}+ 按 1-|Delta| 折算`, "green"),
+        metric("高 Delta 原权利金", money(highDeltaPremium), `${num(sum(highDeltaRows, "contracts"), 0)} 张OTM · |Delta|≈${num(threshold, 2)}+`, "amber"),
         metric("风险折减", money(Math.max(totalPremium - weightedPremium, 0)), "原权利金减加权期权金", totalPremium > weightedPremium ? "red" : "cyan")
       ].join("");
 
       const groups = new Map();
-      positions.forEach(row => {
+      premiumPositions.forEach(row => {
         const expiry = row.expiry || "-";
         if (!groups.has(expiry)) groups.set(expiry, []);
         groups.get(expiry).push(row);
@@ -5890,10 +5912,7 @@
       const side = row.right === "C" ? "call" : "put";
       const sideLabel = row.right === "C" ? "C" : "P";
       const rowSpot = Number.isFinite(row.underlyingPrice) ? row.underlyingPrice : spot;
-      const isItm = Number.isFinite(rowSpot) && (
-        (row.right === "C" && strike < rowSpot) ||
-        (row.right === "P" && strike > rowSpot)
-      );
+      const isItm = optionIsItm(row.right, strike, rowSpot);
       const current = currentContracts(row);
       const qty = targetQuantity(row);
       const quote = `${optPx(row.bid)} / ${optPx(row.ask)}`;
@@ -5921,10 +5940,7 @@
       const side = row.right === "C" ? "call" : "put";
       const sideLabel = row.right === "C" ? "C" : "P";
       const rowSpot = Number.isFinite(row.underlyingPrice) ? row.underlyingPrice : spot;
-      const isItm = Number.isFinite(rowSpot) && (
-        (row.right === "C" && strike < rowSpot) ||
-        (row.right === "P" && strike > rowSpot)
-      );
+      const isItm = optionIsItm(row.right, strike, rowSpot);
       const threshold = firstNum(options.highDeltaThreshold, HIGH_DELTA_PREMIUM_THRESHOLD);
       const highDelta = Boolean(options.markHighDelta) && isHighDeltaPremium(row.delta, threshold);
       const qty = Number.isFinite(row.position) ? row.position : -Math.abs(firstNum(row.contracts, 0));
@@ -6016,10 +6032,7 @@
 
     function chainMapCell(row, side, options, strike, spot) {
       const rowSpot = row && Number.isFinite(row.underlyingPrice) ? row.underlyingPrice : spot;
-      const isItm = Number.isFinite(rowSpot) && (
-        (side === "call" && Number.isFinite(strike) && strike < rowSpot) ||
-        (side === "put" && Number.isFinite(strike) && strike > rowSpot)
-      );
+      const isItm = optionIsItm(side, strike, rowSpot);
       if (!row) return `<div class="chain-map-cell ${side} empty${isItm ? " invalid-zone" : ""}"></div>`;
       return options.editable
         ? chainEditableMapCell(row, side, isItm)
@@ -6611,6 +6624,16 @@
       if (raw === "PUT") return "P";
       if (raw === "CALL") return "C";
       return raw.slice(0, 1);
+    }
+
+    function optionIsItm(right, strike, underlyingPrice) {
+      const normalizedRight = normRight(right);
+      const normalizedStrike = toNum(strike);
+      const normalizedPrice = toNum(underlyingPrice);
+      if (!Number.isFinite(normalizedStrike) || !Number.isFinite(normalizedPrice)) return false;
+      if (normalizedRight === "C") return normalizedPrice > normalizedStrike + EPS;
+      if (normalizedRight === "P") return normalizedPrice < normalizedStrike - EPS;
+      return false;
     }
 
     function directSignedDelta(row, right) {

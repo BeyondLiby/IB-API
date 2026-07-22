@@ -455,7 +455,8 @@ const normalizedZcPremiumResult = new vm.Script(`
     const rows = [{
       symbol: "ZC", secType: "FOP", position: -1, expiry: "20260717", dte: 1,
       strike: 4.25, right: "P", price: 0.625, marketValue: -3125,
-      valueSource: "portfolio", contractMultiplier: 5000, multiplier: 50, costBasis: -34.48
+      valueSource: "portfolio", contractMultiplier: 5000, multiplier: 50, costBasis: -34.48,
+      underlyingPrice: 450
     }];
     return JSON.stringify(parseShortPositions(rows, cfg, { respectInventoryDte: false })[0]);
   })()
@@ -680,7 +681,8 @@ const farthestLiveDte = Math.max(...liveDtes);
 assert(liveDtes.length > 0, "live inventory should include current short positions");
 assert(farthestLiveDte > 2, "live inventory fixture should include holdings beyond the near planning window");
 assert.strictEqual(live.remainingTarget, Math.max(live.monthlyTarget - live.currentPremium, 0), "target pressure should deduct current remaining premium");
-assert(live.remainingTarget < live.monthlyTarget, "remaining target should be lower than gross monthly target when premium exists");
+assert(live.currentPremium >= 0, "ITM exclusion must not produce a negative premium total");
+assert(live.currentPremium > 0 ? live.remainingTarget < live.monthlyTarget : live.remainingTarget === live.monthlyTarget, "target pressure should only deduct premium from eligible non-ITM seller positions");
 assert(live.putStrikeOptions.includes(live.putStrikeMin), "put strike selector should default to a real chain strike");
 assert(live.callStrikeOptions.includes(live.callStrikeMax), "call strike selector should default to a real chain strike");
 assert(live.putStrikeMin < 106.914, "put strike selector should default below the ZF spot");
@@ -821,6 +823,31 @@ assert(Math.abs(premiumMetric.customThreshold - 70) < 1e-9, "custom premium thre
 assert(Math.abs(premiumMetric.displayedThresholdDelta - 60.48) < 1e-9, "a delta displayed as 0.40 should enter the weighted metric using its actual value");
 assert(Math.abs(premiumMetric.thresholdDelta - 60) < 1e-9, "0.40 delta premium should be weighted by 1-|delta|");
 assert(Math.abs(premiumMetric.highDelta - 20) < 1e-9, "high-delta premium weighting is incorrect");
+
+const itmPremiumExclusionResult = new vm.Script(`
+  (() => {
+    const cfg = { ...config(), underlying: "ZN", allowed: ["ZN"], highDeltaPremiumThreshold: 0.40 };
+    const rows = [
+      { symbol: "ZN", secType: "FOP", position: -1, expiry: "20260720", dte: 3, strike: 109.25, right: "C", price: 0.15, marketValue: -150, underlyingPrice: 109.50, delta: 0.80 },
+      { symbol: "ZN", secType: "FOP", position: -1, expiry: "20260720", dte: 3, strike: 110.00, right: "C", price: 0.10, marketValue: -100, underlyingPrice: 109.50, delta: 0.80 },
+      { symbol: "ZN", secType: "FOP", position: -1, expiry: "20260720", dte: 3, strike: 110.00, right: "P", price: 0.50, marketValue: -500, underlyingPrice: 109.50, delta: -0.80 }
+    ];
+    const parsed = parseShortPositions(rows, cfg, { respectInventoryDte: false });
+    return JSON.stringify({ parsed, inventory: aggregateInventory(parsed, cfg) });
+  })()
+`).runInContext(context);
+const itmPremiumExclusion = JSON.parse(itmPremiumExclusionResult);
+assert.strictEqual(itmPremiumExclusion.parsed.length, 3, "ITM seller positions must remain visible in inventory and risk exposure");
+assert.strictEqual(itmPremiumExclusion.parsed[0].premiumExcludedItm, true, "an ITM short call should be marked as excluded from premium");
+assert.strictEqual(itmPremiumExclusion.parsed[0].grossRemainingPremium, 150, "ITM short call should retain its raw market value for display and diagnostics");
+assert.strictEqual(itmPremiumExclusion.parsed[0].remainingPremium, 0, "ITM short call must not contribute remaining premium");
+assert.strictEqual(itmPremiumExclusion.parsed[0].weightedPremium, 0, "ITM short call must not contribute delta-weighted premium");
+assert.strictEqual(itmPremiumExclusion.parsed[1].premiumExcludedItm, false, "an OTM high-delta short call should remain premium-eligible");
+assert(Math.abs(itmPremiumExclusion.parsed[1].weightedPremium - 20) < 1e-9, "an OTM high-delta short call should still use the 1-|Delta| weighting");
+assert.strictEqual(itmPremiumExclusion.parsed[2].premiumExcludedItm, true, "an ITM short put should be marked as excluded from premium");
+assert.strictEqual(itmPremiumExclusion.inventory.totalContracts, 3, "ITM positions should still count toward inventory contracts");
+assert.strictEqual(itmPremiumExclusion.inventory.remainingPremium, 100, "only the OTM seller premium should enter product totals");
+assert(Math.abs(itmPremiumExclusion.inventory.weightedPremium - 20) < 1e-9, "only the weighted OTM seller premium should enter product totals");
 
 const highDeltaMarkerResult = new vm.Script(`
   const marked = chainReadonlyMapCell({
