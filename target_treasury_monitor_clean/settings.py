@@ -60,6 +60,10 @@ class StaticChainSettings:
     near_strike_width: float = 1.0
     far_strike_width: float = 3.0
     market_data_max_dte: int | None = None
+    include_analytics_sample: bool = True
+    analytics_max_dte: int = 60
+    analytics_max_expirations: int = 8
+    analytics_strikes_each_side: int = 5
     force_con_ids: tuple[int, ...] = ()
     future_price_wait_seconds: float = 6.0
 

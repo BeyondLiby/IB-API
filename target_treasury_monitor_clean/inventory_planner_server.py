@@ -84,6 +84,7 @@ def inventory_planner_manifest(directory: Path) -> dict[str, object]:
     default_positions = latest_matching_file(planner_dir, "carry_dashboard_positions.csv")
     default_chain = latest_matching_file(planner_dir, "carry_dashboard_chain.csv")
     bars = latest_matching_file(planner_dir, "carry_dashboard_bars.csv")
+    option_analytics = latest_matching_file(planner_dir, "option_analytics_history.csv")
     product_future_prices: dict[str, Path] = {}
     if debug_dir.exists():
         for path in debug_dir.glob("*_FOP_Static_*_future_prices.csv"):
@@ -91,7 +92,7 @@ def inventory_planner_manifest(directory: Path) -> dict[str, object]:
             current = product_future_prices.get(product)
             if current is None or (path.stat().st_mtime, path.name) > (current.stat().st_mtime, current.name):
                 product_future_prices[product] = path
-    data_files: list[Path | None] = [default_positions, default_chain, bars, *product_future_prices.values()]
+    data_files: list[Path | None] = [default_positions, default_chain, bars, option_analytics, *product_future_prices.values()]
     defaults: dict[str, str] = {}
     if default_positions is not None:
         defaults["positions"] = relative_web_path(default_positions, directory)
@@ -99,6 +100,8 @@ def inventory_planner_manifest(directory: Path) -> dict[str, object]:
         defaults["chain"] = relative_web_path(default_chain, directory)
     if bars is not None:
         defaults["bars"] = relative_web_path(bars, directory)
+    if option_analytics is not None:
+        defaults["optionAnalytics"] = relative_web_path(option_analytics, directory)
 
     if default_chain is not None:
         for product in products_from_chain(default_chain):
@@ -107,6 +110,8 @@ def inventory_planner_manifest(directory: Path) -> dict[str, object]:
                 entry["positions"] = relative_web_path(default_positions, directory)
             if bars is not None:
                 entry["bars"] = relative_web_path(bars, directory)
+            if option_analytics is not None:
+                entry["optionAnalytics"] = relative_web_path(option_analytics, directory)
             if product in product_future_prices:
                 entry["futurePrices"] = relative_web_path(product_future_prices[product], directory)
             products[product] = entry

@@ -47,13 +47,16 @@ assert(html.includes('id="premiumCurveChart"'), "cumulative premium chart missin
 assert(html.includes('id="premiumCurveRawTotal"'), "raw premium curve legend total missing");
 assert(html.includes('id="premiumCurveWeightedTotal"'), "weighted premium curve legend total missing");
 assert(html.includes('id="premiumCurveTooltip"'), "interactive premium curve tooltip missing");
+assert(html.includes('id="optionAnalyticsSection"'), "daily option analytics panel missing");
+assert(html.includes('id="optionIvSmileChart"'), "IV smile chart missing");
+assert(html.includes('id="optionVolSurface"'), "vol surface view missing");
 assert(html.includes('class="panel premium-overview-layout"'), "premium summary, expiry overview, and cumulative chart should share one responsive panel");
 assert(html.includes('id="highDeltaPremiumThreshold"'), "configurable delta-weighted premium threshold missing");
 assert(/id="highDeltaPremiumThreshold"[^>]*value="0\.40"/.test(html), "delta-weighted premium threshold should default to 0.40");
 assert(html.includes('<section class="planner-state" hidden aria-hidden="true">'), "planner defaults should remain available as hidden internal state");
 assert(!html.includes("用户假设与交易区域"), "retired user-assumption panel should no longer be visible");
 assert(!html.includes("<h2>目标压力</h2>"), "retired target-pressure panel should no longer be visible");
-assert(/<section class="panel">\s*<div id="productOverview" class="product-overview"><\/div>\s*<\/section>\s*<div class="section-heading">\s*<h2>底层资产走势<\/h2>/.test(html), "product overview should sit immediately above underlying charts");
+assert(/<section class="panel">\s*<div id="productOverview" class="product-overview"><\/div>\s*<\/section>\s*<div class="section-heading">\s*<h2>期权市场结构/.test(html), "option analytics should sit immediately below product overview");
 assert(html.includes('id="greekDteTable"'), "DTE greek table missing");
 assert(html.includes('id="dailyPriceChart"'), "daily future price chart missing");
 assert(html.includes('id="intradayPriceChart"'), "intraday future price chart missing");
@@ -337,6 +340,16 @@ assert.strictEqual(elements.get("togglePriceCharts").getAttribute("aria-expanded
 elements.get("togglePriceCharts").click();
 assert.strictEqual(elements.get("priceChartSection").hidden, true, "chart collapse button should hide the underlying chart panel");
 
+elements.get("optionAnalyticsSection").hidden = true;
+elements.get("toggleOptionAnalytics").textContent = "展开";
+elements.get("toggleOptionAnalytics").click();
+assert.strictEqual(elements.get("optionAnalyticsSection").hidden, false, "option analytics expand button should reveal the panel");
+assert(elements.get("optionAnalyticsNote").textContent.includes("ZF"), "option analytics should follow the active product");
+assert(elements.get("optionAnalyticsCoverage").innerHTML.includes("Model IV"), "option analytics should report IV coverage");
+assert(elements.get("optionVolSurface").innerHTML.includes("surface-table"), "option analytics should render the IV surface");
+elements.get("toggleOptionAnalytics").click();
+assert.strictEqual(elements.get("optionAnalyticsSection").hidden, true, "option analytics collapse button should hide the panel");
+
 assert.strictEqual(elements.get("tradePanel").hidden, true, "trading panel should start collapsed");
 assert.strictEqual(elements.get("toggleTradePanel").textContent, "展开", "collapsed trading button should offer to expand");
 assert.strictEqual(elements.get("toggleTradePanel").getAttribute("aria-expanded"), "false", "default trading accessibility state is wrong");
@@ -503,11 +516,13 @@ assert(elements.get("productOverview").innerHTML.includes("product-icon"), "prod
 assert(elements.get("productOverview").innerHTML.includes("当前查看"), "product overview should mark the active product prominently");
 assert(elements.get("productOverview").innerHTML.includes("product-signal-row"), "product overview should include position and data status signals");
 assert(elements.get("productOverview").innerHTML.includes("product-metric-label"), "product metrics should include visual metric markers");
-assert(elements.get("portfolioPremiumSummary").innerHTML.includes("全部剩余权利金"), "overall premium total missing");
+assert(elements.get("portfolioPremiumSummary").innerHTML.includes("OTM 剩余权利金"), "overall OTM premium total missing");
 assert(elements.get("portfolioPremiumSummary").innerHTML.includes("Delta 加权期权金"), "overall delta-weighted premium missing");
+assert(elements.get("portfolioPremiumSummary").innerHTML.includes("ITM 时间价值"), "ITM time value summary missing");
+assert(elements.get("portfolioPremiumSummary").innerHTML.includes("ITM 内在价值"), "ITM intrinsic value summary missing");
 assert(elements.get("premiumExpiryTable").innerHTML.includes("到期日"), "premium expiry overview missing expiry column");
-assert(elements.get("premiumExpiryTable").innerHTML.includes("剩余权利金"), "premium expiry overview missing raw premium");
-assert(elements.get("premiumExpiryTable").innerHTML.includes("Delta 加权期权金"), "premium expiry overview missing weighted premium");
+assert(elements.get("premiumExpiryTable").innerHTML.includes("OTM权利金"), "premium expiry overview missing OTM premium");
+assert(elements.get("premiumExpiryTable").innerHTML.includes("ITM时间价值"), "premium expiry overview missing ITM time value");
 assert(elements.get("premiumCurveNote").textContent.includes("个到期日"), "premium curve note should describe its expiry coverage");
 assert(elements.get("premiumCurveNote").textContent.includes("风险折减"), "premium curve note should explain the shaded gap");
 assert(elements.get("premiumCurveRawTotal").textContent.startsWith("$"), "raw premium curve total should render as money");
@@ -841,6 +856,8 @@ assert.strictEqual(itmPremiumExclusion.parsed.length, 3, "ITM seller positions m
 assert.strictEqual(itmPremiumExclusion.parsed[0].premiumExcludedItm, true, "an ITM short call should be marked as excluded from premium");
 assert.strictEqual(itmPremiumExclusion.parsed[0].grossRemainingPremium, 150, "ITM short call should retain its raw market value for display and diagnostics");
 assert.strictEqual(itmPremiumExclusion.parsed[0].remainingPremium, 0, "ITM short call must not contribute remaining premium");
+assert(itmPremiumExclusion.parsed[0].itmIntrinsicValue > 0, "ITM short call should expose intrinsic value separately");
+assert(itmPremiumExclusion.parsed[0].itmTimeValue >= 0, "ITM short call should expose non-negative time value separately");
 assert.strictEqual(itmPremiumExclusion.parsed[0].weightedPremium, 0, "ITM short call must not contribute delta-weighted premium");
 assert.strictEqual(itmPremiumExclusion.parsed[1].premiumExcludedItm, false, "an OTM high-delta short call should remain premium-eligible");
 assert(Math.abs(itmPremiumExclusion.parsed[1].weightedPremium - 20) < 1e-9, "an OTM high-delta short call should still use the 1-|Delta| weighting");

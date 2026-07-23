@@ -343,9 +343,65 @@ def _select_market_data_contracts(
     if settings.market_data_max_dte is not None:
         base_mask = base_mask & (dte_numeric <= int(settings.market_data_max_dte))
 
+    # The sell-candidate filter is intentionally narrow.  A once-daily IV
+    # smile/surface needs a balanced sample on both sides of ATM, but not every
+    # contract in the qualified universe.  Select a bounded set of expiries and
+    # strikes, then union it with the normal planner subscriptions below.
+    analytics_mask = pd.Series(False, index=out.index, dtype=bool)
+    if settings.include_analytics_sample:
+        analytics_max_dte = int(settings.analytics_max_dte)
+        if settings.market_data_max_dte is not None:
+            analytics_max_dte = min(analytics_max_dte, int(settings.market_data_max_dte))
+        analytics_eligible = out[
+            out["underlyingPriceForFilter"].notna()
+            & out["strike"].notna()
+            & dte_numeric.notna()
+            & (dte_numeric >= 0)
+            & (dte_numeric <= analytics_max_dte)
+        ].copy()
+        if not analytics_eligible.empty:
+            expiry_dtes = (
+                analytics_eligible.groupby("expiration", as_index=False)["dteForFilter"]
+                .min()
+                .sort_values(["dteForFilter", "expiration"])
+            )
+            target_dtes = (0, 1, 2, 4, 7, 14, 30, 60)
+            selected_expiries: list[str] = []
+            for target in target_dtes:
+                remaining = expiry_dtes[~expiry_dtes["expiration"].isin(selected_expiries)].copy()
+                if remaining.empty:
+                    break
+                remaining["targetDistance"] = (
+                    pd.to_numeric(remaining["dteForFilter"], errors="coerce") - target
+                ).abs()
+                chosen = remaining.sort_values(
+                    ["targetDistance", "dteForFilter", "expiration"]
+                ).iloc[0]
+                selected_expiries.append(str(chosen["expiration"]))
+                if len(selected_expiries) >= int(settings.analytics_max_expirations):
+                    break
+
+            strike_count = max(int(settings.analytics_strikes_each_side), 0) * 2 + 1
+            for expiration in selected_expiries:
+                expiry_rows = analytics_eligible[analytics_eligible["expiration"] == expiration]
+                if expiry_rows.empty:
+                    continue
+                strike_distances = (
+                    expiry_rows.groupby("strike", as_index=False)["strikeDistanceForFilter"]
+                    .min()
+                    .sort_values(["strikeDistanceForFilter", "strike"])
+                )
+                selected_strikes = set(strike_distances.head(strike_count)["strike"].tolist())
+                analytics_mask |= (
+                    (out["expiration"] == expiration)
+                    & out["strike"].isin(selected_strikes)
+                    & out["right"].astype(str).str.upper().str[:1].isin(["C", "P"])
+                )
+
     force_con_ids = {int(value) for value in settings.force_con_ids if int(value) > 0}
     force_mask = out["conId"].astype("Int64").isin(force_con_ids) if force_con_ids else False
-    selected = out[base_mask | force_mask].copy()
+    out["analyticsSample"] = analytics_mask
+    selected = out[base_mask | analytics_mask | force_mask].copy()
     selected = selected.sort_values(
         ["dteForFilter", "underlyingMonth", "expiration", "right", "strike", "conId"],
         ignore_index=True,
@@ -358,6 +414,22 @@ def _select_market_data_contracts(
         if int(con_id) in by_conid
     ]
     return selected_contracts, selected
+
+
+def _attach_selected_metadata(
+    monitor_frame: pd.DataFrame,
+    selected_metadata: pd.DataFrame,
+) -> pd.DataFrame:
+    """Carry selection provenance into the published monitor rows."""
+    if monitor_frame.empty or selected_metadata.empty or "conId" not in monitor_frame.columns:
+        return monitor_frame
+    columns = [column for column in ["conId", "analyticsSample"] if column in selected_metadata.columns]
+    if len(columns) < 2:
+        return monitor_frame
+    metadata = selected_metadata[columns].drop_duplicates("conId", keep="last")
+    out = monitor_frame.merge(metadata, on="conId", how="left")
+    out["analyticsSample"] = out["analyticsSample"].fillna(False).astype(bool)
+    return out
 
 
 def _load_cached_chain(
@@ -420,7 +492,10 @@ def _load_cached_chain(
             empty_batch_retries=int(settings.empty_batch_retries),
             empty_batch_retry_pause_seconds=float(settings.empty_batch_retry_pause_seconds),
         )
-        monitor_frame = snapshot_to_monitor_frame(snapshot, root=root)
+        monitor_frame = _attach_selected_metadata(
+            snapshot_to_monitor_frame(snapshot, root=root),
+            selected_metadata,
+        )
 
     return {
         "root": root,
@@ -443,6 +518,10 @@ def _load_cached_chain(
             "near_dte_days": settings.near_dte_days,
             "near_strike_width": settings.near_strike_width,
             "far_strike_width": settings.far_strike_width,
+            "analytics_sample": settings.include_analytics_sample,
+            "analytics_max_dte": settings.analytics_max_dte,
+            "analytics_max_expirations": settings.analytics_max_expirations,
+            "analytics_strikes_each_side": settings.analytics_strikes_each_side,
         },
         "universe_source": "contract_cache",
         "contract_cache_path": str(contract_cache_path),
@@ -538,7 +617,10 @@ def refresh_static_chain(
                 empty_batch_retries=int(settings.empty_batch_retries),
                 empty_batch_retry_pause_seconds=float(settings.empty_batch_retry_pause_seconds),
             )
-            monitor_frame = snapshot_to_monitor_frame(snapshot, root=settings.root)
+            monitor_frame = _attach_selected_metadata(
+                snapshot_to_monitor_frame(snapshot, root=settings.root),
+                selected_metadata,
+            )
         result["selected_metadata"] = selected_metadata
         result["selected_contract_count"] = len(selected_contracts)
         result["snapshot_scope"] = "dte_moneyness_filter" if settings.filter_market_data_by_moneyness else "full_chain"
@@ -547,6 +629,10 @@ def refresh_static_chain(
             "near_dte_days": settings.near_dte_days,
             "near_strike_width": settings.near_strike_width,
             "far_strike_width": settings.far_strike_width,
+            "analytics_sample": settings.include_analytics_sample,
+            "analytics_max_dte": settings.analytics_max_dte,
+            "analytics_max_expirations": settings.analytics_max_expirations,
+            "analytics_strikes_each_side": settings.analytics_strikes_each_side,
         }
         result["snapshot"] = snapshot
         result["monitor_frame"] = monitor_frame

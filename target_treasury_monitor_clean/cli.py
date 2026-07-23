@@ -33,6 +33,7 @@ from .ib_client_lock import IbClientLockBusy, acquire_ib_client_lock
 from .ib_session import ib_connection
 from .inventory_planner_server import inventory_planner_handler
 from .margin_whatif import MarginWhatIfRequest, run_margin_whatif
+from .option_analytics import ANALYTICS_FILENAME, update_option_analytics_history
 from .quality import evaluate_option_chain_data, print_option_chain_quality_report
 from .settings import (
     AccountDashboardSettings,
@@ -1141,6 +1142,12 @@ def _run_refresh_carry_html(args: argparse.Namespace, ib_settings: IBSettings) -
         bars=bars_frame,
         output_dir=args.html_data_dir,
     )
+    if not fast_refresh and not combined_chain.empty:
+        analytics_path = update_option_analytics_history(
+            combined_chain,
+            Path(args.html_data_dir) / ANALYTICS_FILENAME,
+        )
+        paths["option_analytics"] = analytics_path
     print("published:", flush=True)
     for name, path in paths.items():
         print(f"  {name}: {path}", flush=True)
