@@ -19,6 +19,9 @@ from treasury_fop_chain import get_future_prices_for_months, get_future_prices_f
 from .settings import StaticChainSettings
 
 
+ANALYTICS_GENERIC_TICKS = "100,101"
+
+
 @dataclass
 class StaticChainResult:
     """Normalized result for a one-shot chain refresh."""
@@ -401,6 +404,7 @@ def _select_market_data_contracts(
     force_con_ids = {int(value) for value in settings.force_con_ids if int(value) > 0}
     force_mask = out["conId"].astype("Int64").isin(force_con_ids) if force_con_ids else False
     out["analyticsSample"] = analytics_mask
+    out["liquidityTicksRequested"] = analytics_mask
     selected = out[base_mask | analytics_mask | force_mask].copy()
     selected = selected.sort_values(
         ["dteForFilter", "underlyingMonth", "expiration", "right", "strike", "conId"],
@@ -423,13 +427,94 @@ def _attach_selected_metadata(
     """Carry selection provenance into the published monitor rows."""
     if monitor_frame.empty or selected_metadata.empty or "conId" not in monitor_frame.columns:
         return monitor_frame
-    columns = [column for column in ["conId", "analyticsSample"] if column in selected_metadata.columns]
+    columns = [
+        column
+        for column in ["conId", "analyticsSample", "liquidityTicksRequested"]
+        if column in selected_metadata.columns
+    ]
     if len(columns) < 2:
         return monitor_frame
     metadata = selected_metadata[columns].drop_duplicates("conId", keep="last")
     out = monitor_frame.merge(metadata, on="conId", how="left")
     out["analyticsSample"] = out["analyticsSample"].fillna(False).astype(bool)
+    if "liquidityTicksRequested" in out.columns:
+        out["liquidityTicksRequested"] = out["liquidityTicksRequested"].fillna(False).astype(bool)
     return out
+
+
+def _snapshot_selected_market_data(
+    ib: IB,
+    contracts: list[Any],
+    selected_metadata: pd.DataFrame,
+    settings: StaticChainSettings,
+) -> pd.DataFrame:
+    """Request OI/volume only for the bounded analytics sample.
+
+    Candidate-only rows keep the lean top-of-book/Greeks subscription.  The
+    analytics rows request generic ticks 100/101 and wait briefly for their
+    optional fields to settle, without making missing OI block a batch.
+    """
+    if not contracts:
+        return pd.DataFrame()
+
+    analytics_con_ids: set[int] = set()
+    if not selected_metadata.empty and {"conId", "analyticsSample"}.issubset(selected_metadata.columns):
+        flags = selected_metadata["analyticsSample"].astype(str).str.lower().isin({"true", "1", "yes"})
+        analytics_con_ids = set(
+            pd.to_numeric(selected_metadata.loc[flags, "conId"], errors="coerce")
+            .dropna()
+            .astype(int)
+            .tolist()
+        )
+
+    analytics_contracts = [
+        contract
+        for contract in contracts
+        if int(getattr(contract, "conId", 0) or 0) in analytics_con_ids
+    ]
+    standard_contracts = [
+        contract
+        for contract in contracts
+        if int(getattr(contract, "conId", 0) or 0) not in analytics_con_ids
+    ]
+
+    common = {
+        "batch_size": int(settings.batch_size),
+        "wait_max_seconds": float(settings.wait_max_seconds),
+        "wait_stable_seconds": float(settings.wait_stable_seconds),
+        "request_interval": float(settings.request_interval),
+        "inter_batch_pause_seconds": float(settings.inter_batch_pause_seconds),
+        "empty_batch_retries": int(settings.empty_batch_retries),
+        "empty_batch_retry_pause_seconds": float(settings.empty_batch_retry_pause_seconds),
+    }
+    frames: list[pd.DataFrame] = []
+    if standard_contracts:
+        frames.append(
+            snapshot_in_batches(
+                ib,
+                standard_contracts,
+                generic_ticks="",
+                stability_fields=("quote", "greeks"),
+                **common,
+            )
+        )
+    if analytics_contracts:
+        print(
+            f"{settings.root.upper()} analytics OI/volume: "
+            f"selected={len(analytics_contracts)}, generic_ticks={ANALYTICS_GENERIC_TICKS}",
+            flush=True,
+        )
+        frames.append(
+            snapshot_in_batches(
+                ib,
+                analytics_contracts,
+                generic_ticks=ANALYTICS_GENERIC_TICKS,
+                stability_fields=("quote", "greeks", "oi", "volume"),
+                **common,
+            )
+        )
+    valid_frames = [frame for frame in frames if not frame.empty]
+    return pd.concat(valid_frames, ignore_index=True) if valid_frames else pd.DataFrame()
 
 
 def _load_cached_chain(
@@ -476,21 +561,11 @@ def _load_cached_chain(
     monitor_frame = pd.DataFrame()
     if settings.request_market_data and selected_contracts:
         print(f"{root} option quotes: selected={len(selected_contracts)}, months={','.join(months)}", flush=True)
-        snapshot = snapshot_in_batches(
+        snapshot = _snapshot_selected_market_data(
             ib,
             selected_contracts,
-            batch_size=int(settings.batch_size),
-            wait_max_seconds=float(settings.wait_max_seconds),
-            wait_stable_seconds=float(settings.wait_stable_seconds),
-            request_interval=float(settings.request_interval),
-            # The planner does not consume option volume/open-interest generic
-            # ticks. Standard top-of-book plus option computations provide the
-            # bid/ask and Greeks used by filtering without one 10090 warning per
-            # contract on partially entitled/delayed accounts.
-            generic_ticks="",
-            inter_batch_pause_seconds=float(settings.inter_batch_pause_seconds),
-            empty_batch_retries=int(settings.empty_batch_retries),
-            empty_batch_retry_pause_seconds=float(settings.empty_batch_retry_pause_seconds),
+            selected_metadata,
+            settings,
         )
         monitor_frame = _attach_selected_metadata(
             snapshot_to_monitor_frame(snapshot, root=root),
@@ -605,17 +680,11 @@ def refresh_static_chain(
                 f"months={','.join(normalize_months(settings.future_months))}",
                 flush=True,
             )
-            snapshot = snapshot_in_batches(
+            snapshot = _snapshot_selected_market_data(
                 ib,
                 selected_contracts,
-                batch_size=int(settings.batch_size),
-                wait_max_seconds=float(settings.wait_max_seconds),
-                wait_stable_seconds=float(settings.wait_stable_seconds),
-                request_interval=float(settings.request_interval),
-                generic_ticks="",
-                inter_batch_pause_seconds=float(settings.inter_batch_pause_seconds),
-                empty_batch_retries=int(settings.empty_batch_retries),
-                empty_batch_retry_pause_seconds=float(settings.empty_batch_retry_pause_seconds),
+                selected_metadata,
+                settings,
             )
             monitor_frame = _attach_selected_metadata(
                 snapshot_to_monitor_frame(snapshot, root=settings.root),

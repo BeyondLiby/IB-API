@@ -1173,6 +1173,7 @@ def snapshot_in_batches(
     inter_batch_pause_seconds: float = 0.5,
     empty_batch_retries: int = 1,
     empty_batch_retry_pause_seconds: float = 5.0,
+    stability_fields: Sequence[str] = ("quote", "greeks"),
 ) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     total = len(contracts)
@@ -1193,10 +1194,7 @@ def snapshot_in_batches(
                     min_seconds=wait_min_seconds,
                     max_seconds=wait_max_seconds,
                     stable_seconds=wait_stable_seconds,
-                    # Bid/ask and model Greeks drive the candidate filter and
-                    # risk display. OI/volume remain collected opportunistically,
-                    # but late optional ticks must not hold every batch open.
-                    stability_fields=("quote", "greeks"),
+                    stability_fields=stability_fields,
                 )
                 batch_frame = streamer.snapshot()
                 is_empty_batch = stats.quote_ready == 0 and stats.greek_ready == 0 and stats.oi_ready == 0

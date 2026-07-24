@@ -25,6 +25,7 @@ ANALYTICS_COLUMNS = [
     "bid",
     "ask",
     "analyticsSample",
+    "liquidityTicksRequested",
 ]
 
 
@@ -97,6 +98,15 @@ def prepare_option_analytics_snapshot(
     out["bid"] = _numeric_column(frame, ("bid",))
     out["ask"] = _numeric_column(frame, ("ask",))
     out["analyticsSample"] = True
+    if "liquidityTicksRequested" in frame.columns:
+        out["liquidityTicksRequested"] = (
+            frame["liquidityTicksRequested"]
+            .astype(str)
+            .str.lower()
+            .isin({"true", "1", "yes"})
+        )
+    else:
+        out["liquidityTicksRequested"] = False
 
     valid_underlying = out["underlyingPrice"].where(out["underlyingPrice"].abs() > 1e-12)
     out["moneynessPct"] = (out["strike"] / valid_underlying - 1.0) * 100.0

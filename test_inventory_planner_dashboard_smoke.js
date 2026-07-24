@@ -48,7 +48,12 @@ assert(html.includes('id="premiumCurveRawTotal"'), "raw premium curve legend tot
 assert(html.includes('id="premiumCurveWeightedTotal"'), "weighted premium curve legend total missing");
 assert(html.includes('id="premiumCurveTooltip"'), "interactive premium curve tooltip missing");
 assert(html.includes('id="optionAnalyticsSection"'), "daily option analytics panel missing");
+assert(/\.option-analytics-chart\s*\{[^}]*height:\s*140px/s.test(html), "option analytics IV chart should use the compact height");
+assert(/\.option-skew-chart\s*\{[^}]*height:\s*140px/s.test(html), "option skew chart should use the compact height");
+assert(/\.surface-wrap\s*\{[^}]*max-height:\s*241px/s.test(html), "volatility surface should use a bounded scroll height");
 assert(html.includes('id="optionIvSmileChart"'), "IV smile chart missing");
+assert(html.includes('id="optionSkewChart"'), "25-delta skew chart missing");
+assert(html.includes('id="optionOiHeatmap"'), "OI heatmap missing");
 assert(html.includes('id="optionVolSurface"'), "vol surface view missing");
 assert(html.includes('class="panel premium-overview-layout"'), "premium summary, expiry overview, and cumulative chart should share one responsive panel");
 assert(html.includes('id="highDeltaPremiumThreshold"'), "configurable delta-weighted premium threshold missing");
@@ -346,7 +351,37 @@ elements.get("toggleOptionAnalytics").click();
 assert.strictEqual(elements.get("optionAnalyticsSection").hidden, false, "option analytics expand button should reveal the panel");
 assert(elements.get("optionAnalyticsNote").textContent.includes("ZF"), "option analytics should follow the active product");
 assert(elements.get("optionAnalyticsCoverage").innerHTML.includes("Model IV"), "option analytics should report IV coverage");
+assert(elements.get("optionOiHeatmap").innerHTML.includes("oi-heatmap-table"), "option analytics should render an OI Strike by DTE heatmap");
 assert(elements.get("optionVolSurface").innerHTML.includes("surface-table"), "option analytics should render the IV surface");
+const skewFixture = JSON.parse(new vm.Script(`JSON.stringify(optionSkewSeries([
+  { expiration: "20260724", dte: 1, right: "C", strike: 101, underlyingPrice: 100, moneynessPct: 1, delta: 0.25, iv: 0.04 },
+  { expiration: "20260724", dte: 1, right: "P", strike: 99, underlyingPrice: 100, moneynessPct: -1, delta: -0.25, iv: 0.06 },
+  { expiration: "20260724", dte: 1, right: "C", strike: 100, underlyingPrice: 100, moneynessPct: 0, delta: 0.50, iv: 0.05 },
+  { expiration: "20260724", dte: 1, right: "P", strike: 100, underlyingPrice: 100, moneynessPct: 0, delta: -0.50, iv: 0.05 }
+]))`).runInContext(context));
+assert.strictEqual(skewFixture.length, 1, "skew series should produce one point per usable expiry");
+assert(Math.abs(skewFixture[0].skew - 2) < 1e-9, "25-delta skew should be Put IV minus Call IV in vol points");
+assert(Math.abs(skewFixture[0].wing) < 1e-9, "25-delta wing butterfly should compare both wings with ATM IV");
+const missingLiquidityStatus = JSON.parse(new vm.Script(`
+  (() => {
+    const saved = optionAnalyticsRows;
+    optionAnalyticsRows = [{
+      symbol: "ZF", snapshotDate: "2026-07-23", expiration: "20260724", dte: 1,
+      right: "C", strike: 107, underlyingPrice: 106.8, iv: 0.05
+    }];
+    optionAnalyticsExpiry = "";
+    renderOptionAnalytics(config());
+    const notRequested = document.getElementById("optionAnalyticsCoverage").innerHTML;
+    optionAnalyticsRows = [{ ...optionAnalyticsRows[0], liquidityTicksRequested: true }];
+    renderOptionAnalytics(config());
+    const requestedButMissing = document.getElementById("optionAnalyticsCoverage").innerHTML;
+    optionAnalyticsRows = saved;
+    renderOptionAnalytics(config());
+    return JSON.stringify({ notRequested, requestedButMissing });
+  })()
+`).runInContext(context));
+assert(missingLiquidityStatus.notRequested.includes("未请求 · 请全量刷新"), "legacy analytics snapshots should explain that OI ticks were not requested");
+assert(missingLiquidityStatus.requestedButMissing.includes("已请求 · IB未返回"), "requested OI ticks that remain missing should be distinguished from unrequested data");
 elements.get("toggleOptionAnalytics").click();
 assert.strictEqual(elements.get("optionAnalyticsSection").hidden, true, "option analytics collapse button should hide the panel");
 
@@ -684,9 +719,12 @@ const liveResult = new vm.Script(`
       const spot = referencePriceFor("ZF", chainRows, shortPositions, cfg, futurePositions).price;
       return candidates
         .filter(row => !row.isCurrentOnly)
-        .every(row => row.right === "C"
-          ? row.strike > spot && row.strike <= cfg.callStrikeMax + EPS
-          : row.strike < spot && row.strike >= cfg.putStrikeMin - EPS);
+        .every(row => {
+          const rowSpot = rowReferencePrice(row, "ZF", spot);
+          return row.right === "C"
+            ? row.strike > rowSpot && row.strike <= cfg.callStrikeMax + EPS
+            : row.strike < rowSpot && row.strike >= cfg.putStrikeMin - EPS;
+        });
     })()
   });
 `).runInContext(context);

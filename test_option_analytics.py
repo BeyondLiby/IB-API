@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
-from target_treasury_monitor_clean.chain_batch import _select_market_data_contracts
+from target_treasury_monitor_clean.chain_batch import (
+    ANALYTICS_GENERIC_TICKS,
+    _select_market_data_contracts,
+    _snapshot_selected_market_data,
+)
 from target_treasury_monitor_clean.option_analytics import (
     prepare_option_analytics_snapshot,
     update_option_analytics_history,
@@ -56,6 +62,7 @@ class OptionAnalyticsTests(unittest.TestCase):
         self.assertAlmostEqual(result.iloc[0]["iv"], 0.12)
         self.assertTrue(pd.isna(result.iloc[0]["openInterest"]))
         self.assertTrue(pd.isna(result.iloc[0]["volume"]))
+        self.assertFalse(bool(result.iloc[0]["liquidityTicksRequested"]))
         self.assertAlmostEqual(result.iloc[0]["moneynessPct"], (109 / 108.5 - 1) * 100)
 
     def test_daily_upsert_replaces_same_contract_but_keeps_prior_day(self) -> None:
@@ -109,6 +116,48 @@ class OptionAnalyticsTests(unittest.TestCase):
         self.assertEqual(analytics["expiration"].nunique(), 3)
         self.assertEqual(analytics.groupby("expiration")["strike"].nunique().max(), 5)
         self.assertTrue((analytics["strike"] - 100).abs().max() <= 2)
+        self.assertTrue(analytics["liquidityTicksRequested"].all())
+
+    def test_liquidity_generic_ticks_only_apply_to_analytics_sample(self) -> None:
+        contracts = [SimpleNamespace(conId=value) for value in (1, 2, 3)]
+        metadata = pd.DataFrame(
+            [
+                {"conId": 1, "analyticsSample": False},
+                {"conId": 2, "analyticsSample": True},
+                {"conId": 3, "analyticsSample": False},
+            ]
+        )
+        settings = StaticChainSettings(root="ZF", batch_size=10)
+
+        def fake_snapshot(_ib: object, selected: list[object], **kwargs: object) -> pd.DataFrame:
+            return pd.DataFrame(
+                [
+                    {
+                        "conId": contract.conId,
+                        "genericTicks": kwargs["generic_ticks"],
+                    }
+                    for contract in selected
+                ]
+            )
+
+        with patch(
+            "target_treasury_monitor_clean.chain_batch.snapshot_in_batches",
+            side_effect=fake_snapshot,
+        ) as snapshot:
+            result = _snapshot_selected_market_data(object(), contracts, metadata, settings)
+
+        self.assertEqual(snapshot.call_count, 2)
+        standard_call, analytics_call = snapshot.call_args_list
+        self.assertEqual([contract.conId for contract in standard_call.args[1]], [1, 3])
+        self.assertEqual(standard_call.kwargs["generic_ticks"], "")
+        self.assertEqual(standard_call.kwargs["stability_fields"], ("quote", "greeks"))
+        self.assertEqual([contract.conId for contract in analytics_call.args[1]], [2])
+        self.assertEqual(analytics_call.kwargs["generic_ticks"], ANALYTICS_GENERIC_TICKS)
+        self.assertEqual(
+            analytics_call.kwargs["stability_fields"],
+            ("quote", "greeks", "oi", "volume"),
+        )
+        self.assertEqual(set(result["conId"].astype(int)), {1, 2, 3})
 
     def test_zc_underlying_price_is_normalized_to_display_cents(self) -> None:
         row = self.sample().iloc[[0]].copy()

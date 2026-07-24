@@ -64,7 +64,7 @@ inter_batch_pause_seconds=0.5
 
 单独运行 `batch-chain` 且没有其他行情订阅时可按账户 line 配额适当放大；planner server 会长期占用“当前持仓数 + 指定期货数”的行情线，因此 full refresh 请求值默认 50，实际使用 `min(请求值, 100 - 持仓线 - 期货线 - 5条预留)`，不会为提速暂停持仓流。
 
-IB 没有提供“1830 个期权一次性返回一张行情表”的接口；这里的批量是代码逐个 `reqMktData` 订阅、等待、读取、取消，再进入下一批。full 只请求标准报价/option computations，并用报价和 model Greeks 判断一批是否稳定；planner 页面未使用的 OI/成交量 generic ticks 不再请求，避免部分权限账户产生逐合约 `10090`。`request_interval` 太小或 `batch_size` 太大时，后续批次仍可能被 pacing 或订阅线路释放延迟影响，出现整批 quote/Greeks 为空。
+IB 没有提供“1830 个期权一次性返回一张行情表”的接口；这里的批量是代码逐个 `reqMktData` 订阅、等待、读取、取消，再进入下一批。full 对普通候选只请求标准报价/option computations，并用报价和 model Greeks 判断一批是否稳定；仅对每日 IV/OI 分析选出的有限到期日和 ATM 附近 Strike 样本额外请求 generic ticks `100,101`，避免为了 OI 把整条候选链都拖慢。若 IB 对某个品种或权限仍不返回 OI，页面会保留缺失状态而不会画成 0。`request_interval` 太小或 `batch_size` 太大时，后续批次仍可能被 pacing 或订阅线路释放延迟影响，出现整批 quote/Greeks 为空。
 
 默认在订阅行情前会过滤有效合约池：
 
